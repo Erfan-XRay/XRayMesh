@@ -19,6 +19,8 @@ XRayMesh یک اسکریپت Bash برای ساخت و مدیریت شبکه Mes
 - دانلود و بروزرسانی خودکار آخرین نسخه پایدار EasyTier
 - اجرای دائمی هر نود به‌صورت سرویس systemd با Restart خودکار
 - نمایش Peerها، Latency، Route، ترافیک و Transport فعال
+- ساخت تونل‌های TCP با HAProxy به مقصد نودهای موجود EasyTier
+- پشتیبانی از لیست پورت و Port Range برای انتقال HAProxy
 - نمایش لاگ سرویس و ابزار عیب‌یابی اتصال و Handshake
 - نمایش IPv4 و IPv6 واقعی سرور به‌صورت جدا از IP مجازی Mesh
 - ویرایش یا حذف امن یک نود بدون نیاز به نصب مجدد کامل
@@ -141,6 +143,29 @@ QUIC ترافیک Mesh را روی UDP حمل می‌کند. پورت انتخا
 Timeout و Connection را بررسی می‌کند. لاگ زنده systemd و جدول Routeهای EasyTier
 نیز از منوی اصلی در دسترس هستند.
 
+## تونل TCP با HAProxy
+
+XRayMesh می‌تواند از سرور فعلی به یکی از نودهای موجود EasyTier، Port Forward
+از نوع TCP ایجاد کند. هنگام ساخت تونل، نودهای شناسایی‌شده در Peer List به کاربر
+پیشنهاد داده می‌شوند و امکان ورود دستی IP مجازی نیز وجود دارد.
+
+پورت‌ها را می‌توان به‌صورت تکی، جداشده با ویرگول، Range یا ترکیبی وارد کرد:
+
+```text
+22
+80,443
+8000-8010
+22,80,443,8000-8010
+```
+
+هر پورت ورودی به همان شماره پورت روی نود مقصد منتقل می‌شود. تونل‌ها از زیرمنوی
+HAProxy قابل مشاهده، ویرایش و حذف هستند. XRayMesh قبل از Restart کردن سرویس
+مستقل `xraymesh-haproxy.service`، تنظیمات تولیدشده را اعتبارسنجی می‌کند.
+
+تونل HAProxy در XRayMesh فقط از **TCP** پشتیبانی می‌کند. HAProxy استاندارد قابلیت
+Port Forward عمومی UDP را ندارد و پشتیبانی HAProxy از QUIC به‌معنای انتقال
+دلخواه برنامه‌های UDP نیست.
+
 ## دستورات
 
 ```text
@@ -152,6 +177,7 @@ sudo ./xraymesh.sh routes     نمایش جدول Route شبکه
 sudo ./xraymesh.sh logs       نمایش زنده لاگ سرویس
 sudo ./xraymesh.sh update     بروزرسانی EasyTier
 sudo ./xraymesh.sh delete     حذف تنظیمات نود فعلی
+sudo ./xraymesh.sh haproxy    مدیریت تونل‌های TCP با HAProxy
 sudo ./xraymesh.sh start      اجرای نود
 sudo ./xraymesh.sh stop       توقف نود
 sudo ./xraymesh.sh restart    راه‌اندازی مجدد نود
@@ -180,6 +206,8 @@ sudo ./xraymesh.sh restart    راه‌اندازی مجدد نود
 - فایل‌های برنامه: `/opt/xraymesh`
 - تنظیمات خصوصی: `/etc/xraymesh/config.env`
 - سرویس systemd: `/etc/systemd/system/xraymesh.service`
+- تنظیمات HAProxy: `/etc/xraymesh/haproxy-tunnels`
+- سرویس HAProxy: `/etc/systemd/system/xraymesh-haproxy.service`
 
 فایل تنظیمات خصوصی با دسترسی `600` ذخیره می‌شود. Network Secret را منتشر نکنید،
 برای هر نود IP مجازی متفاوت در نظر بگیرید و فقط پورت موردنیاز Mesh را باز کنید.

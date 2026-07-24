@@ -19,6 +19,8 @@ Developed by **ErfanXRay**
 - Downloads and updates the latest stable EasyTier core automatically
 - Runs each node as a persistent systemd service with automatic restart
 - Displays connected peers, latency, routes, traffic, and transport information
+- Creates isolated HAProxy TCP tunnels to existing EasyTier nodes
+- Supports comma-separated ports and port ranges for HAProxy forwarding
 - Provides service logs and connection diagnostics for failed handshakes
 - Shows physical server IPv4/IPv6 addresses separately from mesh addresses
 - Safely edits or deletes a node without requiring a complete reinstall
@@ -142,6 +144,31 @@ The diagnostics section checks local listeners, EasyTier peer-center state, and
 recent handshake, timeout, and connection errors. Live systemd logs and the
 EasyTier routing table are also available from the menu.
 
+## HAProxy TCP Tunnels
+
+XRayMesh can create TCP port-forwarding tunnels from the current server to an
+existing EasyTier node. The manager automatically suggests nodes discovered in
+the EasyTier peer list, while also allowing a virtual IP to be entered manually.
+
+Ports can be entered individually, as a comma-separated list, as a range, or as
+a combination:
+
+```text
+22
+80,443
+8000-8010
+22,80,443,8000-8010
+```
+
+Each listening port is forwarded to the same port on the selected destination
+node. Tunnel definitions can be listed, edited, or deleted from the HAProxy
+submenu. XRayMesh validates the generated configuration before restarting its
+dedicated `xraymesh-haproxy.service`.
+
+HAProxy tunnels in XRayMesh support **TCP only**. Standard HAProxy does not
+provide generic UDP port forwarding. QUIC support in HAProxy is not equivalent
+to forwarding arbitrary UDP applications.
+
 ## Commands
 
 ```text
@@ -153,6 +180,7 @@ sudo ./xraymesh.sh routes     Show the mesh routing table
 sudo ./xraymesh.sh logs       Stream service logs
 sudo ./xraymesh.sh update     Update EasyTier
 sudo ./xraymesh.sh delete     Delete the current mesh node
+sudo ./xraymesh.sh haproxy    Manage HAProxy TCP tunnels
 sudo ./xraymesh.sh start      Start the node
 sudo ./xraymesh.sh stop       Stop the node
 sudo ./xraymesh.sh restart    Restart the node
@@ -181,6 +209,8 @@ If only the local node appears:
 - Application: `/opt/xraymesh`
 - Private configuration: `/etc/xraymesh/config.env`
 - systemd service: `/etc/systemd/system/xraymesh.service`
+- HAProxy definitions: `/etc/xraymesh/haproxy-tunnels`
+- HAProxy service: `/etc/systemd/system/xraymesh-haproxy.service`
 
 The private configuration is stored with `600` permissions. Keep the network
 secret private, use a different virtual IP for every node, and expose only the

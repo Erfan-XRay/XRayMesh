@@ -6,12 +6,15 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="1.4.1"
+readonly VERSION="1.5.0"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
 readonly BIN_DIR="${INSTALL_DIR}/bin"
 readonly CONFIG_FILE="/etc/xraymesh/config.env"
 readonly SERVICE_FILE="/etc/systemd/system/xraymesh.service"
+readonly HAPROXY_SERVICE_FILE="/etc/systemd/system/xraymesh-haproxy.service"
+readonly HAPROXY_CONFIG="/etc/xraymesh/haproxy.cfg"
+readonly HAPROXY_TUNNEL_DIR="/etc/xraymesh/haproxy-tunnels"
 readonly LOG_TAG="xraymesh"
 readonly FALLBACK_EASYTIER_VERSION="v2.6.4"
 
@@ -389,6 +392,10 @@ delete_mesh() {
   fi
 
   systemctl disable --now xraymesh.service 2>/dev/null || true
+  if systemctl is-active --quiet xraymesh-haproxy.service 2>/dev/null; then
+    systemctl stop xraymesh-haproxy.service
+    info "HAProxy tunnels were stopped because the mesh node was deleted."
+  fi
   rm -f "$SERVICE_FILE" "$CONFIG_FILE" "${INSTALL_DIR}/xraymesh-runner"
   systemctl daemon-reload
   systemctl reset-failed xraymesh.service 2>/dev/null || true
@@ -526,6 +533,327 @@ diagnostics() {
   pause
 }
 
+validate_tunnel_name() {
+  [[ "$1" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]{0,31}$ ]]
+}
+
+expand_port_spec() {
+  local spec="${1//[[:space:]]/}" item start end port
+  local -a expanded=()
+  local -A seen=()
+  IFS=',' read -ra items <<< "$spec"
+  for item in "${items[@]}"; do
+    if [[ "$item" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+      start="${BASH_REMATCH[1]}"
+      end="${BASH_REMATCH[2]}"
+      (( start >= 1 && end <= 65535 && start <= end )) || return 1
+      (( end - start <= 255 )) || return 1
+      for ((port=start; port<=end; port++)); do expanded+=("$port"); done
+    elif valid_port "$item"; then
+      expanded+=("$item")
+    else
+      return 1
+    fi
+  done
+  ((${#expanded[@]} > 0 && ${#expanded[@]} <= 256)) || return 1
+  for port in "${expanded[@]}"; do
+    [[ -n "${seen[$port]:-}" ]] && continue
+    seen["$port"]=1
+    printf '%s\n' "$port"
+  done
+}
+
+discover_mesh_nodes() {
+  [[ -x "${BIN_DIR}/easytier-cli" ]] || return 0
+  local local_ip=""
+  if [[ -f "$CONFIG_FILE" ]]; then
+    local_ip="$(sed -n 's/^IPV4=//p' "$CONFIG_FILE" | head -n1)"
+  fi
+  "${BIN_DIR}/easytier-cli" peer 2>/dev/null |
+    awk -F'|' -v local_ip="$local_ip" '
+      {
+        ip=$2; host=$3
+        gsub(/^[ \t]+|[ \t]+$/, "", ip)
+        gsub(/^[ \t]+|[ \t]+$/, "", host)
+        if (ip ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && ip != "ipv4" && ip != local_ip)
+          print ip "|" host
+      }
+    ' | sort -u
+}
+
+install_haproxy_runtime() {
+  if command -v haproxy >/dev/null 2>&1; then return; fi
+  info "Installing HAProxy..."
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y -qq haproxy
+  ok "HAProxy installed."
+}
+
+write_haproxy_service() {
+  cat > "$HAPROXY_SERVICE_FILE" <<EOF
+[Unit]
+Description=XRayMesh HAProxy TCP Tunnels
+Documentation=https://www.haproxy.org/
+Wants=network-online.target xraymesh.service
+After=network-online.target xraymesh.service
+
+[Service]
+Type=notify
+ExecStart=/usr/sbin/haproxy -Ws -f ${HAPROXY_CONFIG} -p /run/xraymesh-haproxy/haproxy.pid
+Restart=always
+RestartSec=3
+RuntimeDirectory=xraymesh-haproxy
+RuntimeDirectoryMode=0755
+LimitNOFILE=1048576
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+}
+
+generate_haproxy_config() {
+  mkdir -p "$HAPROXY_TUNNEL_DIR"
+  local tmp="${HAPROXY_CONFIG}.tmp" definition name target port_spec port safe
+  {
+    cat <<'EOF'
+global
+    log stdout format raw local0
+    maxconn 100000
+
+defaults
+    log global
+    mode tcp
+    option tcplog
+    timeout connect 10s
+    timeout client 1h
+    timeout server 1h
+EOF
+    for definition in "$HAPROXY_TUNNEL_DIR"/*.env; do
+      [[ -f "$definition" ]] || continue
+      unset TUNNEL_NAME TARGET_IP PORT_SPEC
+      # shellcheck disable=SC1090
+      source "$definition"
+      name="$TUNNEL_NAME"
+      target="$TARGET_IP"
+      port_spec="$PORT_SPEC"
+      safe="${name//-/_}"
+      while IFS= read -r port; do
+        cat <<EOF
+
+frontend xr_${safe}_${port}
+    bind 0.0.0.0:${port}
+    mode tcp
+    default_backend xr_${safe}_${port}_backend
+
+backend xr_${safe}_${port}_backend
+    mode tcp
+    server ${safe}_node ${target}:${port} check inter 5s fall 3 rise 2
+EOF
+      done < <(expand_port_spec "$port_spec")
+    done
+  } > "$tmp"
+  mv -f "$tmp" "$HAPROXY_CONFIG"
+  chmod 600 "$HAPROXY_CONFIG"
+}
+
+apply_haproxy_config() {
+  generate_haproxy_config
+  if ! haproxy -c -f "$HAPROXY_CONFIG"; then
+    fail "HAProxy rejected the generated configuration."
+    return 1
+  fi
+  write_haproxy_service
+  systemctl enable --now xraymesh-haproxy.service
+  systemctl restart xraymesh-haproxy.service
+  ok "HAProxy tunnel configuration applied."
+}
+
+select_mesh_target() {
+  local -a nodes=()
+  local line choice index
+  while IFS= read -r line; do [[ -n "$line" ]] && nodes+=("$line"); done < <(discover_mesh_nodes)
+
+  printf '\n'
+  if ((${#nodes[@]})); then
+    say "  Available EasyTier nodes" "$BOLD$CYAN"
+    for index in "${!nodes[@]}"; do
+      IFS='|' read -r node_ip node_host <<< "${nodes[$index]}"
+      printf '  %b[%d]%b  %-15s  %s\n' "$CYAN" "$((index + 1))" "$RESET" "$node_ip" "${node_host:-unknown}"
+    done
+  else
+    warn "No EasyTier peers were discovered automatically."
+  fi
+  printf '  %b[M]%b  Enter a virtual IP manually\n\n' "$PURPLE" "$RESET"
+  read -r -p "  Select destination node: " choice
+  if [[ "${choice,,}" == "m" ]]; then
+    read -r -p "  Destination virtual IP: " SELECTED_TARGET
+  elif [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#nodes[@]} )); then
+    SELECTED_TARGET="${nodes[$((choice - 1))]%%|*}"
+  else
+    fail "Invalid node selection."
+    return 1
+  fi
+  valid_ip "$SELECTED_TARGET" || { fail "Destination must be a valid 10.x.x.x mesh IP."; return 1; }
+}
+
+save_haproxy_tunnel() {
+  local name="$1" target="$2" ports="$3" file="${HAPROXY_TUNNEL_DIR}/${1}.env"
+  mkdir -p "$HAPROXY_TUNNEL_DIR"
+  umask 077
+  {
+    printf 'TUNNEL_NAME=%q\n' "$name"
+    printf 'TARGET_IP=%q\n' "$target"
+    printf 'PORT_SPEC=%q\n' "$ports"
+  } > "$file"
+}
+
+create_haproxy_tunnel() {
+  header
+  section "CREATE HAPROXY TUNNEL"
+  info "HAProxy tunnels support TCP traffic. Generic UDP forwarding is not supported."
+  install_haproxy_runtime
+
+  local name ports
+  while :; do
+    read -r -p "  Tunnel name (letters, numbers, _ or -): " name
+    validate_tunnel_name "$name" || { warn "Enter a valid name with up to 32 characters."; continue; }
+    [[ ! -f "${HAPROXY_TUNNEL_DIR}/${name}.env" ]] || { warn "A tunnel with this name already exists."; continue; }
+    break
+  done
+  select_mesh_target || return 1
+  while :; do
+    read -r -p "  TCP ports (e.g. 80,443,8000-8010): " ports
+    expand_port_spec "$ports" >/dev/null && break
+    warn "Invalid ports. Use comma-separated ports/ranges; maximum 256 expanded ports."
+  done
+
+  save_haproxy_tunnel "$name" "$SELECTED_TARGET" "$ports"
+  if apply_haproxy_config; then
+    ok "Tunnel '${name}' forwards TCP ports ${ports} to ${SELECTED_TARGET}."
+  else
+    rm -f "${HAPROXY_TUNNEL_DIR}/${name}.env"
+    generate_haproxy_config
+    return 1
+  fi
+  pause
+}
+
+list_haproxy_tunnels() {
+  local definition count=0
+  printf '\n'
+  printf '  %-4s %-20s %-16s %s\n' "ID" "NAME" "TARGET" "TCP PORTS"
+  printf '  %-4s %-20s %-16s %s\n' "--" "--------------------" "---------------" "----------------"
+  HAPROXY_FILES=()
+  for definition in "$HAPROXY_TUNNEL_DIR"/*.env; do
+    [[ -f "$definition" ]] || continue
+    unset TUNNEL_NAME TARGET_IP PORT_SPEC
+    # shellcheck disable=SC1090
+    source "$definition"
+    HAPROXY_FILES+=("$definition")
+    ((count+=1))
+    printf '  %-4s %-20s %-16s %s\n' "$count" "$TUNNEL_NAME" "$TARGET_IP" "$PORT_SPEC"
+  done
+  ((count)) || warn "No HAProxy tunnels are configured."
+}
+
+edit_haproxy_tunnel() {
+  header
+  section "EDIT HAPROXY TUNNEL"
+  list_haproxy_tunnels
+  ((${#HAPROXY_FILES[@]})) || { pause; return; }
+  local choice definition old_name name ports backup
+  read -r -p "  Select tunnel ID: " choice
+  [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#HAPROXY_FILES[@]} )) ||
+    { fail "Invalid tunnel selection."; return 1; }
+  definition="${HAPROXY_FILES[$((choice - 1))]}"
+  # shellcheck disable=SC1090
+  source "$definition"
+  old_name="$TUNNEL_NAME"
+  name="$(prompt_default "Tunnel name" "$TUNNEL_NAME")"
+  validate_tunnel_name "$name" || { fail "Invalid tunnel name."; return 1; }
+  if [[ "$name" != "$old_name" && -f "${HAPROXY_TUNNEL_DIR}/${name}.env" ]]; then
+    fail "A tunnel named '${name}' already exists."
+    return 1
+  fi
+  select_mesh_target || return 1
+  while :; do
+    ports="$(prompt_default "TCP ports" "$PORT_SPEC")"
+    expand_port_spec "$ports" >/dev/null && break
+    warn "Invalid port list or range."
+  done
+  backup="$(mktemp)"
+  cp "$definition" "$backup"
+  [[ "$name" == "$old_name" ]] || rm -f "$definition"
+  save_haproxy_tunnel "$name" "$SELECTED_TARGET" "$ports"
+  if ! apply_haproxy_config; then
+    rm -f "${HAPROXY_TUNNEL_DIR}/${name}.env"
+    cp "$backup" "$definition"
+    rm -f "$backup"
+    generate_haproxy_config
+    fail "The previous tunnel configuration was restored."
+    return 1
+  fi
+  rm -f "$backup"
+  ok "Tunnel '${name}' updated."
+  pause
+}
+
+delete_haproxy_tunnel() {
+  header
+  section "DELETE HAPROXY TUNNEL"
+  list_haproxy_tunnels
+  ((${#HAPROXY_FILES[@]})) || { pause; return; }
+  local choice definition
+  read -r -p "  Select tunnel ID: " choice
+  [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#HAPROXY_FILES[@]} )) ||
+    { fail "Invalid tunnel selection."; return 1; }
+  definition="${HAPROXY_FILES[$((choice - 1))]}"
+  # shellcheck disable=SC1090
+  source "$definition"
+  read -r -p "  Type DELETE to remove '${TUNNEL_NAME}': " confirm
+  [[ "$confirm" == "DELETE" ]] || { info "Delete operation cancelled."; return; }
+  rm -f "$definition"
+  if compgen -G "${HAPROXY_TUNNEL_DIR}/*.env" >/dev/null; then
+    apply_haproxy_config
+  else
+    systemctl disable --now xraymesh-haproxy.service 2>/dev/null || true
+    rm -f "$HAPROXY_CONFIG" "$HAPROXY_SERVICE_FILE"
+    systemctl daemon-reload
+  fi
+  ok "HAProxy tunnel '${TUNNEL_NAME}' deleted."
+  pause
+}
+
+haproxy_tunnel_menu() {
+  while true; do
+    header
+    section "HAPROXY TCP TUNNELS"
+    printf '  Service: %s\n' "$(systemctl is-active xraymesh-haproxy.service 2>/dev/null || echo inactive)"
+    list_haproxy_tunnels
+    printf '\n'
+    printf '  %b[1]%b  Create tunnel\n' "$CYAN" "$RESET"
+    printf '  %b[2]%b  Edit tunnel\n' "$PURPLE" "$RESET"
+    printf '  %b[3]%b  Delete tunnel\n' "$RED" "$RESET"
+    printf '  %b[4]%b  View HAProxy logs\n' "$BLUE" "$RESET"
+    printf '  %b[0]%b  Back\n\n' "$GRAY" "$RESET"
+    read -r -p "  Select an option [0-4]: " choice
+    case "$choice" in
+      1) run_screen create_haproxy_tunnel ;;
+      2) run_screen edit_haproxy_tunnel ;;
+      3) run_screen delete_haproxy_tunnel ;;
+      4) journalctl -u xraymesh-haproxy.service -f -n 80 -o short-iso ;;
+      0) return ;;
+      *) warn "Invalid option"; sleep 1 ;;
+    esac
+  done
+}
+
 update_core() {
   local before after
   before="$(cat "${INSTALL_DIR}/easytier.version" 2>/dev/null || echo "not installed")"
@@ -557,7 +885,8 @@ uninstall_app() {
   read -r -p "  Type REMOVE to confirm: " confirm
   [[ "$confirm" == "REMOVE" ]] || { info "Uninstall cancelled."; sleep 1; return; }
   systemctl disable --now xraymesh.service 2>/dev/null || true
-  rm -f "$SERVICE_FILE"
+  systemctl disable --now xraymesh-haproxy.service 2>/dev/null || true
+  rm -f "$SERVICE_FILE" "$HAPROXY_SERVICE_FILE"
   rm -rf -- "$INSTALL_DIR" /etc/xraymesh
   systemctl daemon-reload
   ok "XRayMesh has been removed."
@@ -579,11 +908,12 @@ menu() {
     printf '  %b[5]%b  Control service\n' "$PURPLE" "$RESET"
     printf '  %b[6]%b  Install or update EasyTier\n' "$PURPLE" "$RESET"
     printf '  %b[7]%b  Connection diagnostics\n' "$YELLOW" "$RESET"
-    printf '  %b[8]%b  Delete mesh configuration\n' "$YELLOW" "$RESET"
-    printf '  %b[9]%b  Uninstall XRayMesh completely\n' "$RED" "$RESET"
+    printf '  %b[8]%b  HAProxy TCP tunnels\n' "$PINK" "$RESET"
+    printf '  %b[9]%b  Delete mesh configuration\n' "$YELLOW" "$RESET"
+    printf '  %b[10]%b Uninstall XRayMesh completely\n' "$RED" "$RESET"
     printf '  %b[0]%b  Exit\n\n' "$GRAY" "$RESET"
     printf '%b  Tip: Ctrl+C exits here; inside a screen it returns to this menu.%b\n\n' "$DIM$GRAY" "$RESET"
-    read -r -p "  Select an option [0-9]: " choice || { choice=""; continue; }
+    read -r -p "  Select an option [0-10]: " choice || { choice=""; continue; }
     case "$choice" in
       1) IN_MAIN_MENU=0; run_screen setup_node; IN_MAIN_MENU=1 ;;
       2) IN_MAIN_MENU=0; run_screen live_status; IN_MAIN_MENU=1 ;;
@@ -592,8 +922,9 @@ menu() {
       5) IN_MAIN_MENU=0; run_screen control_service; IN_MAIN_MENU=1 ;;
       6) IN_MAIN_MENU=0; run_screen update_core; IN_MAIN_MENU=1 ;;
       7) IN_MAIN_MENU=0; run_screen diagnostics; IN_MAIN_MENU=1 ;;
-      8) IN_MAIN_MENU=0; run_screen delete_mesh; IN_MAIN_MENU=1 ;;
-      9)
+      8) IN_MAIN_MENU=0; run_screen haproxy_tunnel_menu; IN_MAIN_MENU=1 ;;
+      9) IN_MAIN_MENU=0; run_screen delete_mesh; IN_MAIN_MENU=1 ;;
+      10)
         IN_MAIN_MENU=0
         run_screen uninstall_app
         IN_MAIN_MENU=1
@@ -614,10 +945,11 @@ case "${1:-menu}" in
   logs) journalctl -u xraymesh.service -f -n 100 ;;
   update) require_linux; update_core ;;
   delete) require_root; require_linux; delete_mesh ;;
+  haproxy) require_root; require_linux; haproxy_tunnel_menu ;;
   start|stop|restart) require_root; systemctl "$1" xraymesh.service ;;
   version|-v|--version) echo "${APP} ${VERSION} - © ${OWNER}" ;;
   *)
-    echo "Usage: $0 [menu|install|status|peers|routes|logs|update|delete|start|stop|restart|version]"
+    echo "Usage: $0 [menu|install|status|peers|routes|logs|update|delete|haproxy|start|stop|restart|version]"
     exit 2
     ;;
 esac
