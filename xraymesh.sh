@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="1.6.2"
+readonly VERSION="1.7.0"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
 readonly BIN_DIR="${INSTALL_DIR}/bin"
@@ -109,7 +109,7 @@ require_linux() {
 install_dependencies() {
   local missing=()
   local cmd
-  for cmd in curl unzip openssl ip ping figlet jq; do
+  for cmd in curl unzip openssl ip ping figlet jq sha256sum ss; do
     command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
   done
   ((${#missing[@]} == 0)) && return
@@ -124,27 +124,34 @@ arch_asset() {
     x86_64|amd64) echo "easytier-linux-x86_64" ;;
     aarch64|arm64) echo "easytier-linux-aarch64" ;;
     armv7l|armv7) echo "easytier-linux-armv7" ;;
-    i386|i686) echo "easytier-linux-i686" ;;
     *) fail "Unsupported architecture: $(uname -m)"; return 1 ;;
   esac
-}
-
-latest_easytier_version() {
-  local tag
-  tag="$(curl -fsSL --connect-timeout 8 --max-time 15 \
-    https://api.github.com/repos/EasyTier/EasyTier/releases/latest 2>/dev/null |
-    sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1 || true)"
-  echo "${tag:-$FALLBACK_EASYTIER_VERSION}"
 }
 
 install_core() {
   require_root
   install_dependencies
-  local version asset url tmp
-  version="$(latest_easytier_version)"
+  local version asset asset_name url digest actual_digest tmp release_json
   asset="$(arch_asset)"
-  url="https://github.com/EasyTier/EasyTier/releases/download/${version}/${asset}-${version}.zip"
   tmp="$(mktemp -d)"
+  release_json="${tmp}/release.json"
+  if ! curl -fsSL --connect-timeout 8 --max-time 20 \
+    https://api.github.com/repos/EasyTier/EasyTier/releases/latest -o "$release_json"; then
+    warn "Latest-release lookup failed; checking the pinned fallback release."
+    curl -fsSL --connect-timeout 8 --max-time 20 \
+      "https://api.github.com/repos/EasyTier/EasyTier/releases/tags/${FALLBACK_EASYTIER_VERSION}" \
+      -o "$release_json" || { fail "Could not retrieve trusted EasyTier release metadata."; rm -rf -- "$tmp"; return 1; }
+  fi
+  version="$(jq -er '.tag_name' "$release_json")" ||
+    { fail "EasyTier release metadata is invalid."; rm -rf -- "$tmp"; return 1; }
+  asset_name="${asset}-${version}.zip"
+  url="$(jq -er --arg name "$asset_name" '.assets[] | select(.name == $name) | .browser_download_url' "$release_json")" ||
+    { fail "No official EasyTier asset exists for $(uname -m)."; rm -rf -- "$tmp"; return 1; }
+  digest="$(jq -er --arg name "$asset_name" '.assets[] | select(.name == $name) | .digest' "$release_json")" ||
+    { fail "The official release did not provide a checksum for ${asset_name}."; rm -rf -- "$tmp"; return 1; }
+  [[ "$digest" =~ ^sha256:([0-9a-fA-F]{64})$ ]] ||
+    { fail "The official checksum has an unexpected format."; rm -rf -- "$tmp"; return 1; }
+  digest="${BASH_REMATCH[1],,}"
 
   info "Downloading EasyTier ${version} for $(uname -m)..."
   mkdir -p "$BIN_DIR" /etc/xraymesh
@@ -153,6 +160,13 @@ install_core() {
     rm -rf -- "$tmp"
     return 1
   fi
+  actual_digest="$(sha256sum "${tmp}/core.zip" | awk '{print $1}')"
+  if [[ "$actual_digest" != "$digest" ]]; then
+    fail "EasyTier archive checksum verification failed. Nothing was installed."
+    rm -rf -- "$tmp"
+    return 1
+  fi
+  ok "EasyTier archive SHA-256 verified."
   unzip -q -o "${tmp}/core.zip" -d "$tmp"
   local core cli
   core="$(find "$tmp" -type f -name easytier-core | head -n1)"
@@ -288,12 +302,19 @@ setup_node() {
   printf '\n'
 
   local name secret hostname ipv4 protocol port peers encryption ipv6 mtu
+  local config_backup="" had_config=0 service_was_active=0
   local default_name="xraymesh" default_secret="" default_hostname default_ipv4="10.144.144.1"
   local default_protocol="udp" default_port="11010" default_peers=""
   local default_encryption="yes" default_ipv6="no" default_mtu="1380"
   default_hostname="$(hostname -s)"
 
   if [[ -f "$CONFIG_FILE" ]]; then
+    had_config=1
+    config_backup="$(mktemp)"
+    cp -p "$CONFIG_FILE" "$config_backup"
+    if systemctl is-active --quiet xraymesh.service; then
+      service_was_active=1
+    fi
     # Preserve the current values while editing an existing node.
     # shellcheck disable=SC1090
     source "$CONFIG_FILE"
@@ -376,7 +397,26 @@ setup_node() {
   else
     fail "The service failed to start."
     journalctl -u xraymesh.service -n 20 --no-pager
+    warn "Restoring the previous working node configuration."
+    systemctl stop xraymesh.service 2>/dev/null || true
+    if (( had_config )); then
+      cp -p "$config_backup" "$CONFIG_FILE"
+      write_service
+      if (( service_was_active )); then
+        systemctl restart xraymesh.service || true
+      fi
+    else
+      systemctl disable xraymesh.service 2>/dev/null || true
+      rm -f "$CONFIG_FILE" "$SERVICE_FILE" "${INSTALL_DIR}/xraymesh-runner"
+      systemctl daemon-reload
+    fi
+    [[ -z "$config_backup" ]] || rm -f "$config_backup"
     return 1
+  fi
+  [[ -z "$config_backup" ]] || rm -f "$config_backup"
+  if compgen -G "${HAPROXY_TUNNEL_DIR}/*.env" >/dev/null; then
+    info "Re-enabling the existing HAProxy tunnels."
+    apply_haproxy_config || warn "The mesh is online, but HAProxy tunnels need attention."
   fi
 }
 
@@ -399,10 +439,9 @@ delete_mesh() {
   fi
 
   systemctl disable --now xraymesh.service 2>/dev/null || true
-  if systemctl is-active --quiet xraymesh-haproxy.service 2>/dev/null; then
-    systemctl stop xraymesh-haproxy.service
-    info "HAProxy tunnels were stopped because the mesh node was deleted."
-  fi
+  systemctl disable --now xraymesh-haproxy.service 2>/dev/null || true
+  compgen -G "${HAPROXY_TUNNEL_DIR}/*.env" >/dev/null &&
+    info "HAProxy tunnels were disabled and preserved for the next mesh configuration."
   rm -f "$SERVICE_FILE" "$CONFIG_FILE" "${INSTALL_DIR}/xraymesh-runner"
   systemctl daemon-reload
   systemctl reset-failed xraymesh.service 2>/dev/null || true
@@ -801,8 +840,11 @@ EOF
       unset TUNNEL_NAME TARGET_IP PORT_SPEC
       # shellcheck disable=SC1090
       source "$definition"
+      # Values are loaded from the validated tunnel definition above.
+      # shellcheck disable=SC2153
       name="$TUNNEL_NAME"
       target="$TARGET_IP"
+      # shellcheck disable=SC2153
       port_spec="$PORT_SPEC"
       safe="${name//-/_}"
       while IFS= read -r port; do
@@ -825,15 +867,67 @@ EOF
 }
 
 apply_haproxy_config() {
+  local backup="" was_active=0
+  if [[ -f "$HAPROXY_CONFIG" ]]; then
+    backup="$(mktemp)"
+    cp -p "$HAPROXY_CONFIG" "$backup"
+  fi
+  if systemctl is-active --quiet xraymesh-haproxy.service 2>/dev/null; then
+    was_active=1
+  fi
   generate_haproxy_config
   if ! haproxy -c -f "$HAPROXY_CONFIG"; then
     fail "HAProxy rejected the generated configuration."
+    [[ -z "$backup" ]] || cp -p "$backup" "$HAPROXY_CONFIG"
+    [[ -z "$backup" ]] || rm -f "$backup"
     return 1
   fi
   write_haproxy_service
-  systemctl enable --now xraymesh-haproxy.service
-  systemctl restart xraymesh-haproxy.service
+  if ! systemctl enable xraymesh-haproxy.service >/dev/null ||
+     ! systemctl restart xraymesh-haproxy.service ||
+     ! systemctl is-active --quiet xraymesh-haproxy.service; then
+    fail "HAProxy failed to start with the new configuration."
+    if [[ -n "$backup" ]]; then
+      cp -p "$backup" "$HAPROXY_CONFIG"
+      (( was_active )) && systemctl restart xraymesh-haproxy.service 2>/dev/null || true
+    else
+      systemctl disable --now xraymesh-haproxy.service 2>/dev/null || true
+      rm -f "$HAPROXY_CONFIG"
+    fi
+    [[ -z "$backup" ]] || rm -f "$backup"
+    return 1
+  fi
+  [[ -z "$backup" ]] || rm -f "$backup"
   ok "HAProxy tunnel configuration applied."
+}
+
+validate_haproxy_ports() {
+  local tunnel_name="$1" port_spec="$2" definition port other_port
+  local -A requested=()
+  while IFS= read -r port; do requested["$port"]=1; done < <(expand_port_spec "$port_spec")
+
+  for definition in "$HAPROXY_TUNNEL_DIR"/*.env; do
+    [[ -f "$definition" ]] || continue
+    unset TUNNEL_NAME TARGET_IP PORT_SPEC
+    # shellcheck disable=SC1090
+    source "$definition"
+    [[ "$TUNNEL_NAME" == "$tunnel_name" ]] && continue
+    while IFS= read -r other_port; do
+      if [[ -n "${requested[$other_port]:-}" ]]; then
+        fail "TCP port ${other_port} is already assigned to tunnel '${TUNNEL_NAME}'."
+        return 1
+      fi
+    done < <(expand_port_spec "$PORT_SPEC")
+  done
+
+  for port in "${!requested[@]}"; do
+    local listeners
+    listeners="$(ss -H -ltnp "sport = :${port}" 2>/dev/null || true)"
+    if [[ -n "$listeners" && "$listeners" != *haproxy* ]]; then
+      fail "TCP port ${port} is already used by another local service."
+      return 1
+    fi
+  done
 }
 
 select_mesh_target() {
@@ -891,7 +985,7 @@ create_haproxy_tunnel() {
   select_mesh_target || return 1
   while :; do
     read -r -p "  TCP ports (e.g. 80,443,8000-8010): " ports
-    expand_port_spec "$ports" >/dev/null && break
+    expand_port_spec "$ports" >/dev/null && validate_haproxy_ports "$name" "$ports" && break
     warn "Invalid ports. Use comma-separated ports/ranges; maximum 256 expanded ports."
   done
 
@@ -931,8 +1025,11 @@ edit_haproxy_tunnel() {
   ((${#HAPROXY_FILES[@]})) || { pause; return; }
   local choice definition old_name name ports backup
   read -r -p "  Select tunnel ID: " choice
-  [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#HAPROXY_FILES[@]} )) ||
-    { fail "Invalid tunnel selection."; return 1; }
+  if [[ ! "$choice" =~ ^[0-9]+$ ]] ||
+     (( choice < 1 || choice > ${#HAPROXY_FILES[@]} )); then
+    fail "Invalid tunnel selection."
+    return 1
+  fi
   definition="${HAPROXY_FILES[$((choice - 1))]}"
   # shellcheck disable=SC1090
   source "$definition"
@@ -946,7 +1043,7 @@ edit_haproxy_tunnel() {
   select_mesh_target || return 1
   while :; do
     ports="$(prompt_default "TCP ports" "$PORT_SPEC")"
-    expand_port_spec "$ports" >/dev/null && break
+    expand_port_spec "$ports" >/dev/null && validate_haproxy_ports "$old_name" "$ports" && break
     warn "Invalid port list or range."
   done
   backup="$(mktemp)"
@@ -973,8 +1070,11 @@ delete_haproxy_tunnel() {
   ((${#HAPROXY_FILES[@]})) || { pause; return; }
   local choice definition
   read -r -p "  Select tunnel ID: " choice
-  [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#HAPROXY_FILES[@]} )) ||
-    { fail "Invalid tunnel selection."; return 1; }
+  if [[ ! "$choice" =~ ^[0-9]+$ ]] ||
+     (( choice < 1 || choice > ${#HAPROXY_FILES[@]} )); then
+    fail "Invalid tunnel selection."
+    return 1
+  fi
   definition="${HAPROXY_FILES[$((choice - 1))]}"
   # shellcheck disable=SC1090
   source "$definition"
@@ -1055,6 +1155,75 @@ uninstall_app() {
   exit 0
 }
 
+self_test_platform() {
+  [[ "$(uname -s)" == "Linux" ]] && command -v systemctl >/dev/null
+}
+
+self_test_commands() {
+  local command_name
+  for command_name in curl unzip openssl ip ping jq sha256sum ss; do
+    command -v "$command_name" >/dev/null || return 1
+  done
+}
+
+self_test_core() {
+  [[ -x "${BIN_DIR}/easytier-core" && -x "${BIN_DIR}/easytier-cli" ]]
+}
+
+self_test_config_permissions() {
+  [[ "$(stat -c '%a' "$CONFIG_FILE")" == "600" ]]
+}
+
+self_test() {
+  local failures=0 checks=0
+  header
+  section "XRAYMESH SELF-TEST"
+
+  test_result() {
+    ((checks+=1))
+    if "$@"; then
+      ok "$SELF_TEST_LABEL"
+    else
+      fail "$SELF_TEST_LABEL"
+      ((failures+=1))
+    fi
+  }
+
+  SELF_TEST_LABEL="Linux and systemd are available"
+  test_result self_test_platform
+  SELF_TEST_LABEL="Required commands are installed"
+  test_result self_test_commands
+  SELF_TEST_LABEL="EasyTier core and CLI are executable"
+  test_result self_test_core
+
+  if [[ -f "$CONFIG_FILE" ]]; then
+    SELF_TEST_LABEL="Node configuration has secure permissions"
+    test_result self_test_config_permissions
+    SELF_TEST_LABEL="Node systemd unit is valid"
+    test_result systemd-analyze verify "$SERVICE_FILE"
+    SELF_TEST_LABEL="Mesh service is active"
+    test_result systemctl is-active --quiet xraymesh.service
+  else
+    warn "Node configuration checks skipped: no node is configured."
+  fi
+
+  if compgen -G "${HAPROXY_TUNNEL_DIR}/*.env" >/dev/null; then
+    SELF_TEST_LABEL="HAProxy configuration is valid"
+    test_result haproxy -c -f "$HAPROXY_CONFIG"
+    SELF_TEST_LABEL="HAProxy service is active"
+    test_result systemctl is-active --quiet xraymesh-haproxy.service
+  fi
+
+  printf '\n'
+  if (( failures == 0 )); then
+    ok "All ${checks} checks passed."
+  else
+    fail "${failures} of ${checks} checks failed."
+  fi
+  [[ -t 0 ]] && pause
+  (( failures == 0 ))
+}
+
 menu() {
   require_root
   require_linux
@@ -1072,11 +1241,12 @@ menu() {
     printf '  %b[6]%b  Install or update EasyTier\n' "$PURPLE" "$RESET"
     printf '  %b[7]%b  Connection diagnostics\n' "$YELLOW" "$RESET"
     printf '  %b[8]%b  HAProxy TCP tunnels\n' "$PINK" "$RESET"
-    printf '  %b[9]%b  Delete mesh configuration\n' "$YELLOW" "$RESET"
-    printf '  %b[10]%b Uninstall XRayMesh completely\n' "$RED" "$RESET"
+    printf '  %b[9]%b  Run self-test\n' "$GREEN" "$RESET"
+    printf '  %b[10]%b Delete mesh configuration\n' "$YELLOW" "$RESET"
+    printf '  %b[11]%b Uninstall XRayMesh completely\n' "$RED" "$RESET"
     printf '  %b[0]%b  Exit\n\n' "$GRAY" "$RESET"
     printf '%b  Tip: Ctrl+C exits here; inside a screen it returns to this menu.%b\n\n' "$DIM$GRAY" "$RESET"
-    read -r -p "  Select an option [0-10]: " choice || { choice=""; continue; }
+    read -r -p "  Select an option [0-11]: " choice || { choice=""; continue; }
     case "$choice" in
       1) IN_MAIN_MENU=0; run_screen setup_node; IN_MAIN_MENU=1 ;;
       2) IN_MAIN_MENU=0; run_screen live_status; IN_MAIN_MENU=1 ;;
@@ -1086,8 +1256,9 @@ menu() {
       6) IN_MAIN_MENU=0; run_screen update_core; IN_MAIN_MENU=1 ;;
       7) IN_MAIN_MENU=0; run_screen diagnostics; IN_MAIN_MENU=1 ;;
       8) IN_MAIN_MENU=0; run_screen haproxy_tunnel_menu; IN_MAIN_MENU=1 ;;
-      9) IN_MAIN_MENU=0; run_screen delete_mesh; IN_MAIN_MENU=1 ;;
-      10)
+      9) IN_MAIN_MENU=0; run_screen self_test; IN_MAIN_MENU=1 ;;
+      10) IN_MAIN_MENU=0; run_screen delete_mesh; IN_MAIN_MENU=1 ;;
+      11)
         IN_MAIN_MENU=0
         run_screen uninstall_app
         IN_MAIN_MENU=1
@@ -1099,6 +1270,7 @@ menu() {
   done
 }
 
+main() {
 case "${1:-menu}" in
   menu) menu ;;
   install|setup) require_linux; setup_node ;;
@@ -1109,10 +1281,16 @@ case "${1:-menu}" in
   update) require_linux; update_core ;;
   delete) require_root; require_linux; delete_mesh ;;
   haproxy) require_root; require_linux; haproxy_tunnel_menu ;;
+  self-test|doctor) require_linux; self_test ;;
   start|stop|restart) require_root; systemctl "$1" xraymesh.service ;;
   version|-v|--version) echo "${APP} ${VERSION} - © ${OWNER}" ;;
   *)
-    echo "Usage: $0 [menu|install|status|peers|routes|logs|update|delete|haproxy|start|stop|restart|version]"
+    echo "Usage: $0 [menu|install|status|peers|routes|logs|update|delete|haproxy|self-test|start|stop|restart|version]"
     exit 2
     ;;
 esac
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

@@ -51,7 +51,7 @@ day-to-day management easier.
 Run XRayMesh with one command:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh)
+curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh | sudo bash
 ```
 
 Or download and run it locally:
@@ -62,7 +62,8 @@ sudo ./xraymesh.sh
 ```
 
 XRayMesh installs its dependencies and the correct EasyTier binary for the
-server architecture.
+server architecture. The official release archive is verified against the
+SHA-256 digest published by GitHub before installation.
 
 ## Connect Two Servers
 
@@ -188,6 +189,7 @@ sudo ./xraymesh.sh logs       Stream service logs
 sudo ./xraymesh.sh update     Update EasyTier
 sudo ./xraymesh.sh delete     Delete the current mesh node
 sudo ./xraymesh.sh haproxy    Manage HAProxy TCP tunnels
+sudo ./xraymesh.sh self-test  Validate the installation and active services
 sudo ./xraymesh.sh start      Start the node
 sudo ./xraymesh.sh stop       Stop the node
 sudo ./xraymesh.sh restart    Restart the node
@@ -237,6 +239,10 @@ XRayMesh is source-available for personal and internal use. Republishing,
 mirroring, rebranding, selling, or distributing this project or a modified
 version in another repository is prohibited without prior written permission
 from ErfanXRay. See the [XRayMesh Source-Available License](LICENSE).
+
+Security issues should be reported privately as described in
+[SECURITY.md](SECURITY.md). Release history is available in
+[CHANGELOG.md](CHANGELOG.md).
 
 EasyTier is an independent third-party project and remains subject to its own
 license.

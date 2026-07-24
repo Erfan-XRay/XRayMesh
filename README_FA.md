@@ -50,7 +50,7 @@ XRayMesh برای ساده‌ترشدن تنظیمات و مدیریت روزا�
 اجرای XRayMesh با یک دستور:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh)
+curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh | sudo bash
 ```
 
 یا دانلود و اجرای محلی:
@@ -186,6 +186,7 @@ sudo ./xraymesh.sh logs       نمایش زنده لاگ سرویس
 sudo ./xraymesh.sh update     بروزرسانی EasyTier
 sudo ./xraymesh.sh delete     حذف تنظیمات نود فعلی
 sudo ./xraymesh.sh haproxy    مدیریت تونل‌های TCP با HAProxy
+sudo ./xraymesh.sh self-test  بررسی سلامت نصب و سرویس‌های فعال
 sudo ./xraymesh.sh start      اجرای نود
 sudo ./xraymesh.sh stop       توقف نود
 sudo ./xraymesh.sh restart    راه‌اندازی مجدد نود
