@@ -194,5 +194,12 @@ stable EasyTier release. If the API is temporarily unavailable, it uses
 
 ## License
 
-XRayMesh is distributed under the MIT License. EasyTier is an independent
-project distributed under the LGPL-3.0 License.
+Copyright © 2026 ErfanXRay. All Rights Reserved.
+
+XRayMesh is source-available for personal and internal use. Republishing,
+mirroring, rebranding, selling, or distributing this project or a modified
+version in another repository is prohibited without prior written permission
+from ErfanXRay. See the [XRayMesh Source-Available License](LICENSE).
+
+EasyTier is an independent third-party project and remains subject to its own
+license.

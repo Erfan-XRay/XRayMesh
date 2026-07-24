@@ -1,21 +1,74 @@
-MIT License
+XRayMesh Source-Available License
+Version 1.0, July 2026
 
-Copyright (c) 2026 ErfanXRay
+Copyright (c) 2026 ErfanXRay. All Rights Reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. OWNERSHIP
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+XRayMesh, including its source code, documentation, name, branding, design,
+and all modified or derivative versions, is the intellectual property of
+ErfanXRay unless otherwise stated.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+2. LIMITED PERMISSION
+
+You may download and use XRayMesh for personal or internal purposes. You may
+modify your private local copy solely for your own personal or internal use.
+
+3. PROHIBITED ACTIONS
+
+Without prior written permission from ErfanXRay, you may not:
+
+a. copy, publish, redistribute, sublicense, mirror, or publicly host XRayMesh,
+   in whole or in part;
+
+b. publish XRayMesh or a modified or derivative version in another GitHub,
+   GitLab, or other public or private software repository;
+
+c. remove, hide, replace, or alter the XRayMesh name, ErfanXRay attribution,
+   copyright notice, license notice, or other ownership information;
+
+d. present XRayMesh, or any modified or derivative version of it, as your own
+   work or under another author, developer, project, or brand name;
+
+e. sell, rent, monetize, commercially exploit, or include XRayMesh in a paid
+   product or service;
+
+f. use any part of XRayMesh as the basis of another publicly distributed
+   project, installer, management script, or software package.
+
+The availability of the source code does not grant permission to redistribute
+or republish it. Public access to the official repository is provided only for
+inspection, installation, personal use, and contribution to the official
+XRayMesh project.
+
+4. CONTRIBUTIONS
+
+Bug reports and proposed changes should be submitted to the official XRayMesh
+repository. Submission of a contribution grants ErfanXRay a perpetual,
+worldwide, irrevocable, royalty-free right to use, modify, license, and
+distribute that contribution as part of XRayMesh.
+
+5. THIRD-PARTY SOFTWARE
+
+This license applies only to XRayMesh. EasyTier and other third-party
+components remain subject to their own respective licenses. Nothing in this
+license limits rights granted directly by those third-party licenses.
+
+6. TERMINATION
+
+Any permission granted by this license terminates automatically if you violate
+its terms. Upon termination, you must stop using XRayMesh and remove all copies
+under your control, except where retention is required by law.
+
+7. NO WARRANTY
+
+XRAYMESH IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL ERFANXRAY BE
+LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM OR RELATED TO
+XRAYMESH OR ITS USE.
+
+8. PERMISSION REQUESTS
+
+Permission for redistribution, commercial use, or another use prohibited by
+this license must be obtained in writing from ErfanXRay before that use begins.
