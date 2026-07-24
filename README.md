@@ -30,7 +30,13 @@ Developed by **ErfanXRay**
 
 ## Installation
 
-Download the script and run:
+Run XRayMesh directly with one command:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh)
+```
+
+Alternatively, download the script and run it locally:
 
 ```bash
 chmod +x xraymesh.sh
