@@ -139,6 +139,10 @@ QUIC ترافیک Mesh را روی UDP حمل می‌کند. پورت انتخا
 - Transport فعال و Peerهای متصل
 - Latency، میزان ترافیک، Route Cost و Tunnel Protocol
 
+بخش Live Status هر یک ثانیه فقط پنل اطلاعات را در همان محل بروزرسانی می‌کند و
+کل صفحه ترمینال را پاک یا دوباره رسم نمی‌کند. با `q` یا `Ctrl+C` می‌توان به
+منوی اصلی برگشت.
+
 بخش Diagnostics، Listenerهای محلی، وضعیت Peer Center و خطاهای اخیر Handshake،
 Timeout و Connection را بررسی می‌کند. لاگ زنده systemd و جدول Routeهای EasyTier
 نیز از منوی اصلی در دسترس هستند.

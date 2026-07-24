@@ -140,6 +140,9 @@ The dashboard shows:
 - Active transport and connected peers
 - Peer latency, traffic, route cost, and tunnel protocol
 
+Live Status updates the data panel in place once per second without clearing or
+redrawing the full terminal. Press `q` or `Ctrl+C` to return to the main menu.
+
 The diagnostics section checks local listeners, EasyTier peer-center state, and
 recent handshake, timeout, and connection errors. Live systemd logs and the
 EasyTier routing table are also available from the menu.

@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="1.5.2"
+readonly VERSION="1.6.0"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
 readonly BIN_DIR="${INSTALL_DIR}/bin"
@@ -430,8 +430,7 @@ server_addresses() {
     paste -sd ', ' -
 }
 
-dashboard() {
-  header
+render_network_overview() {
   section "NETWORK OVERVIEW"
   printf '  %-16s %s\n' "Service" "$(service_state)"
   if [[ -f "${INSTALL_DIR}/easytier.version" ]]; then
@@ -458,6 +457,9 @@ dashboard() {
   if [[ -n "$server_ipv6" ]]; then
     printf '  %-16s %b%s%b\n' "Server IPv6" "$BLUE" "$server_ipv6" "$RESET"
   fi
+}
+
+render_connected_peers() {
   section "CONNECTED PEERS"
   if systemctl is-active --quiet xraymesh.service && [[ -x "${BIN_DIR}/easytier-cli" ]]; then
     "${BIN_DIR}/easytier-cli" peer 2>/dev/null || warn "Could not retrieve peer information."
@@ -466,13 +468,57 @@ dashboard() {
   fi
 }
 
+dashboard() {
+  header
+  render_network_overview
+  render_connected_peers
+}
+
+restore_live_terminal() {
+  # Restore cursor visibility and the screen that was active before Live Status.
+  printf '\033[?25h\033[?1049l'
+}
+
 live_status() {
   [[ -x "${BIN_DIR}/easytier-cli" ]] || { warn "EasyTier is not installed."; pause; return; }
-  while true; do
+  if [[ ! -t 1 ]]; then
     dashboard
-    printf '\n%b  Refreshing every 2 seconds — press Ctrl+C to return%b\n' "$DIM" "$RESET"
-    sleep 2
+    return
+  fi
+
+  local frame key=""
+  # Use the alternate screen so Live Status never damages terminal history.
+  printf '\033[?1049h\033[?25l'
+  trap 'restore_live_terminal' EXIT
+  trap 'exit 130' INT TERM
+
+  header
+  say "  LIVE STATUS" "$BOLD$PINK"
+  printf '%b  Updating every second without redrawing the full screen.%b\n' "$DIM$GRAY" "$RESET"
+  printf '%b  Press q or Ctrl+C to return to the main menu.%b\n\n' "$DIM$GRAY" "$RESET"
+  # Save the beginning of the dynamic area. It can be restored repeatedly.
+  printf '\033[s'
+
+  while true; do
+    frame="$(
+      render_network_overview
+      render_connected_peers
+      printf '\n%b  LIVE%b  %s  %b|%b  q: back  %b|%b  Ctrl+C: back\n' \
+        "$GREEN" "$RESET" "$(date '+%Y-%m-%d %H:%M:%S')" \
+        "$GRAY" "$RESET" "$GRAY" "$RESET"
+    )"
+
+    # Restore the dynamic origin, write the complete frame in one operation,
+    # then remove stale lines left by a previously larger peer table.
+    printf '\033[u%s\n\033[J' "$frame"
+
+    key=""
+    read -rsn1 -t 1 key || true
+    [[ "${key,,}" == "q" ]] && break
   done
+
+  trap - INT TERM EXIT
+  restore_live_terminal
 }
 
 show_routes() {
