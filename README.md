@@ -51,7 +51,7 @@ day-to-day management easier.
 Run XRayMesh with one command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh | sudo bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh)
 ```
 
 Or download and run it locally:

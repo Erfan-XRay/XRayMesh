@@ -50,7 +50,7 @@ XRayMesh برای ساده‌ترشدن تنظیمات و مدیریت روزا�
 اجرای XRayMesh با یک دستور:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh | sudo bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh)
 ```
 
 یا دانلود و اجرای محلی:

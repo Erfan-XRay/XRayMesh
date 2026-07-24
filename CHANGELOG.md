@@ -18,7 +18,8 @@ All notable XRayMesh changes are documented here.
 - HAProxy tunnels are disabled when the mesh is deleted and restored after a
   new mesh node is configured.
 - Removed unsupported Linux i686 downloads.
-- One-line installation now works correctly for non-root users through `sudo`.
+- Restored the interactive process-substitution installer so menu prompts read
+  directly from the terminal.
 
 ## [1.6.2] - 2026-07-24
 
