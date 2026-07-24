@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="1.6.1"
+readonly VERSION="1.6.2"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
 readonly BIN_DIR="${INSTALL_DIR}/bin"
@@ -109,14 +109,14 @@ require_linux() {
 install_dependencies() {
   local missing=()
   local cmd
-  for cmd in curl unzip openssl ip ping figlet; do
+  for cmd in curl unzip openssl ip ping figlet jq; do
     command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
   done
   ((${#missing[@]} == 0)) && return
   info "Installing dependencies..."
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
-  apt-get install -y -qq curl unzip openssl iproute2 iputils-ping ca-certificates figlet
+  apt-get install -y -qq curl unzip openssl iproute2 iputils-ping ca-certificates figlet jq
 }
 
 arch_asset() {
@@ -476,33 +476,35 @@ render_peer_snapshot() {
     return
   fi
 
-  local output normalized local_ip="" summary count latency rx tx
-  if [[ -f "$CONFIG_FILE" ]]; then
-    local_ip="$(sed -n 's/^IPV4=//p' "$CONFIG_FILE" | head -n1)"
-  fi
-  output="$("${BIN_DIR}/easytier-cli" -p 127.0.0.1:15888 peer 2>/dev/null ||
-    "${BIN_DIR}/easytier-cli" peer 2>/dev/null || true)"
+  local output rows summary count latency rx tx
+  output="$("${BIN_DIR}/easytier-cli" -p 127.0.0.1:15888 -o json peer 2>/dev/null ||
+    "${BIN_DIR}/easytier-cli" -o json peer 2>/dev/null || true)"
   if [[ -z "$output" ]]; then
     warn "Could not retrieve the EasyTier peer snapshot."
     return
   fi
 
-  normalized="$(printf '%s\n' "$output" | sed 's/│/|/g')"
-  summary="$(printf '%s\n' "$normalized" | awk -F'|' -v local_ip="$local_ip" '
-    function trim(value) {
-      gsub(/^[ \t]+|[ \t]+$/, "", value)
-      return value
-    }
+  rows="$(printf '%s\n' "$output" | jq -r '
+    .. | objects |
+    select(.cost? != null and .cost != "Local" and (.ipv4? // "") != "") |
+    [.ipv4, (.lat_ms // "0"), (.rx_bytes // "0 B"), (.tx_bytes // "0 B")] |
+    @tsv
+  ' 2>/dev/null || true)"
+
+  summary="$(printf '%s\n' "$rows" | awk -F'\t' '
     function to_bytes(value, parts, number, unit) {
-      value=trim(value)
       if (value == "" || value == "*") return 0
       split(value, parts, /[ \t]+/)
       number=parts[1]+0
       unit=tolower(parts[2])
-      if (unit == "kb" || unit == "kib") return number*1024
-      if (unit == "mb" || unit == "mib") return number*1024*1024
-      if (unit == "gb" || unit == "gib") return number*1024*1024*1024
-      if (unit == "tb" || unit == "tib") return number*1024*1024*1024*1024
+      if (unit == "kb") return number*1000
+      if (unit == "mb") return number*1000*1000
+      if (unit == "gb") return number*1000*1000*1000
+      if (unit == "tb") return number*1000*1000*1000*1000
+      if (unit == "kib") return number*1024
+      if (unit == "mib") return number*1024*1024
+      if (unit == "gib") return number*1024*1024*1024
+      if (unit == "tib") return number*1024*1024*1024*1024
       return number
     }
     function human(value) {
@@ -513,16 +515,16 @@ render_peer_snapshot() {
       return sprintf("%.0f B", value)
     }
     {
-      ip=trim($2)
-      if (ip !~ /^([0-9]{1,3}\.){3}[0-9]{1,3}$/ || ip == local_ip || seen[ip]++) next
+      ip=$1
+      if (ip == "" || seen[ip]++) next
       count++
-      current_latency=trim($5)
+      current_latency=$2
       if (current_latency ~ /^[0-9]+([.][0-9]+)?$/) {
         latency_total+=current_latency
         latency_count++
       }
-      rx_total+=to_bytes($7)
-      tx_total+=to_bytes($8)
+      rx_total+=to_bytes($3)
+      tx_total+=to_bytes($4)
     }
     END {
       average=(latency_count ? sprintf("%.1f ms", latency_total/latency_count) : "n/a")
@@ -688,16 +690,35 @@ expand_port_spec() {
 
 discover_mesh_nodes() {
   [[ -x "${BIN_DIR}/easytier-cli" ]] || return 0
-  local local_ip="" output normalized line ip host
+  local local_ip="" output normalized line ip host json_rows
   local -A seen=()
   if [[ -f "$CONFIG_FILE" ]]; then
     local_ip="$(sed -n 's/^IPV4=//p' "$CONFIG_FILE" | head -n1)"
   fi
 
-  output="$("${BIN_DIR}/easytier-cli" -p 127.0.0.1:15888 peer 2>/dev/null ||
-    "${BIN_DIR}/easytier-cli" peer 2>/dev/null || true)"
+  output="$("${BIN_DIR}/easytier-cli" -p 127.0.0.1:15888 -o json peer 2>/dev/null ||
+    "${BIN_DIR}/easytier-cli" -o json peer 2>/dev/null || true)"
   [[ -n "$output" ]] || return 0
 
+  if command -v jq >/dev/null 2>&1; then
+    json_rows="$(printf '%s\n' "$output" | jq -r '
+      .. | objects |
+      select(.cost? != null and .cost != "Local" and (.ipv4? // "") != "") |
+      [(.ipv4 // ""), (.hostname // "EasyTier peer")] |
+      @tsv
+    ' 2>/dev/null || true)"
+    while IFS=$'\t' read -r ip host; do
+      [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || continue
+      [[ "$ip" == "$local_ip" || -n "${seen[$ip]:-}" ]] && continue
+      seen["$ip"]=1
+      printf '%s|%s\n' "$ip" "${host:-EasyTier peer}"
+    done <<< "$json_rows"
+    ((${#seen[@]})) && return 0
+  fi
+
+  # Compatibility fallback for EasyTier versions without JSON output.
+  output="$("${BIN_DIR}/easytier-cli" -p 127.0.0.1:15888 peer 2>/dev/null ||
+    "${BIN_DIR}/easytier-cli" peer 2>/dev/null || true)"
   # EasyTier versions may render tables with ASCII pipes or Unicode box
   # separators. Normalize both before reading the IPv4 and hostname columns.
   normalized="$(printf '%s\n' "$output" | sed 's/│/|/g')"
@@ -1037,6 +1058,7 @@ uninstall_app() {
 menu() {
   require_root
   require_linux
+  install_dependencies
   IN_MAIN_MENU=1
   while true; do
     # Keep the menu alive if Ctrl+C interrupts dashboard rendering.
