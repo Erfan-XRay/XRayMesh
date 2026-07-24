@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="1.5.1"
+readonly VERSION="1.5.2"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
 readonly BIN_DIR="${INSTALL_DIR}/bin"
@@ -354,7 +354,14 @@ setup_node() {
 
   write_config "$name" "$secret" "$hostname" "$ipv4" "$protocol" "$port" "$peers" "$encryption" "$ipv6" "$mtu"
   write_service
-  systemctl enable --now xraymesh.service
+  systemctl enable xraymesh.service >/dev/null
+  if systemctl is-active --quiet xraymesh.service; then
+    info "Applying the updated node configuration..."
+    systemctl restart xraymesh.service
+  else
+    info "Starting the mesh node..."
+    systemctl start xraymesh.service
+  fi
   sleep 2
   if systemctl is-active --quiet xraymesh.service; then
     ok "The XRayMesh node is online."
