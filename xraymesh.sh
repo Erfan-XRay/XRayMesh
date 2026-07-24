@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="1.5.0"
+readonly VERSION="1.5.1"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
 readonly BIN_DIR="${INSTALL_DIR}/bin"
@@ -565,20 +565,38 @@ expand_port_spec() {
 
 discover_mesh_nodes() {
   [[ -x "${BIN_DIR}/easytier-cli" ]] || return 0
-  local local_ip=""
+  local local_ip="" output normalized line ip host
+  local -A seen=()
   if [[ -f "$CONFIG_FILE" ]]; then
     local_ip="$(sed -n 's/^IPV4=//p' "$CONFIG_FILE" | head -n1)"
   fi
-  "${BIN_DIR}/easytier-cli" peer 2>/dev/null |
-    awk -F'|' -v local_ip="$local_ip" '
-      {
-        ip=$2; host=$3
-        gsub(/^[ \t]+|[ \t]+$/, "", ip)
-        gsub(/^[ \t]+|[ \t]+$/, "", host)
-        if (ip ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && ip != "ipv4" && ip != local_ip)
-          print ip "|" host
-      }
-    ' | sort -u
+
+  output="$("${BIN_DIR}/easytier-cli" -p 127.0.0.1:15888 peer 2>/dev/null ||
+    "${BIN_DIR}/easytier-cli" peer 2>/dev/null || true)"
+  [[ -n "$output" ]] || return 0
+
+  # EasyTier versions may render tables with ASCII pipes or Unicode box
+  # separators. Normalize both before reading the IPv4 and hostname columns.
+  normalized="$(printf '%s\n' "$output" | sed 's/│/|/g')"
+
+  while IFS='|' read -r _ ip host _; do
+    ip="${ip#"${ip%%[![:space:]]*}"}"
+    ip="${ip%"${ip##*[![:space:]]}"}"
+    host="${host#"${host%%[![:space:]]*}"}"
+    host="${host%"${host##*[![:space:]]}"}"
+    [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || continue
+    [[ "$ip" == "$local_ip" || -n "${seen[$ip]:-}" ]] && continue
+    seen["$ip"]=1
+    printf '%s|%s\n' "$ip" "${host:-EasyTier peer}"
+  done <<< "$normalized"
+
+  # Fallback for future table layouts: extract 10.x virtual addresses directly.
+  while IFS= read -r ip; do
+    [[ "$ip" == "$local_ip" || -n "${seen[$ip]:-}" ]] && continue
+    seen["$ip"]=1
+    printf '%s|EasyTier peer\n' "$ip"
+  done < <(printf '%s\n' "$normalized" |
+    grep -Eo '10(\.[0-9]{1,3}){3}' || true)
 }
 
 install_haproxy_runtime() {
