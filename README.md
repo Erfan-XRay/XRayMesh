@@ -143,6 +143,10 @@ The dashboard shows:
 Live Status updates the data panel in place once per second without clearing or
 redrawing the full terminal. Press `q` or `Ctrl+C` to return to the main menu.
 
+The main menu uses a non-refreshing peer snapshot with the online peer count,
+average latency, total RX/TX traffic, and last-check time. This keeps menu input
+stable while detailed monitoring remains available in Live Status.
+
 The diagnostics section checks local listeners, EasyTier peer-center state, and
 recent handshake, timeout, and connection errors. Live systemd logs and the
 EasyTier routing table are also available from the menu.

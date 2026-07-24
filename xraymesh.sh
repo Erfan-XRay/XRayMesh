@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="1.6.0"
+readonly VERSION="1.6.1"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
 readonly BIN_DIR="${INSTALL_DIR}/bin"
@@ -468,10 +468,80 @@ render_connected_peers() {
   fi
 }
 
+render_peer_snapshot() {
+  section "PEER SNAPSHOT"
+  if ! systemctl is-active --quiet xraymesh.service 2>/dev/null ||
+     [[ ! -x "${BIN_DIR}/easytier-cli" ]]; then
+    warn "Peer information is unavailable while the mesh node is offline."
+    return
+  fi
+
+  local output normalized local_ip="" summary count latency rx tx
+  if [[ -f "$CONFIG_FILE" ]]; then
+    local_ip="$(sed -n 's/^IPV4=//p' "$CONFIG_FILE" | head -n1)"
+  fi
+  output="$("${BIN_DIR}/easytier-cli" -p 127.0.0.1:15888 peer 2>/dev/null ||
+    "${BIN_DIR}/easytier-cli" peer 2>/dev/null || true)"
+  if [[ -z "$output" ]]; then
+    warn "Could not retrieve the EasyTier peer snapshot."
+    return
+  fi
+
+  normalized="$(printf '%s\n' "$output" | sed 's/│/|/g')"
+  summary="$(printf '%s\n' "$normalized" | awk -F'|' -v local_ip="$local_ip" '
+    function trim(value) {
+      gsub(/^[ \t]+|[ \t]+$/, "", value)
+      return value
+    }
+    function to_bytes(value, parts, number, unit) {
+      value=trim(value)
+      if (value == "" || value == "*") return 0
+      split(value, parts, /[ \t]+/)
+      number=parts[1]+0
+      unit=tolower(parts[2])
+      if (unit == "kb" || unit == "kib") return number*1024
+      if (unit == "mb" || unit == "mib") return number*1024*1024
+      if (unit == "gb" || unit == "gib") return number*1024*1024*1024
+      if (unit == "tb" || unit == "tib") return number*1024*1024*1024*1024
+      return number
+    }
+    function human(value) {
+      if (value >= 1099511627776) return sprintf("%.2f TB", value/1099511627776)
+      if (value >= 1073741824) return sprintf("%.2f GB", value/1073741824)
+      if (value >= 1048576) return sprintf("%.2f MB", value/1048576)
+      if (value >= 1024) return sprintf("%.2f KB", value/1024)
+      return sprintf("%.0f B", value)
+    }
+    {
+      ip=trim($2)
+      if (ip !~ /^([0-9]{1,3}\.){3}[0-9]{1,3}$/ || ip == local_ip || seen[ip]++) next
+      count++
+      current_latency=trim($5)
+      if (current_latency ~ /^[0-9]+([.][0-9]+)?$/) {
+        latency_total+=current_latency
+        latency_count++
+      }
+      rx_total+=to_bytes($7)
+      tx_total+=to_bytes($8)
+    }
+    END {
+      average=(latency_count ? sprintf("%.1f ms", latency_total/latency_count) : "n/a")
+      printf "%d|%s|%s|%s", count+0, average, human(rx_total), human(tx_total)
+    }
+  ')"
+  IFS='|' read -r count latency rx tx <<< "$summary"
+
+  printf '  %-18s %b%s online%b\n' "Connected peers" "$BOLD$GREEN" "${count:-0}" "$RESET"
+  printf '  %-18s %b%s%b\n' "Average latency" "$CYAN" "${latency:-n/a}" "$RESET"
+  printf '  %-18s %b%s%b\n' "Total traffic" "$BLUE" "RX ${rx:-0 B} / TX ${tx:-0 B}" "$RESET"
+  printf '  %-18s %s\n' "Last check" "$(date '+%Y-%m-%d %H:%M:%S')"
+  printf '%b  Open Live Status for the complete real-time peer table.%b\n' "$DIM$GRAY" "$RESET"
+}
+
 dashboard() {
   header
   render_network_overview
-  render_connected_peers
+  render_peer_snapshot
 }
 
 restore_live_terminal() {
