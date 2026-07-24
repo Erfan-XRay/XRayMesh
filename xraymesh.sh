@@ -889,7 +889,9 @@ apply_haproxy_config() {
     fail "HAProxy failed to start with the new configuration."
     if [[ -n "$backup" ]]; then
       cp -p "$backup" "$HAPROXY_CONFIG"
-      (( was_active )) && systemctl restart xraymesh-haproxy.service 2>/dev/null || true
+      if (( was_active )); then
+        systemctl restart xraymesh-haproxy.service 2>/dev/null || true
+      fi
     else
       systemctl disable --now xraymesh-haproxy.service 2>/dev/null || true
       rm -f "$HAPROXY_CONFIG"
