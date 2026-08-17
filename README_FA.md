@@ -20,7 +20,8 @@ XRayMesh یک اسکریپت Bash برای ساخت و مدیریت شبکه Mes
 - اجرای دائمی هر نود به‌صورت سرویس systemd با Restart خودکار
 - نمایش Peerها، Latency، Route، ترافیک و Transport فعال
 - ساخت تونل‌های TCP با HAProxy به مقصد نودهای موجود EasyTier
-- پشتیبانی از لیست پورت و Port Range برای انتقال HAProxy
+- ساخت تونل‌های مدیریت‌شده TCP/UDP با iptables به مقصد IP مجازی EasyTier
+- پشتیبانی از لیست پورت و Port Range برای HAProxy و iptables
 - نمایش لاگ سرویس و ابزار عیب‌یابی اتصال و Handshake
 - نمایش IPv4 و IPv6 واقعی سرور به‌صورت جدا از IP مجازی Mesh
 - ویرایش یا حذف امن یک نود بدون نیاز به نصب مجدد کامل
@@ -174,6 +175,14 @@ HAProxy قابل مشاهده، ویرایش و حذف هستند. XRayMesh قب
 Port Forward عمومی UDP را ندارد و پشتیبانی HAProxy از QUIC به‌معنای انتقال
 دلخواه برنامه‌های UDP نیست.
 
+## تونل TCP/UDP با iptables
+
+گزینه 9 منوی اصلی Port Forward خام TCP، UDP یا هر دو را به یک IP مجازی EasyTier انجام می‌دهد. هنگام ساخت تونل، نام، نود مقصد، پروتکل، پورت یا Range پورت، Interface ورودی و Source IPv4/CIDR از کاربر گرفته می‌شود. Ruleها داخل Chainهای اختصاصی `XRAYMESH_DNAT`، `XRAYMESH_FWD` و `XRAYMESH_SNAT` نگهداری می‌شوند.
+
+XRayMesh برای برگشت صحیح پاسخ‌ها از مسیر Relay، IPv4 forwarding را فعال می‌کند و DNAT + FORWARD + MASQUERADE می‌سازد. در نتیجه سرویس مقصد به‌جای IP اصلی کاربر، آدرس سمت Mesh سرور Relay را به‌عنوان Source می‌بیند. این روش برای UDP عمومی از جمله Hysteria2/QUIC و همچنین TCP مناسب است.
+
+تعریف تونل‌ها هنگام حذف Mesh حفظ و بعد از ساخت دوباره Mesh مجدداً اعمال می‌شوند. برای محدودکردن دسترسی عمومی می‌توان Source CIDR را هنگام ساخت تونل محدود کرد.
+
 ## دستورات
 
 ```text
@@ -186,6 +195,7 @@ sudo ./xraymesh.sh logs       نمایش زنده لاگ سرویس
 sudo ./xraymesh.sh update     بروزرسانی EasyTier
 sudo ./xraymesh.sh delete     حذف تنظیمات نود فعلی
 sudo ./xraymesh.sh haproxy    مدیریت تونل‌های TCP با HAProxy
+sudo ./xraymesh.sh iptables   مدیریت تونل‌های TCP/UDP با iptables
 sudo ./xraymesh.sh self-test  بررسی سلامت نصب و سرویس‌های فعال
 sudo ./xraymesh.sh start      اجرای نود
 sudo ./xraymesh.sh stop       توقف نود
@@ -217,6 +227,9 @@ sudo ./xraymesh.sh restart    راه‌اندازی مجدد نود
 - سرویس systemd: `/etc/systemd/system/xraymesh.service`
 - تنظیمات HAProxy: `/etc/xraymesh/haproxy-tunnels`
 - سرویس HAProxy: `/etc/systemd/system/xraymesh-haproxy.service`
+- تعریف‌های iptables: `/etc/xraymesh/iptables-tunnels`
+- سرویس iptables: `/etc/systemd/system/xraymesh-iptables.service`
+- تنظیم IPv4 forwarding: `/etc/sysctl.d/99-xraymesh-forwarding.conf`
 
 فایل تنظیمات خصوصی با دسترسی `600` ذخیره می‌شود. Network Secret را منتشر نکنید،
 برای هر نود IP مجازی متفاوت در نظر بگیرید و فقط پورت موردنیاز Mesh را باز کنید.

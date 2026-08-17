@@ -15,6 +15,10 @@ readonly SERVICE_FILE="/etc/systemd/system/xraymesh.service"
 readonly HAPROXY_SERVICE_FILE="/etc/systemd/system/xraymesh-haproxy.service"
 readonly HAPROXY_CONFIG="/etc/xraymesh/haproxy.cfg"
 readonly HAPROXY_TUNNEL_DIR="/etc/xraymesh/haproxy-tunnels"
+readonly IPTABLES_SERVICE_FILE="/etc/systemd/system/xraymesh-iptables.service"
+readonly IPTABLES_TUNNEL_DIR="/etc/xraymesh/iptables-tunnels"
+readonly IPTABLES_APPLY_SCRIPT="${INSTALL_DIR}/xraymesh-iptables-apply"
+readonly IPTABLES_SYSCTL_FILE="/etc/sysctl.d/99-xraymesh-forwarding.conf"
 readonly LOG_TAG="xraymesh"
 readonly FALLBACK_EASYTIER_VERSION="v2.6.4"
 
@@ -418,6 +422,10 @@ setup_node() {
     info "Re-enabling the existing HAProxy tunnels."
     apply_haproxy_config || warn "The mesh is online, but HAProxy tunnels need attention."
   fi
+  if compgen -G "${IPTABLES_TUNNEL_DIR}/*.env" >/dev/null; then
+    info "Re-enabling the existing iptables UDP/TCP tunnels."
+    apply_iptables_config || warn "The mesh is online, but iptables tunnels need attention."
+  fi
 }
 
 delete_mesh() {
@@ -440,8 +448,14 @@ delete_mesh() {
 
   systemctl disable --now xraymesh.service 2>/dev/null || true
   systemctl disable --now xraymesh-haproxy.service 2>/dev/null || true
+  systemctl disable --now xraymesh-iptables.service 2>/dev/null || true
+  if [[ -x "$IPTABLES_APPLY_SCRIPT" ]]; then
+    "$IPTABLES_APPLY_SCRIPT" remove >/dev/null 2>&1 || true
+  fi
   compgen -G "${HAPROXY_TUNNEL_DIR}/*.env" >/dev/null &&
     info "HAProxy tunnels were disabled and preserved for the next mesh configuration."
+  compgen -G "${IPTABLES_TUNNEL_DIR}/*.env" >/dev/null &&
+    info "iptables tunnels were disabled and preserved for the next mesh configuration."
   rm -f "$SERVICE_FILE" "$CONFIG_FILE" "${INSTALL_DIR}/xraymesh-runner"
   systemctl daemon-reload
   systemctl reset-failed xraymesh.service 2>/dev/null || true
@@ -1118,6 +1132,540 @@ haproxy_tunnel_menu() {
   done
 }
 
+install_iptables_runtime() {
+  if command -v iptables >/dev/null 2>&1; then return; fi
+  info "Installing iptables..."
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y -qq iptables
+  ok "iptables installed."
+}
+
+valid_ipv4_address() {
+  local ip="$1" a b c d
+  IFS='.' read -r a b c d <<< "$ip"
+  [[ -n "${a:-}" && -n "${b:-}" && -n "${c:-}" && -n "${d:-}" ]] || return 1
+  [[ "$a" =~ ^[0-9]+$ && "$b" =~ ^[0-9]+$ && "$c" =~ ^[0-9]+$ && "$d" =~ ^[0-9]+$ ]] || return 1
+  (( 10#$a <= 255 && 10#$b <= 255 && 10#$c <= 255 && 10#$d <= 255 ))
+}
+
+valid_ipv4_cidr() {
+  local value="$1" ip prefix
+  if [[ "$value" == */* ]]; then
+    ip="${value%/*}"
+    prefix="${value##*/}"
+    [[ "$prefix" =~ ^[0-9]+$ ]] && (( prefix >= 0 && prefix <= 32 )) || return 1
+  else
+    ip="$value"
+  fi
+  valid_ipv4_address "$ip"
+}
+
+default_public_interface() {
+  ip -4 route show default 2>/dev/null | awk '/^default / {print $5; exit}'
+}
+
+select_iptables_protocol() {
+  local current="${1:-udp}" choice default_choice=1
+  case "$current" in
+    tcp) default_choice=2 ;;
+    both) default_choice=3 ;;
+  esac
+  printf '\n'
+  say "  Forward protocol" "$BOLD$CYAN"
+  printf '  %b[1]%b  UDP  (recommended for Hysteria2 / QUIC)\n' "$CYAN" "$RESET"
+  printf '  %b[2]%b  TCP\n' "$PURPLE" "$RESET"
+  printf '  %b[3]%b  TCP + UDP\n\n' "$PINK" "$RESET"
+  read -r -p "  Select protocol [${default_choice}]: " choice
+  choice="${choice:-$default_choice}"
+  case "$choice" in
+    1) SELECTED_IPTABLES_PROTOCOL="udp" ;;
+    2) SELECTED_IPTABLES_PROTOCOL="tcp" ;;
+    3) SELECTED_IPTABLES_PROTOCOL="both" ;;
+    *) fail "Invalid protocol selection."; return 1 ;;
+  esac
+}
+
+iptables_protocols() {
+  case "$1" in
+    udp) printf '%s\n' udp ;;
+    tcp) printf '%s\n' tcp ;;
+    both) printf '%s\n' tcp udp ;;
+    *) return 1 ;;
+  esac
+}
+
+validate_iptables_interface() {
+  [[ "$1" == "any" ]] && return 0
+  ip link show dev "$1" >/dev/null 2>&1
+}
+
+validate_iptables_ports() {
+  local tunnel_name="$1" protocol="$2" port_spec="$3" in_if="$4"
+  local definition other_port port proto other_proto listeners
+  local TUNNEL_NAME TARGET_IP PORT_SPEC FORWARD_PROTOCOL IN_IF SOURCE_CIDR
+  local -A requested=()
+
+  while IFS= read -r proto; do
+    while IFS= read -r port; do requested["${proto}:${port}"]=1; done < <(expand_port_spec "$port_spec")
+  done < <(iptables_protocols "$protocol")
+
+  for definition in "$IPTABLES_TUNNEL_DIR"/*.env; do
+    [[ -f "$definition" ]] || continue
+    TUNNEL_NAME=""; TARGET_IP=""; PORT_SPEC=""; FORWARD_PROTOCOL=""; IN_IF=""; SOURCE_CIDR=""
+    # shellcheck disable=SC1090
+    source "$definition"
+    [[ "$TUNNEL_NAME" == "$tunnel_name" ]] && continue
+    [[ "$in_if" == "any" || "$IN_IF" == "any" || "$in_if" == "$IN_IF" ]] || continue
+    while IFS= read -r other_proto; do
+      while IFS= read -r other_port; do
+        if [[ -n "${requested[${other_proto}:${other_port}]:-}" ]]; then
+          fail "${other_proto^^} port ${other_port} is already assigned to iptables tunnel '${TUNNEL_NAME}'."
+          return 1
+        fi
+      done < <(expand_port_spec "$PORT_SPEC")
+    done < <(iptables_protocols "$FORWARD_PROTOCOL")
+  done
+
+  for proto in tcp udp; do
+    while IFS= read -r port; do
+      [[ -n "${requested[${proto}:${port}]:-}" ]] || continue
+      if [[ "$proto" == "tcp" ]]; then
+        listeners="$(ss -H -ltnp "sport = :${port}" 2>/dev/null || true)"
+      else
+        listeners="$(ss -H -lunp "sport = :${port}" 2>/dev/null || true)"
+      fi
+      if [[ -n "$listeners" ]]; then
+        fail "${proto^^} port ${port} is already used by a local service."
+        return 1
+      fi
+    done < <(expand_port_spec "$port_spec")
+  done
+}
+
+write_ip_forwarding_config() {
+  cat > "$IPTABLES_SYSCTL_FILE" <<'EOF_SYSCTL'
+# Managed by XRayMesh iptables tunnels.
+net.ipv4.ip_forward=1
+EOF_SYSCTL
+  chmod 644 "$IPTABLES_SYSCTL_FILE"
+  sysctl -w net.ipv4.ip_forward=1 >/dev/null
+}
+
+save_iptables_tunnel() {
+  local name="$1" target="$2" ports="$3" protocol="$4" in_if="$5" source_cidr="$6"
+  local file="${IPTABLES_TUNNEL_DIR}/${name}.env"
+  mkdir -p "$IPTABLES_TUNNEL_DIR"
+  umask 077
+  {
+    printf 'TUNNEL_NAME=%q\n' "$name"
+    printf 'TARGET_IP=%q\n' "$target"
+    printf 'PORT_SPEC=%q\n' "$ports"
+    printf 'FORWARD_PROTOCOL=%q\n' "$protocol"
+    printf 'IN_IF=%q\n' "$in_if"
+    printf 'SOURCE_CIDR=%q\n' "$source_cidr"
+  } > "$file"
+}
+
+write_iptables_service() {
+  cat > "$IPTABLES_SERVICE_FILE" <<EOF_SERVICE
+[Unit]
+Description=XRayMesh iptables UDP/TCP Tunnels
+Wants=network-online.target xraymesh.service
+After=network-online.target xraymesh.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=${IPTABLES_APPLY_SCRIPT} apply
+ExecReload=${IPTABLES_APPLY_SCRIPT} apply
+ExecStop=${IPTABLES_APPLY_SCRIPT} remove
+CapabilityBoundingSet=CAP_NET_ADMIN
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+EOF_SERVICE
+  systemctl daemon-reload
+}
+
+generate_iptables_apply_script() {
+  mkdir -p "$IPTABLES_TUNNEL_DIR" "$INSTALL_DIR"
+  local tmp="${IPTABLES_APPLY_SCRIPT}.tmp"
+  local definition target port_spec protocol in_if source_cidr proto port
+  local TUNNEL_NAME TARGET_IP PORT_SPEC FORWARD_PROTOCOL IN_IF SOURCE_CIDR
+
+  cat > "$tmp" <<'EOF_SCRIPT'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+IPT="${IPT:-iptables}"
+DNAT_CHAIN="XRAYMESH_DNAT"
+SNAT_CHAIN="XRAYMESH_SNAT"
+FWD_CHAIN="XRAYMESH_FWD"
+
+remove_jump() {
+  local table="$1" parent="$2" child="$3"
+  while "$IPT" -w -t "$table" -C "$parent" -j "$child" >/dev/null 2>&1; do
+    "$IPT" -w -t "$table" -D "$parent" -j "$child"
+  done
+}
+
+remove_chain() {
+  local table="$1" chain="$2"
+  "$IPT" -w -t "$table" -F "$chain" >/dev/null 2>&1 || true
+  "$IPT" -w -t "$table" -X "$chain" >/dev/null 2>&1 || true
+}
+
+remove_rules() {
+  remove_jump nat PREROUTING "$DNAT_CHAIN"
+  remove_jump nat POSTROUTING "$SNAT_CHAIN"
+  remove_jump filter FORWARD "$FWD_CHAIN"
+  remove_chain nat "$DNAT_CHAIN"
+  remove_chain nat "$SNAT_CHAIN"
+  remove_chain filter "$FWD_CHAIN"
+}
+
+apply_rules() {
+  remove_rules
+  "$IPT" -w -t nat -N "$DNAT_CHAIN"
+  "$IPT" -w -t nat -N "$SNAT_CHAIN"
+  "$IPT" -w -t filter -N "$FWD_CHAIN"
+EOF_SCRIPT
+
+  for definition in "$IPTABLES_TUNNEL_DIR"/*.env; do
+    [[ -f "$definition" ]] || continue
+    TUNNEL_NAME=""; TARGET_IP=""; PORT_SPEC=""; FORWARD_PROTOCOL=""; IN_IF=""; SOURCE_CIDR=""
+    # shellcheck disable=SC1090
+    source "$definition"
+    target="$TARGET_IP"
+    port_spec="$PORT_SPEC"
+    protocol="$FORWARD_PROTOCOL"
+    in_if="$IN_IF"
+    source_cidr="$SOURCE_CIDR"
+
+    while IFS= read -r proto; do
+      while IFS= read -r port; do
+        printf '  "$IPT" -w -t nat -A "$DNAT_CHAIN"' >> "$tmp"
+        [[ "$in_if" == "any" ]] || printf ' -i %q' "$in_if" >> "$tmp"
+        printf ' -s %q -p %q --dport %q -j DNAT --to-destination %q\n' \
+          "$source_cidr" "$proto" "$port" "${target}:${port}" >> "$tmp"
+
+        printf '  "$IPT" -w -t filter -A "$FWD_CHAIN"' >> "$tmp"
+        [[ "$in_if" == "any" ]] || printf ' -i %q' "$in_if" >> "$tmp"
+        printf ' -s %q -p %q -d %q --dport %q -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT\n' \
+          "$source_cidr" "$proto" "$target" "$port" >> "$tmp"
+
+        printf '  "$IPT" -w -t filter -A "$FWD_CHAIN" -p %q -s %q --sport %q -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT\n' \
+          "$proto" "$target" "$port" >> "$tmp"
+
+        printf '  "$IPT" -w -t nat -A "$SNAT_CHAIN" -p %q -d %q --dport %q -m conntrack --ctstate DNAT -j MASQUERADE\n' \
+          "$proto" "$target" "$port" >> "$tmp"
+      done < <(expand_port_spec "$port_spec")
+    done < <(iptables_protocols "$protocol")
+  done
+
+  cat >> "$tmp" <<'EOF_SCRIPT'
+  "$IPT" -w -t nat -I PREROUTING 1 -j "$DNAT_CHAIN"
+  "$IPT" -w -t nat -I POSTROUTING 1 -j "$SNAT_CHAIN"
+  "$IPT" -w -t filter -I FORWARD 1 -j "$FWD_CHAIN"
+}
+
+case "${1:-apply}" in
+  apply) apply_rules ;;
+  remove) remove_rules ;;
+  *) echo "Usage: $0 [apply|remove]" >&2; exit 2 ;;
+esac
+EOF_SCRIPT
+
+  mv -f "$tmp" "$IPTABLES_APPLY_SCRIPT"
+  chmod 700 "$IPTABLES_APPLY_SCRIPT"
+}
+
+apply_iptables_config() {
+  local backup="" was_active=0
+  install_iptables_runtime
+  write_ip_forwarding_config
+
+  if [[ -f "$IPTABLES_APPLY_SCRIPT" ]]; then
+    backup="$(mktemp)"
+    cp -p "$IPTABLES_APPLY_SCRIPT" "$backup"
+  fi
+  if systemctl is-active --quiet xraymesh-iptables.service 2>/dev/null; then
+    was_active=1
+  fi
+
+  generate_iptables_apply_script
+  write_iptables_service
+
+  if ! "$IPTABLES_APPLY_SCRIPT" apply; then
+    fail "iptables rejected one or more generated rules."
+    "$IPTABLES_APPLY_SCRIPT" remove >/dev/null 2>&1 || true
+    if [[ -n "$backup" ]]; then
+      cp -p "$backup" "$IPTABLES_APPLY_SCRIPT"
+      "$IPTABLES_APPLY_SCRIPT" apply >/dev/null 2>&1 || true
+    fi
+    [[ -z "$backup" ]] || rm -f "$backup"
+    return 1
+  fi
+
+  if ! systemctl enable xraymesh-iptables.service >/dev/null ||
+     ! systemctl restart xraymesh-iptables.service ||
+     ! systemctl is-active --quiet xraymesh-iptables.service; then
+    fail "The XRayMesh iptables service failed to start."
+    if [[ -n "$backup" ]]; then
+      cp -p "$backup" "$IPTABLES_APPLY_SCRIPT"
+      if (( was_active )); then
+        systemctl restart xraymesh-iptables.service 2>/dev/null || true
+      else
+        "$IPTABLES_APPLY_SCRIPT" apply >/dev/null 2>&1 || true
+      fi
+    else
+      "$IPTABLES_APPLY_SCRIPT" remove >/dev/null 2>&1 || true
+      systemctl disable --now xraymesh-iptables.service 2>/dev/null || true
+    fi
+    [[ -z "$backup" ]] || rm -f "$backup"
+    return 1
+  fi
+
+  [[ -z "$backup" ]] || rm -f "$backup"
+  ok "iptables tunnel configuration applied."
+}
+
+disable_iptables_tunnels() {
+  systemctl disable --now xraymesh-iptables.service 2>/dev/null || true
+  if [[ -x "$IPTABLES_APPLY_SCRIPT" ]]; then
+    "$IPTABLES_APPLY_SCRIPT" remove >/dev/null 2>&1 || true
+  fi
+  rm -f "$IPTABLES_SERVICE_FILE" "$IPTABLES_APPLY_SCRIPT" "$IPTABLES_SYSCTL_FILE"
+  systemctl daemon-reload
+}
+
+create_iptables_tunnel() {
+  header
+  section "CREATE IPTABLES TUNNEL"
+  info "This forwards raw TCP/UDP through the EasyTier mesh using DNAT + FORWARD + MASQUERADE."
+  info "MASQUERADE is enabled so replies return through this server instead of escaping through the destination's default route."
+  install_iptables_runtime
+
+  local name ports in_if source_cidr default_if
+  while :; do
+    read -r -p "  Tunnel name (letters, numbers, _ or -): " name
+    validate_tunnel_name "$name" || { warn "Enter a valid name with up to 32 characters."; continue; }
+    [[ ! -f "${IPTABLES_TUNNEL_DIR}/${name}.env" ]] || { warn "A tunnel with this name already exists."; continue; }
+    break
+  done
+
+  select_mesh_target || return 1
+  ip route get "$SELECTED_TARGET" >/dev/null 2>&1 || { fail "No route to mesh target ${SELECTED_TARGET}."; return 1; }
+  select_iptables_protocol udp || return 1
+
+  default_if="$(default_public_interface)"
+  [[ -n "$default_if" ]] || default_if="any"
+  while :; do
+    in_if="$(prompt_default "Inbound interface (or 'any')" "$default_if")"
+    validate_iptables_interface "$in_if" && break
+    warn "Interface '${in_if}' does not exist."
+  done
+
+  while :; do
+    source_cidr="$(prompt_default "Allowed source IPv4/CIDR" "0.0.0.0/0")"
+    valid_ipv4_cidr "$source_cidr" && break
+    warn "Enter a valid IPv4 address or CIDR, e.g. 0.0.0.0/0 or 203.0.113.0/24."
+  done
+
+  while :; do
+    read -r -p "  Ports (e.g. 443 or 80,443,8000-8010): " ports
+    if expand_port_spec "$ports" >/dev/null &&
+       validate_iptables_ports "$name" "$SELECTED_IPTABLES_PROTOCOL" "$ports" "$in_if"; then
+      break
+    fi
+    warn "Invalid/conflicting ports. Use comma-separated ports/ranges; maximum 256 expanded ports."
+  done
+
+  save_iptables_tunnel "$name" "$SELECTED_TARGET" "$ports" "$SELECTED_IPTABLES_PROTOCOL" "$in_if" "$source_cidr"
+  if apply_iptables_config; then
+    ok "Tunnel '${name}' forwards ${SELECTED_IPTABLES_PROTOCOL^^} ports ${ports} to ${SELECTED_TARGET}."
+  else
+    rm -f "${IPTABLES_TUNNEL_DIR}/${name}.env"
+    generate_iptables_apply_script
+    return 1
+  fi
+  pause
+}
+
+list_iptables_tunnels() {
+  local definition count=0
+  local TUNNEL_NAME TARGET_IP PORT_SPEC FORWARD_PROTOCOL IN_IF SOURCE_CIDR
+  printf '\n'
+  printf '  %-4s %-18s %-16s %-7s %-12s %-18s %s\n' "ID" "NAME" "TARGET" "PROTO" "INTERFACE" "SOURCE" "PORTS"
+  printf '  %-4s %-18s %-16s %-7s %-12s %-18s %s\n' "--" "------------------" "---------------" "-------" "------------" "------------------" "----------------"
+  IPTABLES_FILES=()
+  for definition in "$IPTABLES_TUNNEL_DIR"/*.env; do
+    [[ -f "$definition" ]] || continue
+    TUNNEL_NAME=""; TARGET_IP=""; PORT_SPEC=""; FORWARD_PROTOCOL=""; IN_IF=""; SOURCE_CIDR=""
+    # shellcheck disable=SC1090
+    source "$definition"
+    IPTABLES_FILES+=("$definition")
+    ((count+=1))
+    printf '  %-4s %-18s %-16s %-7s %-12s %-18s %s\n' \
+      "$count" "$TUNNEL_NAME" "$TARGET_IP" "${FORWARD_PROTOCOL^^}" "$IN_IF" "$SOURCE_CIDR" "$PORT_SPEC"
+  done
+  ((count)) || warn "No iptables tunnels are configured."
+}
+
+edit_iptables_tunnel() {
+  header
+  section "EDIT IPTABLES TUNNEL"
+  list_iptables_tunnels
+  ((${#IPTABLES_FILES[@]})) || { pause; return; }
+
+  local choice definition old_name name ports in_if source_cidr backup
+  local TUNNEL_NAME TARGET_IP PORT_SPEC FORWARD_PROTOCOL IN_IF SOURCE_CIDR
+  read -r -p "  Select tunnel ID: " choice
+  if [[ ! "$choice" =~ ^[0-9]+$ ]] || (( choice < 1 || choice > ${#IPTABLES_FILES[@]} )); then
+    fail "Invalid tunnel selection."
+    return 1
+  fi
+
+  definition="${IPTABLES_FILES[$((choice - 1))]}"
+  # shellcheck disable=SC1090
+  source "$definition"
+  old_name="$TUNNEL_NAME"
+
+  name="$(prompt_default "Tunnel name" "$TUNNEL_NAME")"
+  validate_tunnel_name "$name" || { fail "Invalid tunnel name."; return 1; }
+  if [[ "$name" != "$old_name" && -f "${IPTABLES_TUNNEL_DIR}/${name}.env" ]]; then
+    fail "A tunnel named '${name}' already exists."
+    return 1
+  fi
+
+  select_mesh_target || return 1
+  ip route get "$SELECTED_TARGET" >/dev/null 2>&1 || { fail "No route to mesh target ${SELECTED_TARGET}."; return 1; }
+  select_iptables_protocol "$FORWARD_PROTOCOL" || return 1
+
+  while :; do
+    in_if="$(prompt_default "Inbound interface (or 'any')" "$IN_IF")"
+    validate_iptables_interface "$in_if" && break
+    warn "Interface '${in_if}' does not exist."
+  done
+
+  while :; do
+    source_cidr="$(prompt_default "Allowed source IPv4/CIDR" "$SOURCE_CIDR")"
+    valid_ipv4_cidr "$source_cidr" && break
+    warn "Invalid source IPv4/CIDR."
+  done
+
+  while :; do
+    ports="$(prompt_default "Ports" "$PORT_SPEC")"
+    if expand_port_spec "$ports" >/dev/null &&
+       validate_iptables_ports "$old_name" "$SELECTED_IPTABLES_PROTOCOL" "$ports" "$in_if"; then
+      break
+    fi
+    warn "Invalid/conflicting port list or range."
+  done
+
+  backup="$(mktemp)"
+  cp "$definition" "$backup"
+  [[ "$name" == "$old_name" ]] || rm -f "$definition"
+  save_iptables_tunnel "$name" "$SELECTED_TARGET" "$ports" "$SELECTED_IPTABLES_PROTOCOL" "$in_if" "$source_cidr"
+
+  if ! apply_iptables_config; then
+    rm -f "${IPTABLES_TUNNEL_DIR}/${name}.env"
+    cp "$backup" "$definition"
+    rm -f "$backup"
+    generate_iptables_apply_script
+    fail "The previous iptables tunnel configuration was restored."
+    return 1
+  fi
+
+  rm -f "$backup"
+  ok "iptables tunnel '${name}' updated."
+  pause
+}
+
+delete_iptables_tunnel() {
+  header
+  section "DELETE IPTABLES TUNNEL"
+  list_iptables_tunnels
+  ((${#IPTABLES_FILES[@]})) || { pause; return; }
+
+  local choice definition confirm
+  local TUNNEL_NAME TARGET_IP PORT_SPEC FORWARD_PROTOCOL IN_IF SOURCE_CIDR
+  read -r -p "  Select tunnel ID: " choice
+  if [[ ! "$choice" =~ ^[0-9]+$ ]] || (( choice < 1 || choice > ${#IPTABLES_FILES[@]} )); then
+    fail "Invalid tunnel selection."
+    return 1
+  fi
+
+  definition="${IPTABLES_FILES[$((choice - 1))]}"
+  # shellcheck disable=SC1090
+  source "$definition"
+  read -r -p "  Type DELETE to remove '${TUNNEL_NAME}': " confirm
+  [[ "$confirm" == "DELETE" ]] || { info "Delete operation cancelled."; return; }
+
+  rm -f "$definition"
+  if compgen -G "${IPTABLES_TUNNEL_DIR}/*.env" >/dev/null; then
+    apply_iptables_config
+  else
+    disable_iptables_tunnels
+  fi
+  ok "iptables tunnel '${TUNNEL_NAME}' deleted."
+  pause
+}
+
+show_iptables_rules() {
+  header
+  section "ACTIVE IPTABLES RULES"
+  install_iptables_runtime
+  printf '\n  NAT / DNAT\n'
+  iptables -w -t nat -L XRAYMESH_DNAT -n -v --line-numbers 2>/dev/null || warn "XRAYMESH_DNAT is not active."
+  printf '\n  FILTER / FORWARD\n'
+  iptables -w -t filter -L XRAYMESH_FWD -n -v --line-numbers 2>/dev/null || warn "XRAYMESH_FWD is not active."
+  printf '\n  NAT / MASQUERADE\n'
+  iptables -w -t nat -L XRAYMESH_SNAT -n -v --line-numbers 2>/dev/null || warn "XRAYMESH_SNAT is not active."
+  printf '\n'
+  pause
+}
+
+iptables_tunnel_menu() {
+  while true; do
+    header
+    section "IPTABLES UDP/TCP TUNNELS"
+    printf '  Service: %s\n' "$(systemctl is-active xraymesh-iptables.service 2>/dev/null || echo inactive)"
+    printf '  IPv4 forwarding: %s\n' "$(sysctl -n net.ipv4.ip_forward 2>/dev/null || echo unknown)"
+    list_iptables_tunnels
+    printf '\n'
+    printf '  %b[1]%b  Create tunnel\n' "$CYAN" "$RESET"
+    printf '  %b[2]%b  Edit tunnel\n' "$PURPLE" "$RESET"
+    printf '  %b[3]%b  Delete tunnel\n' "$RED" "$RESET"
+    printf '  %b[4]%b  Reapply managed rules\n' "$BLUE" "$RESET"
+    printf '  %b[5]%b  View active rules/counters\n' "$GREEN" "$RESET"
+    printf '  %b[0]%b  Back\n\n' "$GRAY" "$RESET"
+    read -r -p "  Select an option [0-5]: " choice
+    case "$choice" in
+      1) run_screen create_iptables_tunnel ;;
+      2) run_screen edit_iptables_tunnel ;;
+      3) run_screen delete_iptables_tunnel ;;
+      4)
+        if compgen -G "${IPTABLES_TUNNEL_DIR}/*.env" >/dev/null; then
+          run_screen apply_iptables_config
+          pause
+        else
+          warn "No iptables tunnels are configured."
+          sleep 1
+        fi
+        ;;
+      5) run_screen show_iptables_rules ;;
+      0) return ;;
+      *) warn "Invalid option"; sleep 1 ;;
+    esac
+  done
+}
+
 update_core() {
   local before after
   before="$(cat "${INSTALL_DIR}/easytier.version" 2>/dev/null || echo "not installed")"
@@ -1150,7 +1698,11 @@ uninstall_app() {
   [[ "$confirm" == "REMOVE" ]] || { info "Uninstall cancelled."; sleep 1; return; }
   systemctl disable --now xraymesh.service 2>/dev/null || true
   systemctl disable --now xraymesh-haproxy.service 2>/dev/null || true
-  rm -f "$SERVICE_FILE" "$HAPROXY_SERVICE_FILE"
+  systemctl disable --now xraymesh-iptables.service 2>/dev/null || true
+  if [[ -x "$IPTABLES_APPLY_SCRIPT" ]]; then
+    "$IPTABLES_APPLY_SCRIPT" remove >/dev/null 2>&1 || true
+  fi
+  rm -f "$SERVICE_FILE" "$HAPROXY_SERVICE_FILE" "$IPTABLES_SERVICE_FILE" "$IPTABLES_SYSCTL_FILE"
   rm -rf -- "$INSTALL_DIR" /etc/xraymesh
   systemctl daemon-reload
   ok "XRayMesh has been removed."
@@ -1215,6 +1767,16 @@ self_test() {
     SELF_TEST_LABEL="HAProxy service is active"
     test_result systemctl is-active --quiet xraymesh-haproxy.service
   fi
+  if compgen -G "${IPTABLES_TUNNEL_DIR}/*.env" >/dev/null; then
+    SELF_TEST_LABEL="iptables command is available"
+    test_result bash -c 'command -v iptables >/dev/null 2>&1'
+    SELF_TEST_LABEL="IPv4 forwarding is enabled"
+    test_result bash -c '[[ "$(sysctl -n net.ipv4.ip_forward 2>/dev/null)" == "1" ]]'
+    SELF_TEST_LABEL="iptables tunnel service is active"
+    test_result systemctl is-active --quiet xraymesh-iptables.service
+    SELF_TEST_LABEL="XRayMesh DNAT chain is active"
+    test_result iptables -w -t nat -S XRAYMESH_DNAT
+  fi
 
   printf '\n'
   if (( failures == 0 )); then
@@ -1243,12 +1805,13 @@ menu() {
     printf '  %b[6]%b  Install or update EasyTier\n' "$PURPLE" "$RESET"
     printf '  %b[7]%b  Connection diagnostics\n' "$YELLOW" "$RESET"
     printf '  %b[8]%b  HAProxy TCP tunnels\n' "$PINK" "$RESET"
-    printf '  %b[9]%b  Run self-test\n' "$GREEN" "$RESET"
-    printf '  %b[10]%b Delete mesh configuration\n' "$YELLOW" "$RESET"
-    printf '  %b[11]%b Uninstall XRayMesh completely\n' "$RED" "$RESET"
+    printf '  %b[9]%b  iptables UDP/TCP tunnels\n' "$CYAN" "$RESET"
+    printf '  %b[10]%b Run self-test\n' "$GREEN" "$RESET"
+    printf '  %b[11]%b Delete mesh configuration\n' "$YELLOW" "$RESET"
+    printf '  %b[12]%b Uninstall XRayMesh completely\n' "$RED" "$RESET"
     printf '  %b[0]%b  Exit\n\n' "$GRAY" "$RESET"
     printf '%b  Tip: Ctrl+C exits here; inside a screen it returns to this menu.%b\n\n' "$DIM$GRAY" "$RESET"
-    read -r -p "  Select an option [0-11]: " choice || { choice=""; continue; }
+    read -r -p "  Select an option [0-12]: " choice || { choice=""; continue; }
     case "$choice" in
       1) IN_MAIN_MENU=0; run_screen setup_node; IN_MAIN_MENU=1 ;;
       2) IN_MAIN_MENU=0; run_screen live_status; IN_MAIN_MENU=1 ;;
@@ -1258,9 +1821,10 @@ menu() {
       6) IN_MAIN_MENU=0; run_screen update_core; IN_MAIN_MENU=1 ;;
       7) IN_MAIN_MENU=0; run_screen diagnostics; IN_MAIN_MENU=1 ;;
       8) IN_MAIN_MENU=0; run_screen haproxy_tunnel_menu; IN_MAIN_MENU=1 ;;
-      9) IN_MAIN_MENU=0; run_screen self_test; IN_MAIN_MENU=1 ;;
-      10) IN_MAIN_MENU=0; run_screen delete_mesh; IN_MAIN_MENU=1 ;;
-      11)
+      9) IN_MAIN_MENU=0; run_screen iptables_tunnel_menu; IN_MAIN_MENU=1 ;;
+      10) IN_MAIN_MENU=0; run_screen self_test; IN_MAIN_MENU=1 ;;
+      11) IN_MAIN_MENU=0; run_screen delete_mesh; IN_MAIN_MENU=1 ;;
+      12)
         IN_MAIN_MENU=0
         run_screen uninstall_app
         IN_MAIN_MENU=1
@@ -1283,11 +1847,12 @@ case "${1:-menu}" in
   update) require_linux; update_core ;;
   delete) require_root; require_linux; delete_mesh ;;
   haproxy) require_root; require_linux; haproxy_tunnel_menu ;;
+  iptables) require_root; require_linux; iptables_tunnel_menu ;;
   self-test|doctor) require_linux; self_test ;;
   start|stop|restart) require_root; systemctl "$1" xraymesh.service ;;
   version|-v|--version) echo "${APP} ${VERSION} - © ${OWNER}" ;;
   *)
-    echo "Usage: $0 [menu|install|status|peers|routes|logs|update|delete|haproxy|self-test|start|stop|restart|version]"
+    echo "Usage: $0 [menu|install|status|peers|routes|logs|update|delete|haproxy|iptables|self-test|start|stop|restart|version]"
     exit 2
     ;;
 esac

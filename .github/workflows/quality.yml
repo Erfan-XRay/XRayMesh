@@ -29,3 +29,6 @@ jobs:
 
       - name: Test embedded HAProxy port parser
         run: bash tests/port_parser_test.sh
+
+      - name: Test iptables tunnel helpers
+        run: bash tests/iptables_tunnel_test.sh
