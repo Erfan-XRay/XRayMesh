@@ -20,7 +20,8 @@ Developed by **ErfanXRay**
 - Runs each node as a persistent systemd service with automatic restart
 - Displays connected peers, latency, routes, traffic, and transport information
 - Creates isolated HAProxy TCP tunnels to existing EasyTier nodes
-- Supports comma-separated ports and port ranges for HAProxy forwarding
+- Creates managed iptables TCP/UDP forwarding tunnels to EasyTier nodes
+- Supports comma-separated ports and port ranges for HAProxy and iptables forwarding
 - Provides service logs and connection diagnostics for failed handshakes
 - Shows physical server IPv4/IPv6 addresses separately from mesh addresses
 - Safely edits or deletes a node without requiring a complete reinstall
@@ -177,6 +178,14 @@ HAProxy tunnels in XRayMesh support **TCP only**. Standard HAProxy does not
 provide generic UDP port forwarding. QUIC support in HAProxy is not equivalent
 to forwarding arbitrary UDP applications.
 
+## iptables TCP/UDP Tunnels
+
+XRayMesh can forward raw TCP, UDP, or both from a selected local interface to an EasyTier virtual IP. Each tunnel stores its destination mesh IP, protocol, port list/ranges, inbound interface, and allowed source IPv4/CIDR. Rules are isolated in `XRAYMESH_DNAT`, `XRAYMESH_FWD`, and `XRAYMESH_SNAT` chains.
+
+The manager enables IPv4 forwarding and applies DNAT + FORWARD + MASQUERADE so replies return through the relay instead of escaping through the destination node's default route. Because MASQUERADE is used, the destination service sees the relay's mesh-side source address rather than the original client address. The forwarding rules support arbitrary UDP applications such as Hysteria2/QUIC as well as TCP services.
+
+Tunnel definitions are preserved when the mesh node is deleted and re-applied after the mesh is configured again. Use the source CIDR prompt to restrict who can reach a forwarded service.
+
 ## Commands
 
 ```text
@@ -189,6 +198,7 @@ sudo ./xraymesh.sh logs       Stream service logs
 sudo ./xraymesh.sh update     Update EasyTier
 sudo ./xraymesh.sh delete     Delete the current mesh node
 sudo ./xraymesh.sh haproxy    Manage HAProxy TCP tunnels
+sudo ./xraymesh.sh iptables   Manage iptables TCP/UDP tunnels
 sudo ./xraymesh.sh self-test  Validate the installation and active services
 sudo ./xraymesh.sh start      Start the node
 sudo ./xraymesh.sh stop       Stop the node
@@ -220,6 +230,9 @@ If only the local node appears:
 - systemd service: `/etc/systemd/system/xraymesh.service`
 - HAProxy definitions: `/etc/xraymesh/haproxy-tunnels`
 - HAProxy service: `/etc/systemd/system/xraymesh-haproxy.service`
+- iptables definitions: `/etc/xraymesh/iptables-tunnels`
+- iptables service: `/etc/systemd/system/xraymesh-iptables.service`
+- IPv4 forwarding sysctl: `/etc/sysctl.d/99-xraymesh-forwarding.conf`
 
 The private configuration is stored with `600` permissions. Keep the network
 secret private, use a different virtual IP for every node, and expose only the
