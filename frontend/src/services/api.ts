@@ -1,0 +1,194 @@
+import { StatusResponse, Peer, TunnelsData, PingResult, SpeedtestData } from '../types';
+
+export async function fetchAuthStatus(): Promise<{ authenticated: boolean; password_configured: boolean }> {
+  const res = await fetch('/api/auth/status');
+  if (!res.ok) throw new Error('Auth check failed');
+  return res.json();
+}
+
+export async function loginWithPassword(password: string): Promise<boolean> {
+  const res = await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.ok) throw new Error(data.error || 'Password login failed');
+  return true;
+}
+
+export async function loginWithToken(token: string): Promise<boolean> {
+  const res = await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.ok) throw new Error(data.error || 'Token login failed');
+  return true;
+}
+
+export async function logout(): Promise<void> {
+  await fetch('/api/auth/logout', { method: 'POST' });
+}
+
+export async function fetchStatus(): Promise<StatusResponse> {
+  const res = await fetch('/api/status');
+  if (!res.ok) throw new Error('Failed to fetch status');
+  return res.json();
+}
+
+export async function fetchPeers(): Promise<Peer[]> {
+  const res = await fetch('/api/peers');
+  if (!res.ok) throw new Error('Failed to fetch peers');
+  const d = await res.json();
+  const rawPeers = d.data;
+  let list: Peer[] = [];
+  if (Array.isArray(rawPeers)) {
+    list = rawPeers;
+  } else if (rawPeers && typeof rawPeers === 'object') {
+    if (Array.isArray(rawPeers.peers)) list = rawPeers.peers;
+    else list = Object.values(rawPeers);
+  }
+  return list.filter((p) => p && p.cost !== 'Local' && p.ipv4);
+}
+
+export async function fetchTunnels(): Promise<TunnelsData> {
+  const res = await fetch('/api/tunnels');
+  if (!res.ok) throw new Error('Failed to fetch tunnels');
+  const d = await res.json();
+  return d.data || { haproxy: [], iptables: [], gost: [] };
+}
+
+export async function fetchInterfaces(): Promise<string[]> {
+  try {
+    const res = await fetch('/api/interfaces');
+    const d = await res.json();
+    return d.data || ['any'];
+  } catch {
+    return ['any'];
+  }
+}
+
+export async function runPing(target: string, count: number): Promise<PingResult> {
+  const res = await fetch('/api/ping', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target, count }),
+  });
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Ping failed');
+  return d.data;
+}
+
+export async function runSpeedtest(
+  target: string,
+  protocol: 'tcp' | 'udp',
+  duration: number,
+  bandwidth: string
+): Promise<SpeedtestData> {
+  const res = await fetch('/api/iperf/run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target, protocol, duration, bandwidth }),
+  });
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Speedtest failed');
+  return d.data;
+}
+
+// Tunnel mutations
+export async function saveHaproxyTunnel(
+  isEdit: boolean,
+  name: string,
+  target: string,
+  ports: string
+): Promise<string> {
+  const endpoint = isEdit ? '/api/tunnels/haproxy/edit' : '/api/tunnels/haproxy/create';
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, target, ports }),
+  });
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to save HAProxy tunnel');
+  return d.message;
+}
+
+export async function deleteHaproxyTunnel(name: string): Promise<string> {
+  const res = await fetch('/api/tunnels/haproxy/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to delete tunnel');
+  return d.message;
+}
+
+export async function saveIptablesTunnel(
+  isEdit: boolean,
+  name: string,
+  target: string,
+  ports: string,
+  protocol: string,
+  iface: string,
+  sourceCidr: string
+): Promise<string> {
+  const endpoint = isEdit ? '/api/tunnels/iptables/edit' : '/api/tunnels/iptables/create';
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name,
+      target,
+      ports,
+      protocol,
+      interface: iface,
+      source_cidr: sourceCidr || '0.0.0.0/0',
+    }),
+  });
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to save iptables tunnel');
+  return d.message;
+}
+
+export async function deleteIptablesTunnel(name: string): Promise<string> {
+  const res = await fetch('/api/tunnels/iptables/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to delete tunnel');
+  return d.message;
+}
+
+export async function saveGostTunnel(
+  isEdit: boolean,
+  name: string,
+  target: string,
+  ports: string,
+  protocol: string
+): Promise<string> {
+  const endpoint = isEdit ? '/api/tunnels/gost/edit' : '/api/tunnels/gost/create';
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, target, ports, protocol }),
+  });
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to save GOST tunnel');
+  return d.message;
+}
+
+export async function deleteGostTunnel(name: string): Promise<string> {
+  const res = await fetch('/api/tunnels/gost/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to delete tunnel');
+  return d.message;
+}
