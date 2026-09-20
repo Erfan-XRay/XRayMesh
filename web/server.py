@@ -566,9 +566,66 @@ def get_server_public_ip():
     return ""
 
 
+def sanitize_peer_endpoint(raw_peer, default_port="11010"):
+    """
+    Sanitize and validate a peer endpoint string.
+    Returns cleaned 'scheme://host:port' or 'host:port', or '' if invalid.
+    Fixes double colons, trailing colons, and missing hosts.
+    """
+    if not raw_peer:
+        return ""
+    p = str(raw_peer).strip().rstrip("/")
+    if not p:
+        return ""
+    scheme = ""
+    if "://" in p:
+        scheme, p = p.split("://", 1)
+        scheme = scheme.lower().strip()
+
+    p = p.rstrip(":")
+    if not p or p.startswith(":") or p.isdigit():
+        return ""
+
+    if "[" in p and "]" in p:
+        m = re.match(r"^(\[[^\]]+\])(?::+(\d+))?$", p)
+        if not m:
+            return ""
+        host = m.group(1)
+        port = m.group(2) or str(default_port)
+    else:
+        m = re.match(r"^(.+?):+(\d+)$", p)
+        if m:
+            host = m.group(1).rstrip(":")
+            port = m.group(2)
+        else:
+            host = p.rstrip(":")
+            port = str(default_port)
+
+    if not host or host.startswith(":") or host == ":" or host.isdigit():
+        return ""
+    if not str(port).isdigit():
+        port = str(default_port)
+
+    hostport = f"{host}:{port}"
+    if scheme:
+        if scheme in ("ws", "wss"):
+            return f"{scheme}://{hostport}/"
+        return f"{scheme}://{hostport}"
+    return hostport
+
+
 def save_node_config_env(cfg):
     """Write dictionary to CONFIG_FILE with secure file permissions."""
     os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+    if "PEERS" in cfg:
+        mesh_port = str(cfg.get("PORT", "11010"))
+        clean_p = []
+        for p in str(cfg["PEERS"]).split(","):
+            sp = sanitize_peer_endpoint(p, mesh_port)
+            if sp and sp not in clean_p:
+                clean_p.append(sp)
+        cfg["PEERS"] = ",".join(clean_p)
+
     lines = []
     keys = [
         "NETWORK_NAME", "NETWORK_SECRET", "HOSTNAME", "IPV4",
@@ -798,7 +855,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 "v": 1,
                 "net": config.get("NETWORK_NAME", "xraymesh"),
                 "secret": config.get("NETWORK_SECRET", ""),
-                "endpoint": f"{pub_ip}:{port}" if pub_ip else f":{port}",
+                "endpoint": f"{pub_ip}:{port}" if pub_ip else "",
                 "proto": proto
             }
             token_str = base64.b64encode(json.dumps(invite_obj).encode("utf-8")).decode("utf-8")
@@ -1225,9 +1282,11 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 return
 
             if isinstance(peers, list):
-                peers_str = ",".join(p.strip() for p in peers if p.strip())
+                raw_peers = [p.strip() for p in peers if p.strip()]
             else:
-                peers_str = str(peers).strip()
+                raw_peers = [p.strip() for p in str(peers).split(",") if p.strip()]
+            clean_peers = [sanitize_peer_endpoint(p, str(port)) for p in raw_peers]
+            peers_str = ",".join(p for p in clean_peers if p)
 
             default_hostname = os.uname().nodename if hasattr(os, "uname") else "node"
             cfg_dict = {
@@ -1256,13 +1315,20 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             return
 
         elif path == "/api/node/peers/add":
-            new_peer = data.get("peer", "").strip()
-            if not new_peer:
+            new_peer_raw = data.get("peer", "").strip()
+            if not new_peer_raw:
                 self.send_json({"ok": False, "error": "Missing peer address"}, status=400)
                 return
 
             cfg = load_env_file(CONFIG_FILE)
-            cur_peers = [p.strip() for p in cfg.get("PEERS", "").split(",") if p.strip()]
+            mesh_port = cfg.get("PORT", "11010")
+            new_peer = sanitize_peer_endpoint(new_peer_raw, mesh_port)
+            if not new_peer:
+                self.send_json({"ok": False, "error": "Invalid peer address format"}, status=400)
+                return
+
+            cur_peers = [sanitize_peer_endpoint(p, mesh_port) for p in cfg.get("PEERS", "").split(",") if p.strip()]
+            cur_peers = [p for p in cur_peers if p]
             if new_peer not in cur_peers:
                 cur_peers.append(new_peer)
             cfg["PEERS"] = ",".join(cur_peers)
@@ -1279,8 +1345,10 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 return
 
             cfg = load_env_file(CONFIG_FILE)
+            mesh_port = cfg.get("PORT", "11010")
+            clean_remove = sanitize_peer_endpoint(peer_to_remove, mesh_port) or peer_to_remove
             cur_peers = [p.strip() for p in cfg.get("PEERS", "").split(",") if p.strip()]
-            cur_peers = [p for p in cur_peers if p != peer_to_remove]
+            cur_peers = [p for p in cur_peers if p != peer_to_remove and p != clean_remove]
             cfg["PEERS"] = ",".join(cur_peers)
             save_node_config_env(cfg)
 
@@ -1331,9 +1399,12 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             if not cfg.get("MTU"):
                 cfg["MTU"] = "1380"
 
-            cur_peers = [p.strip() for p in cfg.get("PEERS", "").split(",") if p.strip()]
-            if endpoint and endpoint not in cur_peers:
-                cur_peers.append(endpoint)
+            mesh_port = str(cfg.get("PORT", "11010"))
+            clean_endpoint = sanitize_peer_endpoint(endpoint, mesh_port)
+            cur_peers = [sanitize_peer_endpoint(p, mesh_port) for p in cfg.get("PEERS", "").split(",") if p.strip()]
+            cur_peers = [p for p in cur_peers if p]
+            if clean_endpoint and clean_endpoint not in cur_peers:
+                cur_peers.append(clean_endpoint)
             cfg["PEERS"] = ",".join(cur_peers)
 
             save_node_config_env(cfg)
@@ -1344,7 +1415,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 "data": {
                     "network_name": net,
                     "ipv4": cur_ip,
-                    "peer": endpoint
+                    "peer": clean_endpoint
                 }
             })
             return

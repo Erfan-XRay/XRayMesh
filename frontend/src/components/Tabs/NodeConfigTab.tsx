@@ -40,6 +40,46 @@ interface NodeConfigTabProps {
   isRtl: boolean;
 }
 
+function sanitizePeerInput(raw: string, defaultPort?: number): string {
+  if (!raw) return '';
+  let p = raw.trim().replace(/\/+$/, '').replace(/:+$/, '');
+  if (!p || p.startsWith(':') || /^\d+$/.test(p)) return '';
+  let scheme = '';
+  if (p.includes('://')) {
+    const parts = p.split('://');
+    scheme = parts[0].toLowerCase();
+    p = parts[1];
+  }
+  p = p.replace(/:+$/, '');
+  if (!p || p.startsWith(':') || /^\d+$/.test(p)) return '';
+
+  let host = '';
+  let pPort = defaultPort ? String(defaultPort) : '11010';
+
+  if (p.includes('[') && p.includes(']')) {
+    const m = p.match(/^(\[[^\]]+\])(?::+(\d+))?$/);
+    if (!m) return '';
+    host = m[1];
+    pPort = m[2] || pPort;
+  } else {
+    const m = p.match(/^(.+?):+(\d+)$/);
+    if (m) {
+      host = m[1].replace(/:+$/, '');
+      pPort = m[2];
+    } else {
+      host = p.replace(/:+$/, '');
+    }
+  }
+
+  if (!host || host.startsWith(':') || host === ':' || /^\d+$/.test(host)) return '';
+  const hp = `${host}:${pPort}`;
+  if (scheme) {
+    if (scheme === 'ws' || scheme === 'wss') return `${scheme}://${hp}/`;
+    return `${scheme}://${hp}`;
+  }
+  return hp;
+}
+
 export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
   onRefreshStatus,
   onNotify,
@@ -68,8 +108,6 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
   const [wgPortalPort, setWgPortalPort] = useState(22022);
   const [wgClientCidr, setWgClientCidr] = useState('10.99.11.0/24');
   const [peers, setPeers] = useState<string[]>([]);
-
-  // Peer management
   const [newPeer, setNewPeer] = useState('');
   const [addingPeer, setAddingPeer] = useState(false);
 
@@ -83,11 +121,9 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
   const computedInvite = useMemo(() => {
     if (!inviteData) return null;
     const baseObj = { ...inviteData.details };
-    let ep = overrideEndpoint.trim() || baseObj.endpoint || '';
-    if (ep && !ep.includes(':') && port) {
-      ep = `${ep}:${port}`;
-    }
-    const finalObj = { ...baseObj, endpoint: ep };
+    const rawEp = overrideEndpoint.trim() || baseObj.endpoint || '';
+    const cleanEp = sanitizePeerInput(rawEp, port);
+    const finalObj = { ...baseObj, endpoint: cleanEp };
     try {
       const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(finalObj))));
       return {
@@ -185,13 +221,17 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
 
   const handleAddPeer = async () => {
     if (!newPeer.trim()) return;
+    const clean = sanitizePeerInput(newPeer, port);
+    if (!clean) {
+      onNotify(t('node_peers_desc') || 'Invalid peer format', 'error');
+      return;
+    }
     setAddingPeer(true);
     try {
-      const trimmed = newPeer.trim();
-      await addMeshPeer(trimmed);
-      setPeers((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+      await addMeshPeer(clean);
+      setPeers((prev) => (prev.includes(clean) ? prev : [...prev, clean]));
       setNewPeer('');
-      onNotify(`Peer '${trimmed}' added`, 'success');
+      onNotify(`Peer '${clean}' added`, 'success');
       onRefreshStatus();
     } catch (err: any) {
       onNotify(err.message || 'Failed to add peer', 'error');
@@ -641,7 +681,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                   placeholder={inviteData.details.endpoint || t('node_invite_endpoint_placeholder')}
                   className="w-full px-3 py-1.5 bg-slate-950/90 border border-white/10 rounded-lg font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-accent-green"
                 />
-                {!overrideEndpoint && (!inviteData.details.endpoint || inviteData.details.endpoint.startsWith(':')) && (
+                {!overrideEndpoint && (!computedInvite?.details.endpoint || computedInvite.details.endpoint.startsWith(':')) && (
                   <p className="text-[10px] text-amber-400 mt-1 font-medium leading-normal">
                     {t('node_invite_no_ip_warning')}
                   </p>
@@ -655,7 +695,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                   <span className="text-[11px] font-mono text-accent-green font-semibold">
                     {computedInvite.details.net} ({computedInvite.details.proto.toUpperCase()})
                   </span>
-                  <span className="text-[10px] text-text-muted font-mono">{computedInvite.details.endpoint}</span>
+                  <span className="text-[10px] text-text-muted font-mono">{computedInvite.details.endpoint || 'No endpoint (relay only)'}</span>
                 </div>
                 <div className="p-2 rounded bg-black/40 border border-white/5 font-mono text-[11px] text-text-main break-all line-clamp-3 select-all">
                   {computedInvite.invite}

@@ -222,6 +222,30 @@ write_config() {
   local name="$1" secret="$2" hostname="$3" ipv4="$4" protocol="$5" port="$6" peers="$7"
   local encryption="$8" ipv6="$9" mtu="${10}"
   local enable_kcp="${11:-no}" wg_portal="${12:-no}" wg_portal_port="${13:-22022}" wg_client_cidr="${14:-10.99.11.0/24}"
+
+  # Pre-sanitize stored peers list
+  local clean_peers=()
+  if [[ -n "$peers" ]]; then
+    IFS=',' read -ra raw_p_list <<< "$peers"
+    for p in "${raw_p_list[@]}"; do
+      p="${p//[[:space:]]/}"
+      [[ -z "$p" ]] && continue
+      p="${p%/}"
+      while [[ "$p" == *: ]]; do p="${p%:}"; done
+      [[ "$p" =~ ^:+ || "$p" =~ ^[0-9]+$ ]] && continue
+      if [[ ! "$p" =~ \[.*\] && "$p" =~ ^(.+):+([0-9]+)$ ]]; then
+        local ph="${BASH_REMATCH[1]}"
+        while [[ "$ph" == *: ]]; do ph="${ph%:}"; done
+        p="${ph}:${BASH_REMATCH[2]}"
+      fi
+      clean_peers+=("$p")
+    done
+  fi
+  local peers_formatted=""
+  if ((${#clean_peers[@]})); then
+    peers_formatted="$(IFS=','; echo "${clean_peers[*]}")"
+  fi
+
   umask 077
   {
     printf 'NETWORK_NAME=%q\n' "$name"
@@ -230,7 +254,7 @@ write_config() {
     printf 'IPV4=%q\n' "$ipv4"
     printf 'PROTOCOL=%q\n' "$protocol"
     printf 'PORT=%q\n' "$port"
-    printf 'PEERS=%q\n' "$peers"
+    printf 'PEERS=%q\n' "$peers_formatted"
     printf 'ENCRYPTION=%q\n' "$encryption"
     printf 'IPV6=%q\n' "$ipv6"
     printf 'MTU=%q\n' "$mtu"
@@ -249,6 +273,8 @@ Description=XRayMesh - EasyTier Mesh Node
 Documentation=https://github.com/EasyTier/EasyTier
 Wants=network-online.target
 After=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=10
 
 [Service]
 Type=simple
@@ -256,8 +282,6 @@ EnvironmentFile=${CONFIG_FILE}
 ExecStart=${INSTALL_DIR}/xraymesh-runner
 Restart=always
 RestartSec=3
-StartLimitIntervalSec=60
-StartLimitBurst=10
 LimitNOFILE=1048576
 NoNewPrivileges=true
 ProtectHome=true
@@ -344,40 +368,70 @@ if [[ -n "${PEERS:-}" ]]; then
   for peer in "${peer_list[@]}"; do
     peer="${peer//[[:space:]]/}"
     [[ -z "$peer" ]] && continue
+
+    p_scheme=""
     if [[ "$peer" == *"://"* ]]; then
       p_scheme="${peer%%://*}"
       p_hostport="${peer#*://}"
-      [[ "$p_hostport" =~ :[0-9]+(/)?$ ]] || p_hostport="${p_hostport%/}:${PORT}"
-      if [[ "$p_scheme" == "ws" || "$p_scheme" == "wss" ]]; then
-        [[ "$p_hostport" == */ ]] || p_hostport="${p_hostport}/"
-      fi
-      peer_args+=("${p_scheme}://${p_hostport}")
     else
-      [[ "$peer" =~ :[0-9]+$ ]] || peer="${peer}:${PORT}"
+      p_hostport="$peer"
+    fi
+
+    # Strip trailing slashes and colons
+    p_hostport="${p_hostport%/}"
+    while [[ "$p_hostport" == *: ]]; do
+      p_hostport="${p_hostport%:}"
+    done
+
+    if [[ "$p_hostport" =~ ^(\[[^\]]+\])(:([0-9]+))?$ ]]; then
+      p_host="${BASH_REMATCH[1]}"
+      p_port="${BASH_REMATCH[3]:-$PORT}"
+    elif [[ "$p_hostport" =~ ^(.+):+([0-9]+)$ ]]; then
+      p_host="${BASH_REMATCH[1]}"
+      while [[ "$p_host" == *: ]]; do p_host="${p_host%:}"; done
+      p_port="${BASH_REMATCH[2]}"
+    else
+      p_host="$p_hostport"
+      p_port="$PORT"
+    fi
+
+    # Skip if host is empty, starts with colon, or is just digits
+    if [[ -z "$p_host" || "$p_host" =~ ^:+ || "$p_host" =~ ^[0-9]+$ || "$p_host" == ":" ]]; then
+      continue
+    fi
+
+    target="${p_host}:${p_port}"
+    if [[ -n "$p_scheme" ]]; then
+      if [[ "$p_scheme" == "ws" || "$p_scheme" == "wss" ]]; then
+        peer_args+=("${p_scheme}://${target}/")
+      else
+        peer_args+=("${p_scheme}://${target}")
+      fi
+    else
       case "$proto_lower" in
         tcp)
-          peer_args+=("tcp://${peer}")
+          peer_args+=("tcp://${target}")
           ;;
         ws)
-          peer_args+=("ws://${peer}/")
+          peer_args+=("ws://${target}/")
           ;;
         wss)
-          peer_args+=("wss://${peer}/")
+          peer_args+=("wss://${target}/")
           ;;
         quic)
-          peer_args+=("quic://${peer}")
+          peer_args+=("quic://${target}")
           ;;
         faketcp)
-          peer_args+=("faketcp://${peer}")
+          peer_args+=("faketcp://${target}")
           ;;
         wg)
-          peer_args+=("wg://${peer}")
+          peer_args+=("wg://${target}")
           ;;
         udp)
-          peer_args+=("udp://${peer}" "tcp://${peer}")
+          peer_args+=("udp://${target}" "tcp://${target}")
           ;;
         dual|*)
-          peer_args+=("tcp://${peer}" "udp://${peer}")
+          peer_args+=("tcp://${target}" "udp://${target}")
           ;;
       esac
     fi
