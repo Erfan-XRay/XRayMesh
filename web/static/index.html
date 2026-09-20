@@ -790,6 +790,156 @@
       font-size: 0.875rem;
     }
 
+    /* Resource Meters */
+    .resource-meter {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .meter-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+    }
+    .meter-bar-track {
+      height: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 9999px;
+      overflow: hidden;
+    }
+    .meter-bar-fill {
+      height: 100%;
+      border-radius: 9999px;
+      transition: width 0.35s ease-out, background-color 0.35s ease-out;
+    }
+
+    /* Port Helper Chips */
+    .chip-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: 0.45rem;
+    }
+    .port-chip {
+      font-size: 0.72rem;
+      font-family: var(--font-mono);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      padding: 0.2rem 0.5rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+    .port-chip:hover {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: rgba(56, 189, 248, 0.4);
+      color: var(--primary);
+    }
+
+    /* Presets for Speedtest */
+    .presets-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.5rem;
+      margin-bottom: 1.15rem;
+    }
+    .preset-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 0.55rem 0.35rem;
+      font-size: 0.75rem;
+      color: var(--text-main);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.15rem;
+      user-select: none;
+    }
+    .preset-btn:hover {
+      background: rgba(56, 189, 248, 0.12);
+      border-color: rgba(56, 189, 248, 0.35);
+      color: var(--primary);
+    }
+    .preset-btn strong {
+      font-size: 0.8rem;
+    }
+
+    /* Tunnel Sub-Tabs */
+    .sub-tabs-nav {
+      display: flex;
+      gap: 0.4rem;
+      margin-bottom: 1.25rem;
+      overflow-x: auto;
+      padding-bottom: 0.25rem;
+    }
+    .sub-tab-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      font-weight: 500;
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .sub-tab-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .sub-tab-btn.active {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: rgba(56, 189, 248, 0.4);
+      color: var(--primary);
+    }
+
+    /* Search & Filter Input */
+    .filter-bar {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .search-input-wrap {
+      position: relative;
+      flex: 1;
+      min-width: 200px;
+    }
+    .search-input-wrap svg {
+      position: absolute;
+      left: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+    .search-input-wrap input {
+      padding-left: 2.25rem;
+    }
+
+    /* Target Node Info Preview Chip */
+    .node-preview-chip {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(56, 189, 248, 0.06);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      border-radius: 8px;
+      padding: 0.5rem 0.75rem;
+      margin-top: 0.4rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
         animation-duration: 0.01ms !important;
@@ -874,6 +1024,13 @@
       <div class="form-group">
         <label class="form-label">TCP Ports or Ranges</label>
         <input type="text" id="haPorts" class="form-control" placeholder="e.g. 80,443 or 8000-8010">
+        <div class="chip-group">
+          <span style="font-size: 0.7rem; color: var(--text-muted); align-self: center;">Presets:</span>
+          <button type="button" class="port-chip" onclick="setPortValue('haPorts', '80,443')">80,443 (Web)</button>
+          <button type="button" class="port-chip" onclick="setPortValue('haPorts', '443')">443 (HTTPS/TLS)</button>
+          <button type="button" class="port-chip" onclick="setPortValue('haPorts', '8000-8010')">8000-8010 (Range)</button>
+          <button type="button" class="port-chip" onclick="setPortValue('haPorts', '2222')">2222 (SSH)</button>
+        </div>
       </div>
 
       <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
@@ -931,6 +1088,13 @@
       <div class="form-group">
         <label class="form-label">Ports or Ranges</label>
         <input type="text" id="iptPorts" class="form-control" placeholder="e.g. 443 or 8000-8010">
+        <div class="chip-group">
+          <span style="font-size: 0.7rem; color: var(--text-muted); align-self: center;">Presets:</span>
+          <button type="button" class="port-chip" onclick="setPortValue('iptPorts', '443')">443 (Hysteria/QUIC)</button>
+          <button type="button" class="port-chip" onclick="setPortValue('iptPorts', '20000-20100')">20000-20100 (Port-Hopping)</button>
+          <button type="button" class="port-chip" onclick="setPortValue('iptPorts', '80,443')">80,443 (Multi)</button>
+          <button type="button" class="port-chip" onclick="setPortValue('iptPorts', '53')">53 (DNS)</button>
+        </div>
       </div>
 
       <div class="form-group">
@@ -1000,6 +1164,13 @@
       <div class="form-group">
         <label class="form-label">Ports or Ranges</label>
         <input type="text" id="gostPorts" class="form-control" placeholder="e.g. 80,443 or 8000-8010">
+        <div class="chip-group">
+          <span style="font-size: 0.7rem; color: var(--text-muted); align-self: center;">Presets:</span>
+          <button type="button" class="port-chip" onclick="setPortValue('gostPorts', '80,443')">80,443 (Web Dual)</button>
+          <button type="button" class="port-chip" onclick="setPortValue('gostPorts', '443')">443 (HTTPS/QUIC)</button>
+          <button type="button" class="port-chip" onclick="setPortValue('gostPorts', '8000-8010')">8000-8010 (Range)</button>
+          <button type="button" class="port-chip" onclick="setPortValue('gostPorts', '1080')">1080 (SOCKS5)</button>
+        </div>
       </div>
 
       <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
@@ -1102,31 +1273,53 @@
 
       <div class="stat-card">
         <div class="stat-header">
-          <span class="stat-title">Host Server Load</span>
-          <div class="stat-icon">
+          <span class="stat-title">Host Server Resources</span>
+          <div class="stat-icon" title="Host CPU, RAM, & Load">
             <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
           </div>
         </div>
-        <div class="stat-value" id="valRam">-- %</div>
-        <div class="stat-desc" id="valUptime">Uptime: --</div>
+        <div class="resource-meter" style="margin-top: 0.1rem;">
+          <div>
+            <div class="meter-row">
+              <span style="color: var(--text-muted); font-size: 0.78rem;">CPU Usage</span>
+              <span id="valCpu" style="font-family: var(--font-mono); font-weight: 700; color: #ffffff; font-size: 0.88rem;">-- %</span>
+            </div>
+            <div class="meter-bar-track" style="margin-top: 0.25rem;">
+              <div id="barCpu" class="meter-bar-fill" style="width: 0%; background: var(--primary);"></div>
+            </div>
+          </div>
+          <div style="margin-top: 0.45rem;">
+            <div class="meter-row">
+              <span style="color: var(--text-muted); font-size: 0.78rem;">RAM Usage</span>
+              <span id="valRam" style="font-family: var(--font-mono); font-weight: 700; color: #ffffff; font-size: 0.88rem;">-- %</span>
+            </div>
+            <div class="meter-bar-track" style="margin-top: 0.25rem;">
+              <div id="barRam" class="meter-bar-fill" style="width: 0%; background: #38bdf8;"></div>
+            </div>
+          </div>
+        </div>
+        <div class="stat-desc" id="valUptime" style="margin-top: 0.6rem; justify-content: space-between; font-size: 0.74rem;">
+          <span>Uptime: --</span>
+          <span id="valLoadAvg" style="font-family: var(--font-mono); color: var(--text-subtle);">Load: --</span>
+        </div>
       </div>
     </div>
 
     <!-- Navigation Tabs -->
     <div class="tabs-nav">
-      <button class="tab-btn active" onclick="switchMainTab('peers')">
+      <button class="tab-btn active" data-tab="peers" onclick="switchMainTab('peers', this)">
         <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
         Peers & Mesh Nodes
       </button>
-      <button class="tab-btn" onclick="switchMainTab('speedtest')">
+      <button class="tab-btn" data-tab="speedtest" onclick="switchMainTab('speedtest', this)">
         <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
         In-Mesh Speedtest (iperf3)
       </button>
-      <button class="tab-btn" onclick="switchMainTab('ping')">
+      <button class="tab-btn" data-tab="ping" onclick="switchMainTab('ping', this)">
         <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         Live Ping & Latency
       </button>
-      <button class="tab-btn" onclick="switchMainTab('tunnels')">
+      <button class="tab-btn" data-tab="tunnels" onclick="switchMainTab('tunnels', this)">
         <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
         Tunnels Manager (HAProxy & iptables)
       </button>
@@ -1136,11 +1329,24 @@
     <div id="tabPeers" class="tab-pane active">
       <div class="panel">
         <div class="panel-header">
-          <h2 class="panel-title">
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg>
-            Connected Mesh Peers
-          </h2>
-          <span class="badge" style="background: rgba(0, 229, 255, 0.1); color: var(--primary);">EasyTier RPC</span>
+          <div>
+            <h2 class="panel-title">
+              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg>
+              Connected Mesh Peers
+            </h2>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">All nodes currently connected in the encrypted mesh overlay</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <span id="peersCountBadge" class="badge" style="background: rgba(0, 229, 255, 0.1); color: var(--primary);">0 Peers</span>
+            <button class="btn btn-ghost btn-sm" onclick="fetchStatus(true)">Refresh</button>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <div class="search-input-wrap">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <input type="text" id="peerSearchInput" class="form-control" placeholder="Search by Virtual IP, hostname, or protocol..." oninput="filterPeers()">
+          </div>
         </div>
 
         <div id="peersListContainer" class="peers-grid">
@@ -1153,21 +1359,50 @@
     <div id="tabSpeedtest" class="tab-pane">
       <div class="panel">
         <div class="panel-header">
-          <h2 class="panel-title">
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-            In-Mesh Speedtest & Performance Benchmark (iperf3)
-          </h2>
-          <span class="badge" style="background: rgba(168, 85, 247, 0.15); color: var(--accent-purple);">TCP & UDP Benchmark</span>
+          <div>
+            <h2 class="panel-title">
+              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              In-Mesh Speedtest & Performance Benchmark (iperf3)
+            </h2>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">End-to-end network benchmarking across private mesh tunnel</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <div style="display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.35rem 0.75rem; border-radius: 9999px; font-size: 0.76rem; background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25);">
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+              Mesh-Only Isolation (Port 5201 WAN-Blocked)
+            </div>
+            <span class="badge" style="background: rgba(168, 85, 247, 0.15); color: #c084fc;">iperf3 Engine</span>
+          </div>
         </div>
 
         <div class="speedtest-container">
           <!-- Control Column -->
           <div>
+            <label class="form-label" style="margin-bottom: 0.4rem;">Quick Benchmark Profiles</label>
+            <div class="presets-row">
+              <button type="button" class="preset-btn" onclick="applySpeedPreset('quick')">
+                <span>🚀</span>
+                <strong>Quick</strong>
+                <span style="color: var(--text-muted); font-size: 0.7rem;">3s TCP</span>
+              </button>
+              <button type="button" class="preset-btn" onclick="applySpeedPreset('max')">
+                <span>⚡</span>
+                <strong>Max</strong>
+                <span style="color: var(--text-muted); font-size: 0.7rem;">10s TCP</span>
+              </button>
+              <button type="button" class="preset-btn" onclick="applySpeedPreset('udp')">
+                <span>🎯</span>
+                <strong>Jitter/Loss</strong>
+                <span style="color: var(--text-muted); font-size: 0.7rem;">5s UDP 50M</span>
+              </button>
+            </div>
+
             <div class="form-group">
               <label class="form-label">Destination Node</label>
-              <select id="speedtestTarget" class="form-control">
+              <select id="speedtestTarget" class="form-control" onchange="updateSpeedTargetChip()">
                 <option value="">-- Select Destination Node --</option>
               </select>
+              <div id="speedTargetChip" class="node-preview-chip" style="display: none;"></div>
             </div>
 
             <div class="form-group">
@@ -1182,6 +1417,7 @@
                   <label for="protoUdp">UDP (Jitter & Loss)</label>
                 </div>
               </div>
+              <p id="protoHelpText" style="font-size: 0.74rem; color: var(--text-subtle); margin-top: 0.4rem;">TCP tests maximum network throughput and transfer capacity (Mbps) across servers.</p>
             </div>
 
             <div class="form-group" id="groupBandwidth" style="display: none;">
@@ -1208,8 +1444,8 @@
             <button id="btnRunSpeedtest" class="btn btn-primary" style="width: 100%; padding: 0.85rem;" onclick="runSpeedtest()">
               <span>Start Speedtest</span>
             </button>
-            <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.75rem; text-align: center;">
-              Note: The target node must have the iperf3 service active.
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.85rem; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 0.75rem;">
+              💡 <strong>Remote Server Web UI Not Required:</strong> As long as XRayMesh is configured on the target server, its in-mesh iperf3 service is active and listening securely on port 5201.
             </p>
           </div>
 
@@ -1307,8 +1543,15 @@
 
     <!-- TAB 4: TUNNELS -->
     <div id="tabTunnels" class="tab-pane">
+      <div class="sub-tabs-nav">
+        <button class="sub-tab-btn active" data-filter="all" onclick="filterTunnelsView('all', this)">All Tunnels (<span id="countAllTunnels">0</span>)</button>
+        <button class="sub-tab-btn" data-filter="haproxy" onclick="filterTunnelsView('haproxy', this)">HAProxy TCP (<span id="countHaTunnels">0</span>)</button>
+        <button class="sub-tab-btn" data-filter="iptables" onclick="filterTunnelsView('iptables', this)">iptables Raw (<span id="countIptTunnels">0</span>)</button>
+        <button class="sub-tab-btn" data-filter="gost" onclick="filterTunnelsView('gost', this)">GOST Multi-Protocol (<span id="countGostTunnels">0</span>)</button>
+      </div>
+
       <!-- HAProxy Tunnels -->
-      <div class="panel">
+      <div class="panel" id="panelHaproxy">
         <div class="panel-header">
           <div>
             <h2 class="panel-title">
@@ -1331,7 +1574,7 @@
       </div>
 
       <!-- iptables Tunnels -->
-      <div class="panel">
+      <div class="panel" id="panelIptables">
         <div class="panel-header">
           <div>
             <h2 class="panel-title">
@@ -1354,7 +1597,7 @@
       </div>
 
       <!-- GOST Tunnels -->
-      <div class="panel">
+      <div class="panel" id="panelGost">
         <div class="panel-header">
           <div>
             <h2 class="panel-title">
@@ -1453,14 +1696,19 @@
       });
     });
 
-    // Tabs
-    function switchMainTab(tabId) {
+    // Tabs & Navigation
+    function switchMainTab(tabId, el) {
       document.querySelectorAll('.tabs-nav .tab-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
 
-      event.currentTarget.classList.add('active');
+      const targetBtn = el || document.querySelector(`.tabs-nav .tab-btn[data-tab="${tabId}"]`);
+      if (targetBtn) targetBtn.classList.add('active');
+
       if (tabId === 'peers') document.getElementById('tabPeers').classList.add('active');
-      if (tabId === 'speedtest') document.getElementById('tabSpeedtest').classList.add('active');
+      if (tabId === 'speedtest') {
+        document.getElementById('tabSpeedtest').classList.add('active');
+        updateSpeedTargetChip();
+      }
       if (tabId === 'ping') document.getElementById('tabPing').classList.add('active');
       if (tabId === 'tunnels') {
         document.getElementById('tabTunnels').classList.add('active');
@@ -1471,7 +1719,7 @@
 
     function switchLoginTab(type) {
       document.querySelectorAll('#loginModal .tab-btn').forEach(b => b.classList.remove('active'));
-      event.currentTarget.classList.add('active');
+      if (event && event.currentTarget) event.currentTarget.classList.add('active');
       if (type === 'pw') {
         document.getElementById('loginPwTab').style.display = 'block';
         document.getElementById('loginTkTab').style.display = 'none';
@@ -1484,6 +1732,89 @@
     function toggleBandwidthInput() {
       const isUdp = document.getElementById('protoUdp').checked;
       document.getElementById('groupBandwidth').style.display = isUdp ? 'block' : 'none';
+      const help = document.getElementById('protoHelpText');
+      if (help) {
+        help.textContent = isUdp
+          ? 'UDP tests packet loss %, jitter variance (ms), and packet delivery under load.'
+          : 'TCP tests real-world file transfer speed and maximum network throughput (Mbps).';
+      }
+    }
+
+    function setPortValue(inputId, val) {
+      const el = document.getElementById(inputId);
+      if (el) {
+        el.value = val;
+        el.focus();
+      }
+    }
+
+    function filterTunnelsView(type, btn) {
+      document.querySelectorAll('.sub-tabs-nav .sub-tab-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+
+      const pHa = document.getElementById('panelHaproxy');
+      const pIpt = document.getElementById('panelIptables');
+      const pGost = document.getElementById('panelGost');
+
+      if (type === 'all') {
+        if (pHa) pHa.style.display = 'block';
+        if (pIpt) pIpt.style.display = 'block';
+        if (pGost) pGost.style.display = 'block';
+      } else if (type === 'haproxy') {
+        if (pHa) pHa.style.display = 'block';
+        if (pIpt) pIpt.style.display = 'none';
+        if (pGost) pGost.style.display = 'none';
+      } else if (type === 'iptables') {
+        if (pHa) pHa.style.display = 'none';
+        if (pIpt) pIpt.style.display = 'block';
+        if (pGost) pGost.style.display = 'none';
+      } else if (type === 'gost') {
+        if (pHa) pHa.style.display = 'none';
+        if (pIpt) pIpt.style.display = 'none';
+        if (pGost) pGost.style.display = 'block';
+      }
+    }
+
+    function applySpeedPreset(mode) {
+      if (mode === 'quick') {
+        document.getElementById('protoTcp').checked = true;
+        document.getElementById('speedtestDuration').value = '3';
+        toggleBandwidthInput();
+        showToast("Profile set: Quick 3s TCP Throughput", "info");
+      } else if (mode === 'max') {
+        document.getElementById('protoTcp').checked = true;
+        document.getElementById('speedtestDuration').value = '10';
+        toggleBandwidthInput();
+        showToast("Profile set: Max 10s TCP Throughput", "info");
+      } else if (mode === 'udp') {
+        document.getElementById('protoUdp').checked = true;
+        document.getElementById('speedtestDuration').value = '5';
+        document.getElementById('speedtestBandwidth').value = '50M';
+        toggleBandwidthInput();
+        showToast("Profile set: 5s UDP Jitter & Packet Loss (50 Mbps)", "info");
+      }
+    }
+
+    function updateSpeedTargetChip() {
+      const select = document.getElementById('speedtestTarget');
+      const chip = document.getElementById('speedTargetChip');
+      if (!select || !chip) return;
+      const val = select.value;
+      if (!val) {
+        chip.style.display = 'none';
+        chip.innerHTML = '';
+        return;
+      }
+      const peer = peersCache.find(p => p.ipv4 === val);
+      const host = peer ? (peer.hostname || 'Peer') : 'Node';
+      const lat = peer ? (peer.lat_ms ? peer.lat_ms + ' ms' : '< 1ms') : '--';
+      const cost = peer ? (peer.cost === 1 || peer.cost === '1' ? 'Direct P2P (Cost 1)' : `Relayed (Cost ${peer.cost})`) : 'In-mesh';
+
+      chip.style.display = 'flex';
+      chip.innerHTML = `
+        <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        <span>Target: <strong style="color: #ffffff;">${val}</strong> (${host}) &bull; Latency: <strong style="color: var(--primary);">${lat}</strong> &bull; Routing: <strong style="color: #34d399;">${cost}</strong></span>
+      `;
     }
 
     // Authentication Checks
@@ -1576,8 +1907,34 @@
 
         // Host System Info
         const sys = statusData.system || {};
-        document.getElementById('valRam').textContent = `${sys.ram_percent || 0}% RAM`;
-        document.getElementById('valUptime').textContent = `Uptime: ${sys.uptime_str || '--'}`;
+        const cpuPct = (typeof sys.cpu_percent === 'number') ? sys.cpu_percent : 0;
+        const ramPct = (typeof sys.ram_percent === 'number') ? sys.ram_percent : 0;
+
+        const elCpu = document.getElementById('valCpu');
+        if (elCpu) elCpu.textContent = `${cpuPct}%`;
+        const barCpu = document.getElementById('barCpu');
+        if (barCpu) {
+          barCpu.style.width = `${Math.min(100, Math.max(0, cpuPct))}%`;
+          barCpu.style.background = cpuPct > 85 ? 'var(--accent-red)' : (cpuPct > 60 ? 'var(--accent-yellow)' : 'var(--primary)');
+        }
+
+        const elRam = document.getElementById('valRam');
+        if (elRam) {
+          const usedStr = sys.ram_used_mb ? (sys.ram_used_mb >= 1024 ? (sys.ram_used_mb / 1024).toFixed(1) + 'GB' : sys.ram_used_mb + 'MB') : '';
+          const totalStr = sys.ram_total_mb ? (sys.ram_total_mb >= 1024 ? (sys.ram_total_mb / 1024).toFixed(1) + 'GB' : sys.ram_total_mb + 'MB') : '';
+          elRam.textContent = (usedStr && totalStr) ? `${ramPct}% (${usedStr}/${totalStr})` : `${ramPct}%`;
+        }
+        const barRam = document.getElementById('barRam');
+        if (barRam) {
+          barRam.style.width = `${Math.min(100, Math.max(0, ramPct))}%`;
+          barRam.style.background = ramPct > 85 ? 'var(--accent-red)' : (ramPct > 70 ? 'var(--accent-yellow)' : '#38bdf8');
+        }
+
+        const elUptime = document.getElementById('valUptime');
+        if (elUptime) {
+          const loadStr = Array.isArray(sys.load_avg) ? sys.load_avg.join(', ') : '--';
+          elUptime.innerHTML = `<span>Uptime: ${sys.uptime_str || '--'}</span><span id="valLoadAvg" style="font-family: var(--font-mono); color: var(--text-subtle);">Load: ${loadStr}</span>`;
+        }
 
         // Process Peers
         renderPeers(peersData.data);
@@ -1588,8 +1945,26 @@
       }
     }
 
+    let allActivePeers = [];
+
+    function filterPeers() {
+      const input = document.getElementById('peerSearchInput');
+      const query = (input ? input.value : '').trim().toLowerCase();
+      const filtered = allActivePeers.filter(p => {
+        if (!query) return true;
+        const ip = (p.ipv4 || '').toLowerCase();
+        const host = (p.hostname || '').toLowerCase();
+        const proto = (p.tunnel_proto || '').toLowerCase();
+        return ip.includes(query) || host.includes(query) || proto.includes(query);
+      });
+      renderPeersList(filtered);
+      const badge = document.getElementById('peersCountBadge');
+      if (badge) {
+        badge.textContent = query ? `${filtered.length} / ${allActivePeers.length} Peers` : `${allActivePeers.length} Peers`;
+      }
+    }
+
     function renderPeers(rawPeers) {
-      const container = document.getElementById('peersListContainer');
       const selectTarget = document.getElementById('speedtestTarget');
       peersCache = [];
 
@@ -1602,11 +1977,13 @@
       }
 
       const activePeers = list.filter(p => p && p.cost !== "Local" && p.ipv4);
+      allActivePeers = activePeers;
       peersCache = activePeers;
 
       document.getElementById('valPeerCount').textContent = activePeers.length;
 
-      // Update target dropdown for speedtest
+      // Update target dropdown for speedtest preserving selection if valid
+      const curTarget = selectTarget.value;
       selectTarget.innerHTML = '<option value="">-- Select Destination Node --</option>';
       activePeers.forEach(p => {
         const opt = document.createElement('option');
@@ -1614,26 +1991,43 @@
         opt.textContent = `${p.ipv4} (${p.hostname || 'Peer'}) - Latency: ${p.lat_ms || '0'}ms`;
         selectTarget.appendChild(opt);
       });
+      if (curTarget) selectTarget.value = curTarget;
+      updateSpeedTargetChip();
 
       // Update target dropdowns for tunnels
       populateTunnelTargetDropdowns();
 
-      if (activePeers.length === 0) {
-        container.innerHTML = `
-          <div class="empty-state" style="grid-column: 1 / -1;">
-            <div class="empty-state-icon">
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+      filterPeers();
+    }
+
+    function renderPeersList(activePeers) {
+      const container = document.getElementById('peersListContainer');
+      if (!activePeers || activePeers.length === 0) {
+        if (allActivePeers.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state" style="grid-column: 1 / -1;">
+              <div class="empty-state-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+              </div>
+              <div class="empty-state-title">No Connected Mesh Peers Discovered</div>
+              <p class="empty-state-desc">Join additional nodes to this network with the same Network Name and Secret to establish encrypted mesh connections.</p>
+              <button class="btn btn-ghost btn-sm" onclick="fetchStatus(true)">
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                Refresh Peers
+              </button>
             </div>
-            <div class="empty-state-title">No Connected Mesh Peers Discovered</div>
-            <p class="empty-state-desc">Join additional nodes to this network with the same Network Name and Secret to establish encrypted mesh connections.</p>
-            <button class="btn btn-ghost btn-sm" onclick="fetchStatus(true)">
-              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-              Refresh Peers
-            </button>
-          </div>
-        `;
-        document.getElementById('valAvgLatency').textContent = '-- ms';
-        return;
+          `;
+          document.getElementById('valAvgLatency').textContent = '-- ms';
+          return;
+        } else {
+          container.innerHTML = `
+            <div class="empty-state" style="grid-column: 1 / -1;">
+              <div class="empty-state-title">No matching peers found</div>
+              <p class="empty-state-desc">Try searching with a different IP address or hostname.</p>
+            </div>
+          `;
+          return;
+        }
       }
 
       let totalLat = 0, latCount = 0;
@@ -1647,16 +2041,29 @@
         if (lat > 100) latBadgeColor = 'var(--accent-yellow)';
         if (lat > 200) latBadgeColor = 'var(--accent-red)';
 
+        const isDirect = (p.cost === 1 || p.cost === "1" || p.cost <= 1);
+        const routeBadge = isDirect
+          ? `<span class="badge" style="background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25);">Direct P2P</span>`
+          : `<span class="badge" style="background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.25);">Relayed (${p.cost})</span>`;
+
         html += `
           <div class="peer-card">
             <div class="peer-card-top">
               <div>
-                <div class="peer-ip">${p.ipv4}</div>
+                <div class="peer-ip" style="display: flex; align-items: center; gap: 0.45rem;">
+                  <span>${p.ipv4}</span>
+                  <button class="btn-copy" onclick="copyRawText('${p.ipv4}')" title="Copy Virtual IP" aria-label="Copy Virtual IP">
+                    <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                  </button>
+                </div>
                 <div class="peer-meta">${p.hostname || 'EasyTier Node'}</div>
               </div>
-              <span class="badge" style="background: rgba(255,255,255,0.05); color: ${latBadgeColor}; border: 1px solid ${latBadgeColor}44;">
-                ${p.lat_ms ? p.lat_ms + ' ms' : '< 1ms'}
-              </span>
+              <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.3rem;">
+                <span class="badge" style="background: rgba(255,255,255,0.05); color: ${latBadgeColor}; border: 1px solid ${latBadgeColor}44;">
+                  ${p.lat_ms ? p.lat_ms + ' ms' : '< 1ms'}
+                </span>
+                ${routeBadge}
+              </div>
             </div>
 
             <div class="peer-details">
@@ -1890,6 +2297,17 @@
         const haproxy = data.haproxy || [];
         const iptables = data.iptables || [];
         const gost = data.gost || [];
+
+        // Update sub-tab counters
+        const countAll = haproxy.length + iptables.length + gost.length;
+        const elAll = document.getElementById('countAllTunnels');
+        if (elAll) elAll.textContent = countAll;
+        const elHa = document.getElementById('countHaTunnels');
+        if (elHa) elHa.textContent = haproxy.length;
+        const elIpt = document.getElementById('countIptTunnels');
+        if (elIpt) elIpt.textContent = iptables.length;
+        const elGost = document.getElementById('countGostTunnels');
+        if (elGost) elGost.textContent = gost.length;
 
         // Render HAProxy
         if (haproxy.length === 0) {

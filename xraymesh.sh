@@ -28,6 +28,7 @@ readonly WEB_DIR="${INSTALL_DIR}/web"
 readonly WEB_CONFIG_FILE="/etc/xraymesh/web.env"
 readonly WEB_SERVICE_FILE="/etc/systemd/system/xraymesh-web.service"
 readonly IPERF_SERVICE_FILE="/etc/systemd/system/xraymesh-iperf.service"
+readonly IPERF_RUNNER="${INSTALL_DIR}/xraymesh-iperf-runner"
 readonly WEB_TOKEN_FILE="/etc/xraymesh/web-tokens.json"
 readonly DEFAULT_WEB_PORT="11080"
 readonly LOG_TAG="xraymesh"
@@ -306,6 +307,57 @@ fi
 exec /opt/xraymesh/bin/easytier-core "${args[@]}"
 RUNNER
   chmod 0755 "${INSTALL_DIR}/xraymesh-runner"
+  write_iperf_service
+  systemctl daemon-reload
+}
+
+write_iperf_service() {
+  cat > "$IPERF_RUNNER" <<'RUNNER_IPERF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+config_file="/etc/xraymesh/config.env"
+mesh_ip=""
+if [[ -f "$config_file" ]]; then
+  mesh_ip="$(grep -E '^IPV4=' "$config_file" 2>/dev/null | cut -d= -f2 | tr -d '"'\'' ')"
+fi
+
+# Wait for mesh virtual IP to be assigned to an interface (up to 20 seconds)
+if [[ -n "$mesh_ip" ]]; then
+  for _ in {1..20}; do
+    if ip addr show 2>/dev/null | grep -Fq "$mesh_ip"; then
+      break
+    fi
+    sleep 1
+  done
+  # Bind strictly to Mesh Virtual IP so port 5201 is NEVER exposed to public WAN
+  exec /usr/bin/iperf3 -s -B "$mesh_ip" -p 5201
+else
+  exec /usr/bin/iperf3 -s -p 5201
+fi
+RUNNER_IPERF
+  chmod 0755 "$IPERF_RUNNER"
+
+  cat > "$IPERF_SERVICE_FILE" <<EOF_IPERF_SVC
+[Unit]
+Description=XRayMesh iperf3 In-Mesh Speedtest Daemon
+Documentation=https://github.com/Erfan-XRay/XRayMesh
+PartOf=xraymesh.service
+After=network-online.target xraymesh.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=${IPERF_RUNNER}
+Restart=always
+RestartSec=3
+TimeoutStopSec=5
+KillMode=mixed
+SyslogIdentifier=xraymesh-iperf
+
+[Install]
+WantedBy=multi-user.target
+EOF_IPERF_SVC
+
   systemctl daemon-reload
 }
 
@@ -390,13 +442,15 @@ setup_node() {
 
   write_config "$name" "$secret" "$hostname" "$ipv4" "$protocol" "$port" "$peers" "$encryption" "$ipv6" "$mtu"
   write_service
-  systemctl enable xraymesh.service >/dev/null
+  systemctl enable xraymesh.service xraymesh-iperf.service >/dev/null 2>&1 || true
   if systemctl is-active --quiet xraymesh.service; then
     info "Applying the updated node configuration..."
     systemctl restart xraymesh.service
+    systemctl restart xraymesh-iperf.service >/dev/null 2>&1 || true
   else
     info "Starting the mesh node..."
     systemctl start xraymesh.service
+    systemctl start xraymesh-iperf.service >/dev/null 2>&1 || true
   fi
   sleep 2
   if systemctl is-active --quiet xraymesh.service; then
@@ -2417,26 +2471,7 @@ SyslogIdentifier=xraymesh-web
 WantedBy=multi-user.target
 EOF_WEB_SVC
 
-  cat > "$IPERF_SERVICE_FILE" <<EOF_IPERF_SVC
-[Unit]
-Description=XRayMesh iperf3 Speedtest Daemon
-Documentation=https://github.com/Erfan-XRay/XRayMesh
-Wants=network-online.target xraymesh.service
-After=network-online.target xraymesh.service
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/iperf3 -s -p 5201
-Restart=always
-RestartSec=3
-TimeoutStopSec=5
-KillMode=mixed
-SyslogIdentifier=xraymesh-iperf
-
-[Install]
-WantedBy=multi-user.target
-EOF_IPERF_SVC
-
+  write_iperf_service
   systemctl daemon-reload
 }
 
@@ -2590,48 +2625,60 @@ web_menu() {
     fi
 
     printf '  Web Service:      %s\n' "$web_state"
-    printf '  iperf3 Service:   %s\n' "$iperf_state"
+    printf '  In-Mesh iperf3:   %s (Mesh-Only Port 5201)\n' "$iperf_state"
     printf '  Web URL:          http://%s:%s\n' "$pub_ip" "$port"
     printf '  Password Login:   %s\n\n' "$has_pw"
 
-    printf '  %b[1]%b  Start / Enable Web Dashboard & iperf3\n' "$GREEN" "$RESET"
-    printf '  %b[2]%b  Stop / Deactivate Web Dashboard & iperf3\n' "$RED" "$RESET"
-    printf '  %b[3]%b  Restart Web Dashboard & iperf3\n' "$BLUE" "$RESET"
+    printf '  %b[1]%b  Start / Enable Web Dashboard\n' "$GREEN" "$RESET"
+    printf '  %b[2]%b  Stop / Deactivate Web Dashboard\n' "$RED" "$RESET"
+    printf '  %b[3]%b  Restart Web Dashboard\n' "$BLUE" "$RESET"
     printf '  %b[4]%b  Generate One-Click Login Link (Token)\n' "$CYAN" "$RESET"
     printf '  %b[5]%b  Set / Change Admin Password\n' "$PURPLE" "$RESET"
     printf '  %b[6]%b  Change Web Port\n' "$YELLOW" "$RESET"
-    printf '  %b[7]%b  View Web Logs\n' "$PINK" "$RESET"
-    printf '  %b[8]%b  Update Web Dashboard to Latest Version\n' "$GREEN" "$RESET"
+    printf '  %b[7]%b  Toggle In-Mesh iperf3 Speedtest Daemon\n' "$CYAN" "$RESET"
+    printf '  %b[8]%b  View Web Logs\n' "$PINK" "$RESET"
+    printf '  %b[9]%b  Update Web Dashboard to Latest Version\n' "$GREEN" "$RESET"
     printf '  %b[0]%b  Back\n\n' "$GRAY" "$RESET"
 
-    read -r -p "  Select an option [0-8]: " choice
+    read -r -p "  Select an option [0-9]: " choice
     case "$choice" in
       1)
-        systemctl enable --now xraymesh-web.service xraymesh-iperf.service
-        ok "Web Dashboard and iperf3 services started."
+        systemctl enable --now xraymesh-web.service
+        ok "Web Dashboard service started."
         pause
         ;;
       2)
         if systemctl status xraymesh-web.service 2>/dev/null | grep -q "deactivating"; then
           systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null || true
         fi
-        systemctl disable --now xraymesh-web.service xraymesh-iperf.service 2>/dev/null || systemctl stop xraymesh-web.service xraymesh-iperf.service 2>/dev/null || true
-        warn "Web Dashboard and iperf3 services stopped & deactivated."
+        systemctl disable --now xraymesh-web.service 2>/dev/null || systemctl stop xraymesh-web.service 2>/dev/null || true
+        warn "Web Dashboard service stopped & deactivated."
         pause
         ;;
       3)
         if systemctl status xraymesh-web.service 2>/dev/null | grep -q "deactivating"; then
           systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null || true
         fi
-        systemctl restart xraymesh-web.service xraymesh-iperf.service 2>/dev/null || (systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null && systemctl start xraymesh-web.service 2>/dev/null) || true
-        ok "Services restarted."
+        systemctl restart xraymesh-web.service 2>/dev/null || (systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null && systemctl start xraymesh-web.service 2>/dev/null) || true
+        ok "Web Dashboard service restarted."
         pause
         ;;
       4) run_screen generate_web_token ;;
       5) run_screen set_web_password ;;
       6) run_screen configure_web_port ;;
-      7) journalctl -u xraymesh-web.service -f -n 50 ;;
-      8)
+      7)
+        if systemctl is-active --quiet xraymesh-iperf.service 2>/dev/null; then
+          systemctl disable --now xraymesh-iperf.service >/dev/null 2>&1 || true
+          warn "In-Mesh iperf3 daemon stopped & disabled."
+        else
+          write_iperf_service
+          systemctl enable --now xraymesh-iperf.service >/dev/null 2>&1 || true
+          ok "In-Mesh iperf3 daemon enabled & started (bound to Mesh Virtual IP)."
+        fi
+        pause
+        ;;
+      8) journalctl -u xraymesh-web.service -f -n 50 ;;
+      9)
         info "Updating Web Dashboard assets..."
         update_web_assets
         ok "Web Dashboard updated to latest version."
@@ -2876,21 +2923,24 @@ main() {
   gost-restart) require_root; require_linux; systemctl restart xraymesh-gost.service ;;
   web|dashboard-web) require_root; require_linux; web_menu ;;
   token|web-token) require_root; require_linux; generate_web_token ;;
-  web-start) require_root; require_linux; systemctl start xraymesh-web.service xraymesh-iperf.service ;;
+  web-start) require_root; require_linux; systemctl start xraymesh-web.service ;;
   web-stop)
     require_root; require_linux
     if systemctl status xraymesh-web.service 2>/dev/null | grep -q "deactivating"; then
       systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null || true
     fi
-    systemctl disable --now xraymesh-web.service xraymesh-iperf.service 2>/dev/null || systemctl stop xraymesh-web.service xraymesh-iperf.service 2>/dev/null || true
+    systemctl disable --now xraymesh-web.service 2>/dev/null || systemctl stop xraymesh-web.service 2>/dev/null || true
     ;;
   web-restart)
     require_root; require_linux
     if systemctl status xraymesh-web.service 2>/dev/null | grep -q "deactivating"; then
       systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null || true
     fi
-    systemctl restart xraymesh-web.service xraymesh-iperf.service 2>/dev/null || (systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null && systemctl start xraymesh-web.service 2>/dev/null) || true
+    systemctl restart xraymesh-web.service 2>/dev/null || (systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null && systemctl start xraymesh-web.service 2>/dev/null) || true
     ;;
+  iperf-start) require_root; require_linux; write_iperf_service; systemctl enable --now xraymesh-iperf.service ;;
+  iperf-stop) require_root; require_linux; systemctl disable --now xraymesh-iperf.service 2>/dev/null || systemctl stop xraymesh-iperf.service 2>/dev/null || true ;;
+  iperf-restart) require_root; require_linux; write_iperf_service; systemctl restart xraymesh-iperf.service ;;
   web-update) require_root; require_linux; update_web_assets ;;
   self-test|doctor) require_linux; self_test ;;
   start|stop|restart) require_root; systemctl "$1" xraymesh.service ;;

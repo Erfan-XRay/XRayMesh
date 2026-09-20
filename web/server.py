@@ -176,6 +176,57 @@ def create_session():
     return session_id
 
 
+_last_cpu_sample = {"total": 0.0, "idle": 0.0, "time": 0.0}
+
+
+def read_proc_stat_cpu():
+    """Read total and idle CPU times from /proc/stat."""
+    if not os.path.isfile("/proc/stat"):
+        return None, None
+    try:
+        with open("/proc/stat", "r") as f:
+            for line in f:
+                if line.startswith("cpu "):
+                    parts = [float(x) for x in line.split()[1:]]
+                    idle = parts[3] + (parts[4] if len(parts) > 4 else 0.0)
+                    total = sum(parts)
+                    return total, idle
+    except Exception:
+        pass
+    return None, None
+
+
+def get_cpu_percent():
+    """Compute CPU usage percent using /proc/stat delta."""
+    global _last_cpu_sample
+    total_now, idle_now = read_proc_stat_cpu()
+    if total_now is None or idle_now is None:
+        return 0.0
+
+    last_total = _last_cpu_sample["total"]
+    last_idle = _last_cpu_sample["idle"]
+    now = time.time()
+
+    if last_total == 0.0 or total_now <= last_total:
+        _last_cpu_sample = {"total": total_now, "idle": idle_now, "time": now}
+        time.sleep(0.06)
+        t2, i2 = read_proc_stat_cpu()
+        if t2 is not None and i2 is not None and t2 > total_now:
+            d_total = t2 - total_now
+            d_idle = i2 - idle_now
+            pct = round(max(0.0, min(100.0, (1.0 - (d_idle / d_total)) * 100.0)), 1)
+            _last_cpu_sample = {"total": t2, "idle": i2, "time": time.time()}
+            return pct
+        return 0.0
+
+    d_total = total_now - last_total
+    d_idle = idle_now - last_idle
+    _last_cpu_sample = {"total": total_now, "idle": idle_now, "time": now}
+    if d_total <= 0:
+        return 0.0
+    return round(max(0.0, min(100.0, (1.0 - (d_idle / d_total)) * 100.0)), 1)
+
+
 def get_system_stats():
     """Retrieve host system information (CPU, RAM, Uptime)."""
     stats = {
@@ -186,6 +237,11 @@ def get_system_stats():
         "uptime_str": "unknown",
         "load_avg": [0.0, 0.0, 0.0]
     }
+
+    try:
+        stats["cpu_percent"] = get_cpu_percent()
+    except Exception:
+        pass
 
     try:
         # Load average

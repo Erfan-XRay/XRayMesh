@@ -1,12 +1,13 @@
 [Unit]
-Description=XRayMesh iperf3 Speedtest Daemon
+Description=XRayMesh iperf3 In-Mesh Speedtest Daemon
 Documentation=https://github.com/Erfan-XRay/XRayMesh
-Wants=network-online.target xraymesh.service
+PartOf=xraymesh.service
 After=network-online.target xraymesh.service
+Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/iperf3 -s -p 5201
+ExecStart=/opt/xraymesh/xraymesh-iperf-runner
 Restart=always
 RestartSec=3
 TimeoutStopSec=5
