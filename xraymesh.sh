@@ -1754,19 +1754,20 @@ update_web_assets() {
     install -m 0644 "${script_dir}/web/static/index.html" "${WEB_DIR}/static/index.html"
     updated=1
   else
-    local tmp_srv tmp_idx
+    local tmp_srv tmp_idx ts
+    ts="$(date +%s)"
     tmp_srv="$(mktemp)"
     tmp_idx="$(mktemp)"
-    if curl -fsSL --connect-timeout 8 \
-      "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/${branch}/web/server.py" \
+    if curl -fsSL -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' --connect-timeout 5 --max-time 15 \
+      "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/${branch}/web/server.py?t=${ts}" \
       -o "$tmp_srv" 2>/dev/null && [[ -s "$tmp_srv" ]]; then
       install -m 0755 "$tmp_srv" "${WEB_DIR}/server.py"
       updated=1
     fi
     rm -f "$tmp_srv"
 
-    if curl -fsSL --connect-timeout 8 \
-      "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/${branch}/web/static/index.html" \
+    if curl -fsSL -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' --connect-timeout 5 --max-time 15 \
+      "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/${branch}/web/static/index.html?t=${ts}" \
       -o "$tmp_idx" 2>/dev/null && [[ -s "$tmp_idx" ]]; then
       install -m 0644 "$tmp_idx" "${WEB_DIR}/static/index.html"
       updated=1
@@ -1774,8 +1775,15 @@ update_web_assets() {
     rm -f "$tmp_idx"
   fi
 
+  if [[ -f "$WEB_SERVICE_FILE" ]]; then
+    write_web_services
+  fi
+
   if (( updated )) && systemctl is-active --quiet xraymesh-web.service 2>/dev/null; then
-    systemctl restart xraymesh-web.service 2>/dev/null || true
+    if systemctl status xraymesh-web.service 2>/dev/null | grep -q "deactivating"; then
+      systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null || true
+    fi
+    systemctl restart xraymesh-web.service 2>/dev/null || (systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null && systemctl start xraymesh-web.service 2>/dev/null) || true
   fi
 }
 
@@ -1810,6 +1818,8 @@ EnvironmentFile=-${WEB_CONFIG_FILE}
 ExecStart=/usr/bin/python3 ${WEB_DIR}/server.py
 Restart=always
 RestartSec=3
+TimeoutStopSec=5
+KillMode=mixed
 NoNewPrivileges=true
 ProtectHome=true
 ProtectSystem=strict
@@ -1833,6 +1843,8 @@ Type=simple
 ExecStart=/usr/bin/iperf3 -s -p 5201
 Restart=always
 RestartSec=3
+TimeoutStopSec=5
+KillMode=mixed
 SyslogIdentifier=xraymesh-iperf
 
 [Install]
@@ -1997,15 +2009,16 @@ web_menu() {
     printf '  Password Login:   %s\n\n' "$has_pw"
 
     printf '  %b[1]%b  Start / Enable Web Dashboard & iperf3\n' "$GREEN" "$RESET"
-    printf '  %b[2]%b  Stop Web Dashboard\n' "$RED" "$RESET"
+    printf '  %b[2]%b  Stop / Deactivate Web Dashboard & iperf3\n' "$RED" "$RESET"
     printf '  %b[3]%b  Restart Web Dashboard & iperf3\n' "$BLUE" "$RESET"
     printf '  %b[4]%b  Generate One-Click Login Link (Token)\n' "$CYAN" "$RESET"
     printf '  %b[5]%b  Set / Change Admin Password\n' "$PURPLE" "$RESET"
     printf '  %b[6]%b  Change Web Port\n' "$YELLOW" "$RESET"
     printf '  %b[7]%b  View Web Logs\n' "$PINK" "$RESET"
+    printf '  %b[8]%b  Update Web Dashboard to Latest Version\n' "$GREEN" "$RESET"
     printf '  %b[0]%b  Back\n\n' "$GRAY" "$RESET"
 
-    read -r -p "  Select an option [0-7]: " choice
+    read -r -p "  Select an option [0-8]: " choice
     case "$choice" in
       1)
         systemctl enable --now xraymesh-web.service xraymesh-iperf.service
@@ -2013,12 +2026,18 @@ web_menu() {
         pause
         ;;
       2)
-        systemctl stop xraymesh-web.service
-        warn "Web Dashboard stopped."
+        if systemctl status xraymesh-web.service 2>/dev/null | grep -q "deactivating"; then
+          systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null || true
+        fi
+        systemctl disable --now xraymesh-web.service xraymesh-iperf.service 2>/dev/null || systemctl stop xraymesh-web.service xraymesh-iperf.service 2>/dev/null || true
+        warn "Web Dashboard and iperf3 services stopped & deactivated."
         pause
         ;;
       3)
-        systemctl restart xraymesh-web.service xraymesh-iperf.service
+        if systemctl status xraymesh-web.service 2>/dev/null | grep -q "deactivating"; then
+          systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null || true
+        fi
+        systemctl restart xraymesh-web.service xraymesh-iperf.service 2>/dev/null || (systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null && systemctl start xraymesh-web.service 2>/dev/null) || true
         ok "Services restarted."
         pause
         ;;
@@ -2026,6 +2045,12 @@ web_menu() {
       5) run_screen set_web_password ;;
       6) run_screen configure_web_port ;;
       7) journalctl -u xraymesh-web.service -f -n 50 ;;
+      8)
+        info "Updating Web Dashboard assets..."
+        update_web_assets
+        ok "Web Dashboard updated to latest version."
+        pause
+        ;;
       0) return ;;
       *) warn "Invalid option"; sleep 1 ;;
     esac
@@ -2245,13 +2270,26 @@ case "${1:-menu}" in
   web|dashboard-web) require_root; require_linux; web_menu ;;
   token|web-token) require_root; require_linux; generate_web_token ;;
   web-start) require_root; require_linux; systemctl start xraymesh-web.service xraymesh-iperf.service ;;
-  web-stop) require_root; require_linux; systemctl stop xraymesh-web.service xraymesh-iperf.service ;;
-  web-restart) require_root; require_linux; systemctl restart xraymesh-web.service xraymesh-iperf.service ;;
+  web-stop)
+    require_root; require_linux
+    if systemctl status xraymesh-web.service 2>/dev/null | grep -q "deactivating"; then
+      systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null || true
+    fi
+    systemctl disable --now xraymesh-web.service xraymesh-iperf.service 2>/dev/null || systemctl stop xraymesh-web.service xraymesh-iperf.service 2>/dev/null || true
+    ;;
+  web-restart)
+    require_root; require_linux
+    if systemctl status xraymesh-web.service 2>/dev/null | grep -q "deactivating"; then
+      systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null || true
+    fi
+    systemctl restart xraymesh-web.service xraymesh-iperf.service 2>/dev/null || (systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null && systemctl start xraymesh-web.service 2>/dev/null) || true
+    ;;
+  web-update) require_root; require_linux; update_web_assets ;;
   self-test|doctor) require_linux; self_test ;;
   start|stop|restart) require_root; systemctl "$1" xraymesh.service ;;
   version|-v|--version) echo "${APP} ${VERSION} - © ${OWNER}" ;;
   *)
-    echo "Usage: $0 [menu|install|status|peers|routes|logs|update|delete|haproxy|iptables|web|token|self-test|start|stop|restart|version]"
+    echo "Usage: $0 [menu|install|status|peers|routes|logs|update|delete|haproxy|iptables|web|token|web-update|self-test|start|stop|restart|version]"
     exit 2
     ;;
 esac

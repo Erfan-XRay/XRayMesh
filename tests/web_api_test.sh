@@ -10,6 +10,7 @@ source "${ROOT_DIR}/xraymesh.sh"
 [[ "$(get_web_port)" == "11080" ]]
 
 # Test function declarations
+declare -F update_web_assets >/dev/null
 declare -F install_web_runtime >/dev/null
 declare -F write_web_services >/dev/null
 declare -F get_web_port >/dev/null
@@ -32,5 +33,11 @@ test -f "${ROOT_DIR}/systemd/xraymesh-iperf.service"
 grep -Fq 'xraymesh-web.service' "${ROOT_DIR}/xraymesh.sh"
 grep -Fq 'xraymesh-iperf.service' "${ROOT_DIR}/xraymesh.sh"
 grep -Fq 'web_menu' "${ROOT_DIR}/xraymesh.sh"
+grep -Fq 'TimeoutStopSec=5' "${ROOT_DIR}/systemd/xraymesh-web.service"
+grep -Fq 'TimeoutStopSec=5' "${ROOT_DIR}/systemd/xraymesh-iperf.service"
+grep -Fq 'TimeoutStopSec=5' "${ROOT_DIR}/xraymesh.sh"
+grep -Fq 'KillMode=mixed' "${ROOT_DIR}/systemd/xraymesh-web.service"
+grep -Fq 'KillMode=mixed' "${ROOT_DIR}/xraymesh.sh"
+grep -Fq 'threading.Thread(target=server.shutdown' "${ROOT_DIR}/web/server.py"
 
 printf 'Web UI & speedtest helper tests passed.\n'

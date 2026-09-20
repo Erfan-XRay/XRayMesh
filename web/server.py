@@ -23,6 +23,7 @@ import hashlib
 import secrets
 import re
 import signal
+import threading
 from pathlib import Path
 
 # Paths & Defaults
@@ -800,20 +801,36 @@ def run_server():
     server = ThreadedHTTPServer((BIND_ADDR, PORT), XRayMeshHandler)
     print(f"[*] XRayMesh Web Daemon listening on {BIND_ADDR}:{PORT}")
 
+    shutdown_done = threading.Event()
+
     def shutdown_signal(sig, frame):
-        print("\n[*] Shutting down XRayMesh Web Daemon...")
-        server.shutdown()
-        sys.exit(0)
+        print(f"\n[*] Received signal {sig}, shutting down XRayMesh Web Daemon...", flush=True)
+        # socketserver.shutdown() blocks until serve_forever() finishes.
+        # It MUST run on a different thread than serve_forever() to prevent deadlocking.
+        threading.Thread(target=server.shutdown, daemon=True).start()
+
+        # Fallback watchdog: if graceful shutdown exceeds 2.0 seconds, force immediate exit
+        def watchdog():
+            if not shutdown_done.wait(timeout=2.0):
+                print("[*] Forcing process termination...", flush=True)
+                os._exit(0)
+
+        threading.Thread(target=watchdog, daemon=True).start()
 
     signal.signal(signal.SIGINT, shutdown_signal)
     signal.signal(signal.SIGTERM, shutdown_signal)
 
     try:
-        server.serve_forever()
-    except KeyboardInterrupt:
+        server.serve_forever(poll_interval=0.2)
+    except (KeyboardInterrupt, SystemExit):
         pass
     finally:
-        server.server_close()
+        shutdown_done.set()
+        try:
+            server.server_close()
+        except Exception:
+            pass
+        print("[*] XRayMesh Web Daemon stopped cleanly.", flush=True)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,8 @@ Type=simple
 ExecStart=/usr/bin/iperf3 -s -p 5201
 Restart=always
 RestartSec=3
+TimeoutStopSec=5
+KillMode=mixed
 SyslogIdentifier=xraymesh-iperf
 
 [Install]
