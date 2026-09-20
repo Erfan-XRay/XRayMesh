@@ -17,6 +17,8 @@ import os
 import sys
 import subprocess
 import urllib.parse
+import urllib.request
+import base64
 import time
 import uuid
 import hashlib
@@ -482,6 +484,60 @@ def run_xraymesh_cmd(args, timeout=45):
         return False, str(e)
 
 
+_public_ip_cache = {"ip": "", "time": 0.0}
+
+def get_server_public_ip():
+    """Detect public IPv4 of the server (cached for 60s)."""
+    now = time.time()
+    if _public_ip_cache["ip"] and (now - _public_ip_cache["time"]) < 60:
+        return _public_ip_cache["ip"]
+    try:
+        req = urllib.request.Request("https://api.ipify.org", headers={"User-Agent": "curl/7.88.1"})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            ip = resp.read().decode("utf-8").strip()
+            if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", ip):
+                _public_ip_cache["ip"] = ip
+                _public_ip_cache["time"] = now
+                return ip
+    except Exception:
+        pass
+    try:
+        r = subprocess.run(["ip", "route", "get", "1.1.1.1"], stdout=subprocess.PIPE, text=True, timeout=2)
+        m = re.search(r"src\s+([0-9.]+)", r.stdout)
+        if m:
+            ip = m.group(1)
+            _public_ip_cache["ip"] = ip
+            _public_ip_cache["time"] = now
+            return ip
+    except Exception:
+        pass
+    return ""
+
+
+def save_node_config_env(cfg):
+    """Write dictionary to CONFIG_FILE with secure file permissions."""
+    os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+    lines = []
+    keys = [
+        "NETWORK_NAME", "NETWORK_SECRET", "HOSTNAME", "IPV4",
+        "PROTOCOL", "PORT", "PEERS", "ENCRYPTION", "IPV6",
+        "MTU", "ENABLE_KCP", "WG_PORTAL", "WG_PORTAL_PORT", "WG_CLIENT_CIDR"
+    ]
+    for k in keys:
+        v = str(cfg.get(k, ""))
+        escaped_v = v.replace("'", "'\\''")
+        lines.append(f"{k}='{escaped_v}'\n")
+
+    tmp = CONFIG_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+    try:
+        os.chmod(tmp, 0o600)
+    except Exception:
+        pass
+    os.replace(tmp, CONFIG_FILE)
+
+
 class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
     """Custom HTTP handler with REST API and Single Page Application routing."""
 
@@ -633,6 +689,75 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             self.send_json({
                 "ok": True,
                 "data": ifaces
+            })
+            return
+
+        elif path == "/api/node/config":
+            config = load_env_file(CONFIG_FILE)
+            peers_raw = config.get("PEERS", "")
+            peers_list = [p.strip() for p in peers_raw.split(",") if p.strip()] if peers_raw else []
+
+            svc_active = False
+            try:
+                r = subprocess.run(["systemctl", "is-active", "--quiet", "xraymesh.service"], timeout=3)
+                svc_active = (r.returncode == 0)
+            except Exception:
+                pass
+
+            hostname_val = config.get("HOSTNAME", "")
+            if not hostname_val and hasattr(os, "uname"):
+                hostname_val = os.uname().nodename
+
+            self.send_json({
+                "ok": True,
+                "data": {
+                    "network_name": config.get("NETWORK_NAME", "xraymesh"),
+                    "network_secret": config.get("NETWORK_SECRET", ""),
+                    "hostname": hostname_val or "node",
+                    "ipv4": config.get("IPV4", "10.144.144.1"),
+                    "protocol": config.get("PROTOCOL", "dual"),
+                    "port": int(config.get("PORT", "11010")),
+                    "peers": peers_list,
+                    "encryption": config.get("ENCRYPTION", "yes") == "yes",
+                    "ipv6": config.get("IPV6", "no") == "yes",
+                    "mtu": int(config.get("MTU", "1380")),
+                    "enable_kcp": config.get("ENABLE_KCP", "no") == "yes",
+                    "wg_portal": config.get("WG_PORTAL", "no") == "yes",
+                    "wg_portal_port": int(config.get("WG_PORTAL_PORT", "22022")),
+                    "wg_client_cidr": config.get("WG_CLIENT_CIDR", "10.99.11.0/24"),
+                    "public_ip": get_server_public_ip(),
+                    "node_configured": os.path.isfile(CONFIG_FILE),
+                    "service_active": svc_active
+                }
+            })
+            return
+
+        elif path == "/api/node/invite":
+            config = load_env_file(CONFIG_FILE)
+            if not os.path.isfile(CONFIG_FILE):
+                self.send_json({"ok": False, "error": "Node is not configured yet."}, status=400)
+                return
+
+            pub_ip = get_server_public_ip()
+            port = config.get("PORT", "11010")
+            proto = config.get("PROTOCOL", "dual")
+
+            invite_obj = {
+                "v": 1,
+                "net": config.get("NETWORK_NAME", "xraymesh"),
+                "secret": config.get("NETWORK_SECRET", ""),
+                "endpoint": f"{pub_ip}:{port}" if pub_ip else f":{port}",
+                "proto": proto
+            }
+            token_str = base64.b64encode(json.dumps(invite_obj).encode("utf-8")).decode("utf-8")
+            self.send_json({
+                "ok": True,
+                "data": {
+                    "invite": f"xrmesh://{token_str}",
+                    "details": invite_obj,
+                    "public_ip": pub_ip,
+                    "port": port
+                }
             })
             return
 
@@ -978,6 +1103,151 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"ok": True, "message": msg or "GOST tunnel deleted successfully."})
             else:
                 self.send_json({"ok": False, "error": msg or "Failed to delete GOST tunnel."}, status=400)
+            return
+
+        elif path == "/api/node/config":
+            net_name = data.get("network_name", "").strip()
+            secret = data.get("network_secret", "").strip()
+            hostname = data.get("hostname", "").strip()
+            ipv4 = data.get("ipv4", "").strip()
+            port = int(data.get("port", 11010))
+            protocol = data.get("protocol", "dual").strip().lower()
+            peers = data.get("peers", [])
+            encryption = "yes" if data.get("encryption", True) else "no"
+            ipv6 = "yes" if data.get("ipv6", False) else "no"
+            mtu = int(data.get("mtu", 1380))
+            enable_kcp = "yes" if data.get("enable_kcp", False) else "no"
+            wg_portal = "yes" if data.get("wg_portal", False) else "no"
+            wg_portal_port = int(data.get("wg_portal_port", 22022))
+            wg_client_cidr = data.get("wg_client_cidr", "10.99.11.0/24").strip()
+
+            if not net_name or not secret or not ipv4 or not port:
+                self.send_json({"ok": False, "error": "Missing required fields: network_name, network_secret, ipv4, port"}, status=400)
+                return
+
+            if isinstance(peers, list):
+                peers_str = ",".join(p.strip() for p in peers if p.strip())
+            else:
+                peers_str = str(peers).strip()
+
+            default_hostname = os.uname().nodename if hasattr(os, "uname") else "node"
+            cfg_dict = {
+                "NETWORK_NAME": net_name,
+                "NETWORK_SECRET": secret,
+                "HOSTNAME": hostname or default_hostname,
+                "IPV4": ipv4,
+                "PROTOCOL": protocol,
+                "PORT": str(port),
+                "PEERS": peers_str,
+                "ENCRYPTION": encryption,
+                "IPV6": ipv6,
+                "MTU": str(mtu),
+                "ENABLE_KCP": enable_kcp,
+                "WG_PORTAL": wg_portal,
+                "WG_PORTAL_PORT": str(wg_portal_port),
+                "WG_CLIENT_CIDR": wg_client_cidr
+            }
+
+            save_node_config_env(cfg_dict)
+            ok, msg = run_xraymesh_cmd(["node-restart"])
+            if ok:
+                self.send_json({"ok": True, "message": "Node configuration saved and mesh service restarted."})
+            else:
+                self.send_json({"ok": True, "message": "Configuration saved. Service reload issued.", "warning": msg})
+            return
+
+        elif path == "/api/node/peers/add":
+            new_peer = data.get("peer", "").strip()
+            if not new_peer:
+                self.send_json({"ok": False, "error": "Missing peer address"}, status=400)
+                return
+
+            cfg = load_env_file(CONFIG_FILE)
+            cur_peers = [p.strip() for p in cfg.get("PEERS", "").split(",") if p.strip()]
+            if new_peer not in cur_peers:
+                cur_peers.append(new_peer)
+            cfg["PEERS"] = ",".join(cur_peers)
+            save_node_config_env(cfg)
+
+            ok, msg = run_xraymesh_cmd(["node-restart"])
+            self.send_json({"ok": True, "message": f"Peer '{new_peer}' added and mesh service restarted.", "peers": cur_peers})
+            return
+
+        elif path == "/api/node/peers/remove":
+            peer_to_remove = data.get("peer", "").strip()
+            if not peer_to_remove:
+                self.send_json({"ok": False, "error": "Missing peer address"}, status=400)
+                return
+
+            cfg = load_env_file(CONFIG_FILE)
+            cur_peers = [p.strip() for p in cfg.get("PEERS", "").split(",") if p.strip()]
+            cur_peers = [p for p in cur_peers if p != peer_to_remove]
+            cfg["PEERS"] = ",".join(cur_peers)
+            save_node_config_env(cfg)
+
+            ok, msg = run_xraymesh_cmd(["node-restart"])
+            self.send_json({"ok": True, "message": f"Peer '{peer_to_remove}' removed.", "peers": cur_peers})
+            return
+
+        elif path == "/api/node/join":
+            invite_raw = data.get("invite", "").strip()
+            if not invite_raw:
+                self.send_json({"ok": False, "error": "Missing invite token"}, status=400)
+                return
+
+            token = invite_raw.replace("xrmesh://", "").strip()
+            try:
+                decoded_json = base64.b64decode(token).decode("utf-8")
+                invite_data = json.loads(decoded_json)
+            except Exception as e:
+                self.send_json({"ok": False, "error": f"Invalid invite format: {e}"}, status=400)
+                return
+
+            net = invite_data.get("net", "").strip()
+            secret = invite_data.get("secret", "").strip()
+            endpoint = invite_data.get("endpoint", "").strip()
+            proto = invite_data.get("proto", "dual").strip().lower()
+
+            if not net or not secret:
+                self.send_json({"ok": False, "error": "Invite token is missing network name or secret"}, status=400)
+                return
+
+            cfg = load_env_file(CONFIG_FILE)
+            cur_ip = cfg.get("IPV4", "")
+            if not cur_ip:
+                cur_ip = f"10.144.144.{secrets.randbelow(200) + 2}"
+
+            cfg["NETWORK_NAME"] = net
+            cfg["NETWORK_SECRET"] = secret
+            cfg["PROTOCOL"] = proto
+            cfg["IPV4"] = cur_ip
+            if not cfg.get("PORT"):
+                cfg["PORT"] = "11010"
+            if not cfg.get("HOSTNAME"):
+                cfg["HOSTNAME"] = os.uname().nodename if hasattr(os, "uname") else "node"
+            if not cfg.get("ENCRYPTION"):
+                cfg["ENCRYPTION"] = "yes"
+            if not cfg.get("IPV6"):
+                cfg["IPV6"] = "no"
+            if not cfg.get("MTU"):
+                cfg["MTU"] = "1380"
+
+            cur_peers = [p.strip() for p in cfg.get("PEERS", "").split(",") if p.strip()]
+            if endpoint and endpoint not in cur_peers:
+                cur_peers.append(endpoint)
+            cfg["PEERS"] = ",".join(cur_peers)
+
+            save_node_config_env(cfg)
+            ok, msg = run_xraymesh_cmd(["node-restart"])
+            self.send_json({
+                "ok": True,
+                "message": f"Successfully joined mesh '{net}'. Node restarted.",
+                "data": {
+                    "network_name": net,
+                    "ipv4": cur_ip,
+                    "peer": endpoint
+                }
+            })
             return
 
         self.send_error(404, "Endpoint not found")

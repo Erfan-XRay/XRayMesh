@@ -98,6 +98,43 @@ export type Language = 'en' | 'fa';
 
 export type PaletteId = 'sky' | 'emerald' | 'violet' | 'amber' | 'rose' | 'oled';
 
+export type TabId = 'peers' | 'node' | 'speedtest' | 'ping' | 'tunnels';
+
+export type MeshProtocol = 'dual' | 'tcp' | 'ws' | 'wss' | 'quic' | 'faketcp' | 'wg';
+
+export interface NodeConfig {
+  network_name: string;
+  network_secret: string;
+  hostname: string;
+  ipv4: string;
+  protocol: MeshProtocol | string;
+  port: number;
+  peers: string[];
+  encryption: boolean;
+  ipv6: boolean;
+  mtu: number;
+  enable_kcp: boolean;
+  wg_portal: boolean;
+  wg_portal_port: number;
+  wg_client_cidr: string;
+  public_ip?: string;
+  node_configured: boolean;
+  service_active: boolean;
+}
+
+export interface MeshInviteData {
+  invite: string;
+  details: {
+    v: number;
+    net: string;
+    secret: string;
+    endpoint: string;
+    proto: string;
+  };
+  public_ip: string;
+  port: string | number;
+}
+
 export interface ToastItem {
   id: string;
   message: string;

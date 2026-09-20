@@ -9,6 +9,7 @@ import {
   HaproxyTunnel,
   IptablesTunnel,
   GostTunnel,
+  TabId,
 } from './types';
 import { useTheme } from './theme/useTheme';
 import { useTranslation } from './i18n/useTranslation';
@@ -21,13 +22,12 @@ import { LoginModal } from './components/Modals/LoginModal';
 import { TunnelModal, TunnelModalType } from './components/Modals/TunnelModal';
 import { DeleteConfirmModal } from './components/Modals/DeleteConfirmModal';
 import { PeersTab } from './components/Tabs/PeersTab';
+import { NodeConfigTab } from './components/Tabs/NodeConfigTab';
 import { SpeedtestTab } from './components/Tabs/SpeedtestTab';
 import { PingTab } from './components/Tabs/PingTab';
 import { TunnelsTab } from './components/Tabs/TunnelsTab';
 
-import { Users, Zap, Activity, Network } from 'lucide-react';
-
-type TabId = 'peers' | 'speedtest' | 'ping' | 'tunnels';
+import { Users, Zap, Activity, Network, Settings } from 'lucide-react';
 
 const EMPTY_STATUS: StatusResponse = {
   node: {},
@@ -379,6 +379,7 @@ export default function App() {
   // ─── Tab Config ─────────────────────────────────────────
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
     { id: 'peers', label: t('tab_peers'), icon: <Users className="w-4 h-4" /> },
+    { id: 'node', label: t('tab_node'), icon: <Settings className="w-4 h-4" /> },
     { id: 'speedtest', label: t('tab_speedtest'), icon: <Zap className="w-4 h-4" /> },
     { id: 'ping', label: t('tab_ping'), icon: <Activity className="w-4 h-4" /> },
     { id: 'tunnels', label: t('tab_tunnels'), icon: <Network className="w-4 h-4" /> },
@@ -467,6 +468,17 @@ export default function App() {
               onCopy={handleCopy}
               copiedKey={copiedKey}
               t={t}
+            />
+          )}
+          {activeTab === 'node' && (
+            <NodeConfigTab
+              onRefreshStatus={handleRefresh}
+              onNotify={addToast}
+              onCopy={handleCopy}
+              copiedKey={copiedKey}
+              t={t}
+              lang={lang}
+              isRtl={isRtl}
             />
           )}
           {activeTab === 'speedtest' && (

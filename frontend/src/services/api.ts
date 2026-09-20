@@ -1,4 +1,4 @@
-import { StatusResponse, Peer, TunnelsData, PingResult, SpeedtestData } from '../types';
+import { StatusResponse, Peer, TunnelsData, PingResult, SpeedtestData, NodeConfig, MeshInviteData } from '../types';
 
 export async function fetchAuthStatus(): Promise<{ authenticated: boolean; password_configured: boolean }> {
   const res = await fetch('/api/auth/status');
@@ -190,5 +190,63 @@ export async function deleteGostTunnel(name: string): Promise<string> {
   });
   const d = await res.json();
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to delete tunnel');
+  return d.message;
+}
+
+export async function fetchNodeConfig(): Promise<NodeConfig> {
+  const res = await fetch('/api/node/config');
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to fetch node configuration');
+  return d.data;
+}
+
+export async function saveNodeConfig(config: Partial<NodeConfig>): Promise<string> {
+  const res = await fetch('/api/node/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  });
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to save node configuration');
+  return d.message || 'Configuration saved successfully.';
+}
+
+export async function addMeshPeer(peer: string): Promise<string> {
+  const res = await fetch('/api/node/peers/add', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ peer }),
+  });
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to add peer');
+  return d.message;
+}
+
+export async function removeMeshPeer(peer: string): Promise<string> {
+  const res = await fetch('/api/node/peers/remove', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ peer }),
+  });
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to remove peer');
+  return d.message;
+}
+
+export async function fetchMeshInvite(): Promise<MeshInviteData> {
+  const res = await fetch('/api/node/invite');
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to generate invite');
+  return d.data;
+}
+
+export async function joinMeshNetwork(invite: string): Promise<string> {
+  const res = await fetch('/api/node/join', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ invite }),
+  });
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to join mesh network');
   return d.message;
 }

@@ -216,6 +216,7 @@ prompt_default() {
 write_config() {
   local name="$1" secret="$2" hostname="$3" ipv4="$4" protocol="$5" port="$6" peers="$7"
   local encryption="$8" ipv6="$9" mtu="${10}"
+  local enable_kcp="${11:-no}" wg_portal="${12:-no}" wg_portal_port="${13:-22022}" wg_client_cidr="${14:-10.99.11.0/24}"
   umask 077
   {
     printf 'NETWORK_NAME=%q\n' "$name"
@@ -228,6 +229,10 @@ write_config() {
     printf 'ENCRYPTION=%q\n' "$encryption"
     printf 'IPV6=%q\n' "$ipv6"
     printf 'MTU=%q\n' "$mtu"
+    printf 'ENABLE_KCP=%q\n' "$enable_kcp"
+    printf 'WG_PORTAL=%q\n' "$wg_portal"
+    printf 'WG_PORTAL_PORT=%q\n' "$wg_portal_port"
+    printf 'WG_CLIENT_CIDR=%q\n' "$wg_client_cidr"
   } > "$CONFIG_FILE"
   chmod 600 "$CONFIG_FILE"
 }
@@ -260,6 +265,12 @@ SyslogIdentifier=${LOG_TAG}
 WantedBy=multi-user.target
 EOF
 
+  write_runner
+  write_iperf_service
+  systemctl daemon-reload
+}
+
+write_runner() {
   cat > "${INSTALL_DIR}/xraymesh-runner" <<'RUNNER'
 #!/usr/bin/env bash
 set -Eeuo pipefail
@@ -270,45 +281,102 @@ args=(
   --network-secret "$NETWORK_SECRET"
   --ipv4 "$IPV4"
   --rpc-portal "127.0.0.1:15888"
-  --default-protocol "$PROTOCOL"
   --mtu "$MTU"
 )
-# WSS and QUIC are strict transports. TCP and UDP keep the dual-protocol
-# fallback that is useful across restrictive networks.
-if [[ "$PROTOCOL" == "wss" || "$PROTOCOL" == "quic" ]]; then
-  args+=(--listeners "${PROTOCOL}://0.0.0.0:${PORT}")
+
+# Normalize protocol (EasyTier --default-protocol only takes tcp or udp)
+proto_lower="$(echo "${PROTOCOL:-dual}" | tr '[:upper:]' '[:lower:]')"
+if [[ "$proto_lower" == "tcp" || "$proto_lower" == "ws" || "$proto_lower" == "wss" ]]; then
+  args+=(--default-protocol "tcp")
 else
-  args+=(--listeners "$PORT")
+  args+=(--default-protocol "udp")
 fi
-[[ "$IPV6" == "no" ]] && args+=(--disable-ipv6)
-[[ "$ENCRYPTION" == "no" ]] && args+=(--disable-encryption)
-if [[ -n "$PEERS" ]]; then
+
+# Configure listeners based on protocol
+case "$proto_lower" in
+  tcp)
+    args+=(--listeners "tcp://0.0.0.0:${PORT}")
+    ;;
+  ws)
+    args+=(--listeners "ws://0.0.0.0:${PORT}/")
+    ;;
+  wss)
+    args+=(--listeners "wss://0.0.0.0:${PORT}/")
+    ;;
+  quic)
+    args+=(--listeners "quic://0.0.0.0:${PORT}")
+    ;;
+  faketcp)
+    args+=(--listeners "faketcp://0.0.0.0:${PORT}")
+    ;;
+  wg)
+    args+=(--listeners "wg://0.0.0.0:${PORT}")
+    ;;
+  dual|udp|*)
+    args+=(--listeners "$PORT")
+    ;;
+esac
+
+# KCP Loss-Resistance Proxy
+if [[ "${ENABLE_KCP:-no}" == "yes" ]]; then
+  args+=(--enable-kcp-proxy)
+fi
+
+# WireGuard Client Ingress (VPN Portal)
+if [[ "${WG_PORTAL:-no}" == "yes" && -n "${WG_PORTAL_PORT:-}" && -n "${WG_CLIENT_CIDR:-}" ]]; then
+  args+=(--vpn-portal "wg://0.0.0.0:${WG_PORTAL_PORT}/${WG_CLIENT_CIDR}")
+fi
+
+[[ "${IPV6:-yes}" == "no" ]] && args+=(--disable-ipv6)
+[[ "${ENCRYPTION:-yes}" == "no" ]] && args+=(--disable-encryption)
+
+if [[ -n "${PEERS:-}" ]]; then
   IFS=',' read -ra peer_list <<< "$PEERS"
   peer_args=()
   for peer in "${peer_list[@]}"; do
     peer="${peer//[[:space:]]/}"
     [[ -z "$peer" ]] && continue
-    if [[ "$PROTOCOL" == "wss" || "$PROTOCOL" == "quic" ]]; then
-      # Remove any user-supplied scheme and enforce the selected transport.
-      [[ "$peer" == *"://"* ]] && peer="${peer#*://}"
-      [[ "$peer" =~ :[0-9]+$ ]] || peer="${peer}:${PORT}"
-      peer_args+=("${PROTOCOL}://${peer}")
-    elif [[ "$peer" =~ ^(tcp|udp|ws|wss|wg|quic|faketcp):// ]]; then
-      [[ "$peer" =~ :[0-9]+$ ]] || peer="${peer}:${PORT}"
-      peer_args+=("$peer")
+    if [[ "$peer" == *"://"* ]]; then
+      p_scheme="${peer%%://*}"
+      p_hostport="${peer#*://}"
+      [[ "$p_hostport" =~ :[0-9]+(/)?$ ]] || p_hostport="${p_hostport%/}:${PORT}"
+      if [[ "$p_scheme" == "ws" || "$p_scheme" == "wss" ]]; then
+        [[ "$p_hostport" == */ ]] || p_hostport="${p_hostport}/"
+      fi
+      peer_args+=("${p_scheme}://${p_hostport}")
     else
       [[ "$peer" =~ :[0-9]+$ ]] || peer="${peer}:${PORT}"
-      # Try both UDP and TCP automatically. EasyTier keeps the working path.
-      peer_args+=("udp://${peer}" "tcp://${peer}")
+      case "$proto_lower" in
+        ws)
+          peer_args+=("ws://${peer}/")
+          ;;
+        wss)
+          peer_args+=("wss://${peer}/")
+          ;;
+        tcp)
+          peer_args+=("tcp://${peer}")
+          ;;
+        quic)
+          peer_args+=("quic://${peer}")
+          ;;
+        faketcp)
+          peer_args+=("faketcp://${peer}")
+          ;;
+        wg)
+          peer_args+=("wg://${peer}")
+          ;;
+        dual|udp|*)
+          peer_args+=("udp://${peer}" "tcp://${peer}")
+          ;;
+      esac
     fi
   done
   ((${#peer_args[@]})) && args+=(--peers "${peer_args[@]}")
 fi
+
 exec /opt/xraymesh/bin/easytier-core "${args[@]}"
 RUNNER
   chmod 0755 "${INSTALL_DIR}/xraymesh-runner"
-  write_iperf_service
-  systemctl daemon-reload
 }
 
 write_iperf_service() {
@@ -371,8 +439,9 @@ setup_node() {
   local name secret hostname ipv4 protocol port peers encryption ipv6 mtu
   local config_backup="" had_config=0 service_was_active=0
   local default_name="xraymesh" default_secret="" default_hostname default_ipv4="10.144.144.1"
-  local default_protocol="udp" default_port="11010" default_peers=""
+  local default_protocol="dual" default_port="11010" default_peers=""
   local default_encryption="yes" default_ipv6="no" default_mtu="1380"
+  local default_enable_kcp="no" default_wg_portal="no" default_wg_port="22022" default_wg_cidr="10.99.11.0/24"
   default_hostname="$(hostname -s)"
 
   if [[ -f "$CONFIG_FILE" ]]; then
@@ -390,11 +459,16 @@ setup_node() {
     default_hostname="${HOSTNAME:-$default_hostname}"
     default_ipv4="${IPV4:-$default_ipv4}"
     default_protocol="${PROTOCOL:-$default_protocol}"
+    [[ "$default_protocol" == "udp" ]] && default_protocol="dual"
     default_port="${PORT:-$default_port}"
     default_peers="${PEERS:-}"
     default_encryption="${ENCRYPTION:-$default_encryption}"
     default_ipv6="${IPV6:-$default_ipv6}"
     default_mtu="${MTU:-$default_mtu}"
+    default_enable_kcp="${ENABLE_KCP:-$default_enable_kcp}"
+    default_wg_portal="${WG_PORTAL:-$default_wg_portal}"
+    default_wg_port="${WG_PORTAL_PORT:-$default_wg_port}"
+    default_wg_cidr="${WG_CLIENT_CIDR:-$default_wg_cidr}"
     info "Editing the existing node. Press Enter to keep each current value."
   fi
 
@@ -423,13 +497,10 @@ setup_node() {
     valid_ip "$ipv4" && break
     warn "Enter a valid address from the 10.x.x.x range."
   done
-  protocol="$(prompt_default "Preferred protocol (udp/tcp/wss/quic)" "$default_protocol")"
-  [[ "$protocol" =~ ^(udp|tcp|ws|wss|quic)$ ]] || protocol="udp"
-  if [[ "$protocol" == "wss" || "$protocol" == "quic" ]]; then
-    info "${protocol^^} strict mode enabled: no TCP/UDP transport fallback."
-  else
-    info "TCP/UDP fallback mode enabled for connection reliability."
-  fi
+  protocol="$(prompt_default "Preferred protocol (dual/tcp/ws/wss/quic/faketcp/wg)" "$default_protocol")"
+  [[ "$protocol" =~ ^(dual|tcp|udp|ws|wss|quic|faketcp|wg)$ ]] || protocol="dual"
+  [[ "$protocol" == "udp" ]] && protocol="dual"
+
   while :; do
     port="$(prompt_default "Mesh port" "$default_port")"
     valid_port "$port" && break
@@ -440,7 +511,16 @@ setup_node() {
   ipv6="$(prompt_default "Enable IPv6? (yes/no)" "$default_ipv6")"
   mtu="$(prompt_default "MTU" "$default_mtu")"
 
-  write_config "$name" "$secret" "$hostname" "$ipv4" "$protocol" "$port" "$peers" "$encryption" "$ipv6" "$mtu"
+  enable_kcp="$(prompt_default "Enable KCP loss-resistance proxy? (yes/no)" "$default_enable_kcp")"
+  wg_portal="$(prompt_default "Enable WireGuard client VPN portal? (yes/no)" "$default_wg_portal")"
+  wg_portal_port="$default_wg_port"
+  wg_client_cidr="$default_wg_cidr"
+  if [[ "$wg_portal" == "yes" ]]; then
+    wg_portal_port="$(prompt_default "WireGuard listen port" "$default_wg_port")"
+    wg_client_cidr="$(prompt_default "WireGuard client CIDR" "$default_wg_cidr")"
+  fi
+
+  write_config "$name" "$secret" "$hostname" "$ipv4" "$protocol" "$port" "$peers" "$encryption" "$ipv6" "$mtu" "$enable_kcp" "$wg_portal" "$wg_portal_port" "$wg_client_cidr"
   write_service
   systemctl enable xraymesh.service xraymesh-iperf.service >/dev/null 2>&1 || true
   if systemctl is-active --quiet xraymesh.service; then
@@ -2945,12 +3025,14 @@ main() {
   iperf-start) require_root; require_linux; write_iperf_service; systemctl enable --now xraymesh-iperf.service ;;
   iperf-stop) require_root; require_linux; systemctl disable --now xraymesh-iperf.service 2>/dev/null || systemctl stop xraymesh-iperf.service 2>/dev/null || true ;;
   iperf-restart) require_root; require_linux; write_iperf_service; systemctl restart xraymesh-iperf.service ;;
+  write-runner) require_root; require_linux; write_runner; write_iperf_service; systemctl daemon-reload ;;
+  node-restart) require_root; require_linux; write_runner; write_iperf_service; systemctl daemon-reload; systemctl restart xraymesh.service xraymesh-iperf.service ;;
   web-update) require_root; require_linux; update_web_assets ;;
   self-test|doctor) require_linux; self_test ;;
   start|stop|restart) require_root; systemctl "$1" xraymesh.service ;;
   version|-v|--version) echo "${APP} ${VERSION} - © ${OWNER}" ;;
   *)
-    echo "Usage: $0 [menu|install|status|peers|routes|logs|update|delete|haproxy|iptables|gost|web|token|web-update|self-test|start|stop|restart|version]"
+    echo "Usage: $0 [menu|install|status|peers|routes|logs|update|delete|haproxy|iptables|gost|web|token|web-update|write-runner|node-restart|self-test|start|stop|restart|version]"
     exit 2
     ;;
 esac
