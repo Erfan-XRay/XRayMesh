@@ -21,7 +21,8 @@ XRayMesh یک اسکریپت Bash برای ساخت و مدیریت شبکه Mes
 - نمایش Peerها، Latency، Route، ترافیک و Transport فعال
 - ساخت تونل‌های TCP با HAProxy به مقصد نودهای موجود EasyTier
 - ساخت تونل‌های مدیریت‌شده TCP/UDP با iptables به مقصد IP مجازی EasyTier
-- پشتیبانی از لیست پورت و Port Range برای HAProxy و iptables
+- ساخت تونل‌های پرسرعت GOST v3 در سطح User-space (پشتیبانی همزمان از TCP و UDP)
+- پشتیبانی از لیست پورت و Port Range برای HAProxy، iptables و GOST
 - نمایش لاگ سرویس و ابزار عیب‌یابی اتصال و Handshake
 - نمایش IPv4 و IPv6 واقعی سرور به‌صورت جدا از IP مجازی Mesh
 - ویرایش یا حذف امن یک نود بدون نیاز به نصب مجدد کامل

@@ -14,11 +14,16 @@ readonly CONFIG_FILE="/etc/xraymesh/config.env"
 readonly SERVICE_FILE="/etc/systemd/system/xraymesh.service"
 readonly HAPROXY_SERVICE_FILE="/etc/systemd/system/xraymesh-haproxy.service"
 readonly HAPROXY_CONFIG="/etc/xraymesh/haproxy.cfg"
-readonly HAPROXY_TUNNEL_DIR="/etc/xraymesh/haproxy-tunnels"
+readonly HAPROXY_TUNNEL_DIR="${HAPROXY_TUNNEL_DIR:-/etc/xraymesh/haproxy-tunnels}"
 readonly IPTABLES_SERVICE_FILE="/etc/systemd/system/xraymesh-iptables.service"
-readonly IPTABLES_TUNNEL_DIR="/etc/xraymesh/iptables-tunnels"
+readonly IPTABLES_TUNNEL_DIR="${IPTABLES_TUNNEL_DIR:-/etc/xraymesh/iptables-tunnels}"
 readonly IPTABLES_APPLY_SCRIPT="${INSTALL_DIR}/xraymesh-iptables-apply"
 readonly IPTABLES_SYSCTL_FILE="/etc/sysctl.d/99-xraymesh-forwarding.conf"
+readonly GOST_BIN="${BIN_DIR}/gost"
+readonly GOST_SERVICE_FILE="/etc/systemd/system/xraymesh-gost.service"
+readonly GOST_CONFIG_FILE="${GOST_CONFIG_FILE:-/etc/xraymesh/gost.json}"
+readonly GOST_TUNNEL_DIR="${GOST_TUNNEL_DIR:-/etc/xraymesh/gost-tunnels}"
+readonly FALLBACK_GOST_VERSION="v3.3.0"
 readonly WEB_DIR="${INSTALL_DIR}/web"
 readonly WEB_CONFIG_FILE="/etc/xraymesh/web.env"
 readonly WEB_SERVICE_FILE="/etc/systemd/system/xraymesh-web.service"
@@ -432,6 +437,10 @@ setup_node() {
     info "Re-enabling the existing iptables UDP/TCP tunnels."
     apply_iptables_config || warn "The mesh is online, but iptables tunnels need attention."
   fi
+  if compgen -G "${GOST_TUNNEL_DIR}/*.env" >/dev/null; then
+    info "Re-enabling the existing GOST TCP/UDP tunnels."
+    apply_gost_config || warn "The mesh is online, but GOST tunnels need attention."
+  fi
 }
 
 delete_mesh() {
@@ -455,6 +464,7 @@ delete_mesh() {
   systemctl disable --now xraymesh.service 2>/dev/null || true
   systemctl disable --now xraymesh-haproxy.service 2>/dev/null || true
   systemctl disable --now xraymesh-iptables.service 2>/dev/null || true
+  systemctl disable --now xraymesh-gost.service 2>/dev/null || true
   if [[ -x "$IPTABLES_APPLY_SCRIPT" ]]; then
     "$IPTABLES_APPLY_SCRIPT" remove >/dev/null 2>&1 || true
   fi
@@ -462,6 +472,8 @@ delete_mesh() {
     info "HAProxy tunnels were disabled and preserved for the next mesh configuration."
   compgen -G "${IPTABLES_TUNNEL_DIR}/*.env" >/dev/null &&
     info "iptables tunnels were disabled and preserved for the next mesh configuration."
+  compgen -G "${GOST_TUNNEL_DIR}/*.env" >/dev/null &&
+    info "GOST tunnels were disabled and preserved for the next mesh configuration."
   rm -f "$SERVICE_FILE" "$CONFIG_FILE" "${INSTALL_DIR}/xraymesh-runner"
   systemctl daemon-reload
   systemctl reset-failed xraymesh.service 2>/dev/null || true
@@ -1744,6 +1756,471 @@ delete_iptables_tunnel_noninteractive() {
   ok "iptables tunnel '${name}' deleted."
 }
 
+gost_arch_asset() {
+  case "$(uname -m)" in
+    x86_64|amd64) echo "linux_amd64" ;;
+    aarch64|arm64) echo "linux_arm64" ;;
+    armv7*|armhf) echo "linux_armv7" ;;
+    i686|i386) echo "linux_386" ;;
+    *) fail "Unsupported architecture for GOST: $(uname -m)"; return 1 ;;
+  esac
+}
+
+install_gost_runtime() {
+  if [[ -x "$GOST_BIN" ]]; then
+    return 0
+  fi
+  require_root
+  install_dependencies
+  local arch asset_name version url checksums_url tmp release_json expected_digest actual_digest
+  arch="$(gost_arch_asset)" || return 1
+  tmp="$(mktemp -d)"
+  release_json="${tmp}/release.json"
+
+  if ! curl -fsSL --connect-timeout 8 --max-time 20 \
+    https://api.github.com/repos/go-gost/gost/releases/latest -o "$release_json"; then
+    warn "Latest GOST release lookup failed; checking the fallback release."
+    curl -fsSL --connect-timeout 8 --max-time 20 \
+      "https://api.github.com/repos/go-gost/gost/releases/tags/${FALLBACK_GOST_VERSION}" \
+      -o "$release_json" || { fail "Could not retrieve trusted GOST release metadata."; rm -rf -- "$tmp"; return 1; }
+  fi
+
+  version="$(jq -er '.tag_name' "$release_json")" ||
+    { fail "GOST release metadata is invalid."; rm -rf -- "$tmp"; return 1; }
+  local clean_ver="${version#v}"
+  asset_name="gost_${clean_ver}_${arch}.tar.gz"
+
+  url="$(jq -er --arg name "$asset_name" '.assets[] | select(.name == $name) | .browser_download_url' "$release_json")" ||
+    { fail "No official GOST asset exists for $(uname -m)."; rm -rf -- "$tmp"; return 1; }
+  checksums_url="$(jq -er '.assets[] | select(.name == "checksums.txt") | .browser_download_url' "$release_json")" || true
+
+  info "Downloading GOST ${version} for $(uname -m)..."
+  mkdir -p "$BIN_DIR" "$GOST_TUNNEL_DIR" /etc/xraymesh
+  if ! curl -fL --retry 3 --connect-timeout 10 --progress-bar "$url" -o "${tmp}/gost.tar.gz"; then
+    fail "Download failed: $url"
+    rm -rf -- "$tmp"
+    return 1
+  fi
+
+  if [[ -n "$checksums_url" ]] && curl -fsSL --connect-timeout 8 --max-time 15 "$checksums_url" -o "${tmp}/checksums.txt" 2>/dev/null; then
+    expected_digest="$(grep -E "[[:space:]]${asset_name}\$" "${tmp}/checksums.txt" 2>/dev/null | awk '{print $1}')"
+    if [[ -n "$expected_digest" ]]; then
+      actual_digest="$(sha256sum "${tmp}/gost.tar.gz" | awk '{print $1}')"
+      if [[ "${actual_digest,,}" != "${expected_digest,,}" ]]; then
+        fail "GOST archive checksum verification failed. Download discarded."
+        rm -rf -- "$tmp"
+        return 1
+      fi
+      ok "GOST archive SHA-256 verified."
+    fi
+  fi
+
+  tar -xzf "${tmp}/gost.tar.gz" -C "$tmp"
+  local bin
+  bin="$(find "$tmp" -type f -name gost | head -n1)"
+  if [[ -z "$bin" ]]; then
+    fail "GOST binary not found in archive."
+    rm -rf -- "$tmp"
+    return 1
+  fi
+  install -m 0755 "$bin" "$GOST_BIN"
+  printf '%s\n' "$version" > "${INSTALL_DIR}/gost.version"
+  write_gost_service
+  rm -rf -- "$tmp"
+  ok "GOST ${version} installed successfully."
+}
+
+write_gost_service() {
+  cat > "$GOST_SERVICE_FILE" <<EOF_GOST_SVC
+[Unit]
+Description=XRayMesh GOST Tunnel Daemon
+Documentation=https://gost.run/
+Wants=network-online.target xraymesh.service
+After=network-online.target xraymesh.service
+
+[Service]
+Type=simple
+ExecStart=${GOST_BIN} -C ${GOST_CONFIG_FILE}
+Restart=always
+RestartSec=3
+TimeoutStopSec=5
+KillMode=mixed
+SyslogIdentifier=xraymesh-gost
+
+[Install]
+WantedBy=multi-user.target
+EOF_GOST_SVC
+  systemctl daemon-reload
+}
+
+validate_gost_ports() {
+  local tunnel_name="$1" port_spec="$2" protocol="${3:-both}"
+  local definition port other_port
+  local -A requested=()
+  while IFS= read -r port; do requested["$port"]=1; done < <(expand_port_spec "$port_spec")
+
+  for definition in "$GOST_TUNNEL_DIR"/*.env; do
+    [[ -f "$definition" ]] || continue
+    unset TUNNEL_NAME TARGET_IP PORT_SPEC PROTOCOL
+    # shellcheck disable=SC1090
+    source "$definition"
+    [[ "$TUNNEL_NAME" == "$tunnel_name" ]] && continue
+    local other_proto="${PROTOCOL:-both}"
+    if [[ "$protocol" == "both" || "$other_proto" == "both" || "$protocol" == "$other_proto" ]]; then
+      while IFS= read -r other_port; do
+        if [[ -n "${requested[$other_port]:-}" ]]; then
+          fail "Port ${other_port} (${protocol^^}) is already assigned to GOST tunnel '${TUNNEL_NAME}' (${other_proto^^})."
+          return 1
+        fi
+      done < <(expand_port_spec "$PORT_SPEC")
+    fi
+  done
+
+  if [[ "$protocol" == "tcp" || "$protocol" == "both" ]]; then
+    for definition in "$HAPROXY_TUNNEL_DIR"/*.env; do
+      [[ -f "$definition" ]] || continue
+      unset TUNNEL_NAME TARGET_IP PORT_SPEC
+      # shellcheck disable=SC1090
+      source "$definition"
+      while IFS= read -r other_port; do
+        if [[ -n "${requested[$other_port]:-}" ]]; then
+          fail "TCP port ${other_port} conflicts with HAProxy tunnel '${TUNNEL_NAME}'."
+          return 1
+        fi
+      done < <(expand_port_spec "$PORT_SPEC")
+    done
+  fi
+
+  return 0
+}
+
+save_gost_tunnel() {
+  local name="$1" target="$2" ports="$3" protocol="${4:-both}"
+  local file="${GOST_TUNNEL_DIR}/${name}.env"
+  mkdir -p "$GOST_TUNNEL_DIR"
+  umask 077
+  {
+    printf 'TUNNEL_NAME=%q\n' "$name"
+    printf 'TARGET_IP=%q\n' "$target"
+    printf 'PORT_SPEC=%q\n' "$ports"
+    printf 'PROTOCOL=%q\n' "$protocol"
+  } > "$file"
+}
+
+generate_gost_config() {
+  if ! compgen -G "${GOST_TUNNEL_DIR}/*.env" >/dev/null; then
+    systemctl disable --now xraymesh-gost.service 2>/dev/null || true
+    rm -f "$GOST_CONFIG_FILE"
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$GOST_CONFIG_FILE")"
+  local tmp first_service=1 definition port
+  tmp="$(mktemp)"
+
+  {
+    printf '{\n  "services": [\n'
+    for definition in "${GOST_TUNNEL_DIR}"/*.env; do
+      [[ -f "$definition" ]] || continue
+      unset TUNNEL_NAME TARGET_IP PORT_SPEC PROTOCOL
+      # shellcheck disable=SC1090
+      source "$definition"
+      local name="${TUNNEL_NAME:-$(basename "$definition" .env)}"
+      local target="${TARGET_IP:-}"
+      local port_spec="${PORT_SPEC:-}"
+      local protocol="${PROTOCOL:-both}"
+      protocol="${protocol,,}"
+
+      [[ -n "$target" && -n "$port_spec" ]] || continue
+
+      while IFS= read -r port; do
+        [[ -n "$port" ]] || continue
+
+        if [[ "$protocol" == "tcp" || "$protocol" == "both" ]]; then
+          if (( first_service )); then
+            first_service=0
+          else
+            printf ',\n'
+          fi
+          cat <<EOF_JSON_TCP
+    {
+      "name": "${name}-tcp-${port}",
+      "addr": ":${port}",
+      "handler": {
+        "type": "tcp"
+      },
+      "listener": {
+        "type": "tcp"
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "target-tcp-${port}",
+            "addr": "${target}:${port}"
+          }
+        ]
+      }
+    }
+EOF_JSON_TCP
+        fi
+
+        if [[ "$protocol" == "udp" || "$protocol" == "both" ]]; then
+          if (( first_service )); then
+            first_service=0
+          else
+            printf ',\n'
+          fi
+          cat <<EOF_JSON_UDP
+    {
+      "name": "${name}-udp-${port}",
+      "addr": ":${port}",
+      "handler": {
+        "type": "udp"
+      },
+      "listener": {
+        "type": "udp"
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "target-udp-${port}",
+            "addr": "${target}:${port}"
+          }
+        ]
+      }
+    }
+EOF_JSON_UDP
+        fi
+      done < <(expand_port_spec "$port_spec")
+    done
+    printf '\n  ]\n}\n'
+  } > "$tmp"
+
+  if [[ ! -s "$tmp" ]]; then
+    rm -f "$tmp"
+    fail "Failed to generate GOST configuration."
+    return 1
+  fi
+
+  mv -f "$tmp" "$GOST_CONFIG_FILE"
+  chmod 0600 "$GOST_CONFIG_FILE"
+}
+
+apply_gost_config() {
+  generate_gost_config || return 1
+  if compgen -G "${GOST_TUNNEL_DIR}/*.env" >/dev/null; then
+    [[ -f "$GOST_SERVICE_FILE" ]] || write_gost_service
+    systemctl enable --now xraymesh-gost.service 2>/dev/null || true
+    systemctl restart xraymesh-gost.service 2>/dev/null || (systemctl kill -s SIGKILL xraymesh-gost.service 2>/dev/null && systemctl start xraymesh-gost.service 2>/dev/null) || true
+    ok "GOST tunnel configuration applied."
+  fi
+}
+
+create_gost_tunnel() {
+  header
+  section "CREATE GOST TUNNEL"
+  info "GOST tunnels forward user-space TCP and UDP ports to target mesh nodes."
+  install_gost_runtime || return 1
+
+  local name ports protocol
+  while :; do
+    read -r -p "  Tunnel name (letters, numbers, _ or -): " name
+    validate_tunnel_name "$name" || { warn "Enter a valid name with up to 32 characters."; continue; }
+    [[ ! -f "${GOST_TUNNEL_DIR}/${name}.env" ]] || { warn "A tunnel with this name already exists."; continue; }
+    break
+  done
+
+  select_mesh_target || return 1
+
+  printf '\n  Select Protocol:\n'
+  printf '    %b[1]%b Both TCP + UDP (Recommended)\n' "$GREEN" "$RESET"
+  printf '    %b[2]%b TCP Only\n' "$CYAN" "$RESET"
+  printf '    %b[3]%b UDP Only\n' "$YELLOW" "$RESET"
+  local proto_choice="1"
+  read -r -p "  Enter choice [1-3, default 1]: " proto_choice
+  case "${proto_choice:-1}" in
+    2) protocol="tcp" ;;
+    3) protocol="udp" ;;
+    *) protocol="both" ;;
+  esac
+
+  while :; do
+    read -r -p "  Ports to forward (e.g. 80,443,8000-8010): " ports
+    expand_port_spec "$ports" >/dev/null && validate_gost_ports "$name" "$ports" "$protocol" && break
+    warn "Invalid ports or port conflict detected. Maximum 256 expanded ports."
+  done
+
+  save_gost_tunnel "$name" "$SELECTED_TARGET" "$ports" "$protocol"
+  if apply_gost_config; then
+    ok "GOST tunnel '${name}' forwards ${protocol^^} ports ${ports} to ${SELECTED_TARGET}."
+  else
+    rm -f "${GOST_TUNNEL_DIR}/${name}.env"
+    generate_gost_config
+    return 1
+  fi
+  pause
+}
+
+list_gost_tunnels() {
+  local count=0
+  if compgen -G "${GOST_TUNNEL_DIR}/*.env" >/dev/null; then
+    count="$(find "$GOST_TUNNEL_DIR" -type f -name '*.env' | wc -l)"
+  fi
+  local state
+  state="$(systemctl is-active xraymesh-gost.service 2>/dev/null || echo inactive)"
+  printf '  Configured GOST Tunnels: %b%s%b (Service: %s)\n\n' "$CYAN" "$count" "$RESET" "$state"
+  if (( count == 0 )); then
+    info "No GOST tunnels configured yet."
+    return
+  fi
+  printf '  %-20s %-16s %-10s %s\n' "TUNNEL NAME" "TARGET IP" "PROTOCOL" "PORTS"
+  printf '  %-20s %-16s %-10s %s\n' "-----------" "---------" "--------" "-----"
+  local f name target ports proto
+  for f in "${GOST_TUNNEL_DIR}"/*.env; do
+    [[ -f "$f" ]] || continue
+    name="$(basename "$f" .env)"
+    target="$(grep -E '^TARGET_IP=' "$f" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
+    ports="$(grep -E '^PORT_SPEC=' "$f" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
+    proto="$(grep -E '^PROTOCOL=' "$f" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
+    printf '  %-20s %-16s %-10s %s\n' "$name" "$target" "${proto^^:-BOTH}" "$ports"
+  done
+  printf '\n'
+}
+
+edit_gost_tunnel() {
+  header
+  section "EDIT GOST TUNNEL"
+  list_gost_tunnels
+  local count=0
+  if compgen -G "${GOST_TUNNEL_DIR}/*.env" >/dev/null; then
+    count="$(find "$GOST_TUNNEL_DIR" -type f -name '*.env' | wc -l)"
+  fi
+  (( count > 0 )) || { pause; return; }
+
+  local name file
+  read -r -p "  Enter tunnel name to edit: " name
+  file="${GOST_TUNNEL_DIR}/${name}.env"
+  [[ -f "$file" ]] || { fail "GOST tunnel '${name}' does not exist."; pause; return 1; }
+
+  local old_target old_ports old_proto
+  old_target="$(grep -E '^TARGET_IP=' "$file" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
+  old_ports="$(grep -E '^PORT_SPEC=' "$file" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
+  old_proto="$(grep -E '^PROTOCOL=' "$file" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
+
+  info "Editing tunnel '${name}' (current target: ${old_target}, protocol: ${old_proto^^:-BOTH})."
+  select_mesh_target || return 1
+
+  printf '\n  Select Protocol:\n'
+  printf '    %b[1]%b Both TCP + UDP (Recommended)\n' "$GREEN" "$RESET"
+  printf '    %b[2]%b TCP Only\n' "$CYAN" "$RESET"
+  printf '    %b[3]%b UDP Only\n' "$YELLOW" "$RESET"
+  local proto_choice="" protocol="${old_proto:-both}"
+  read -r -p "  Enter choice [1-3, default ${old_proto:-both}]: " proto_choice
+  case "${proto_choice}" in
+    1) protocol="both" ;;
+    2) protocol="tcp" ;;
+    3) protocol="udp" ;;
+    *) protocol="${old_proto:-both}" ;;
+  esac
+
+  local ports
+  while :; do
+    read -r -p "  Ports [${old_ports}]: " ports
+    ports="${ports:-$old_ports}"
+    expand_port_spec "$ports" >/dev/null && validate_gost_ports "$name" "$ports" "$protocol" && break
+    warn "Invalid ports or conflict detected."
+  done
+
+  save_gost_tunnel "$name" "$SELECTED_TARGET" "$ports" "$protocol"
+  if apply_gost_config; then
+    ok "GOST tunnel '${name}' updated successfully."
+  else
+    fail "Failed to apply updated GOST configuration."
+  fi
+  pause
+}
+
+delete_gost_tunnel() {
+  header
+  section "DELETE GOST TUNNEL"
+  list_gost_tunnels
+  local count=0
+  if compgen -G "${GOST_TUNNEL_DIR}/*.env" >/dev/null; then
+    count="$(find "$GOST_TUNNEL_DIR" -type f -name '*.env' | wc -l)"
+  fi
+  (( count > 0 )) || { pause; return; }
+
+  local name file
+  read -r -p "  Enter tunnel name to delete: " name
+  file="${GOST_TUNNEL_DIR}/${name}.env"
+  [[ -f "$file" ]] || { fail "GOST tunnel '${name}' does not exist."; pause; return 1; }
+
+  rm -f "$file"
+  apply_gost_config
+  ok "GOST tunnel '${name}' deleted."
+  pause
+}
+
+gost_tunnel_menu() {
+  while true; do
+    header
+    section "GOST TUNNELS (TCP / UDP)"
+    list_gost_tunnels
+
+    printf '  %b[1]%b  Create New GOST Tunnel\n' "$GREEN" "$RESET"
+    printf '  %b[2]%b  Edit Existing GOST Tunnel\n' "$CYAN" "$RESET"
+    printf '  %b[3]%b  Delete GOST Tunnel\n' "$RED" "$RESET"
+    printf '  %b[4]%b  Restart GOST Service\n' "$BLUE" "$RESET"
+    printf '  %b[5]%b  View GOST Logs\n' "$YELLOW" "$RESET"
+    printf '  %b[0]%b  Back\n\n' "$GRAY" "$RESET"
+
+    read -r -p "  Select an option [0-5]: " choice
+    case "$choice" in
+      1) run_screen create_gost_tunnel ;;
+      2) run_screen edit_gost_tunnel ;;
+      3) run_screen delete_gost_tunnel ;;
+      4)
+        systemctl restart xraymesh-gost.service 2>/dev/null || true
+        ok "GOST service restarted."
+        pause
+        ;;
+      5) journalctl -u xraymesh-gost.service -f -n 50 ;;
+      0) return ;;
+      *) warn "Invalid option"; sleep 1 ;;
+    esac
+  done
+}
+
+create_gost_tunnel_noninteractive() {
+  require_root
+  install_gost_runtime
+  local name="${1:-}" target="${2:-}" ports="${3:-}" protocol="${4:-both}"
+  protocol="${protocol,,}"
+  validate_tunnel_name "$name" || { fail "Enter a valid tunnel name with up to 32 characters."; return 1; }
+  [[ ! -f "${GOST_TUNNEL_DIR}/${name}.env" ]] || { fail "A tunnel with this name already exists."; return 1; }
+  valid_ip "$target" || { fail "Target must be a valid 10.x.x.x mesh IP."; return 1; }
+  expand_port_spec "$ports" >/dev/null || { fail "Invalid port list or range."; return 1; }
+  validate_gost_ports "$name" "$ports" "$protocol" || return 1
+
+  save_gost_tunnel "$name" "$target" "$ports" "$protocol"
+  if apply_gost_config; then
+    ok "GOST tunnel '${name}' forwards ${protocol^^} ports ${ports} to ${target}."
+  else
+    rm -f "${GOST_TUNNEL_DIR}/${name}.env"
+    generate_gost_config
+    return 1
+  fi
+}
+
+delete_gost_tunnel_noninteractive() {
+  require_root
+  local name="${1:-}" file="${GOST_TUNNEL_DIR}/${1}.env"
+  [[ -f "$file" ]] || { fail "GOST tunnel '${name}' not found."; return 1; }
+  rm -f "$file"
+  apply_gost_config
+  ok "GOST tunnel '${name}' deleted."
+}
+
 update_web_assets() {
   mkdir -p "${WEB_DIR}/static" /etc/xraymesh
   local script_dir branch="${XRAYMESH_BRANCH:-beta}" updated=0
@@ -2181,6 +2658,12 @@ self_test() {
     SELF_TEST_LABEL="XRayMesh DNAT chain is active"
     test_result iptables -w -t nat -S XRAYMESH_DNAT
   fi
+  if compgen -G "${GOST_TUNNEL_DIR}/*.env" >/dev/null; then
+    SELF_TEST_LABEL="GOST binary is installed"
+    test_result test -x "$GOST_BIN"
+    SELF_TEST_LABEL="GOST service is active"
+    test_result systemctl is-active --quiet xraymesh-gost.service
+  fi
   if [[ -f "$WEB_SERVICE_FILE" ]]; then
     SELF_TEST_LABEL="Web Dashboard service is active"
     test_result systemctl is-active --quiet xraymesh-web.service
@@ -2219,13 +2702,14 @@ menu() {
     printf '  %b[7]%b  Connection diagnostics\n' "$YELLOW" "$RESET"
     printf '  %b[8]%b  HAProxy TCP tunnels\n' "$PINK" "$RESET"
     printf '  %b[9]%b  iptables UDP/TCP tunnels\n' "$CYAN" "$RESET"
-    printf '  %b[10]%b Web UI Dashboard & Speedtest\n' "$GREEN" "$RESET"
-    printf '  %b[11]%b Run self-test\n' "$BLUE" "$RESET"
-    printf '  %b[12]%b Delete mesh configuration\n' "$YELLOW" "$RESET"
-    printf '  %b[13]%b Uninstall XRayMesh completely\n' "$RED" "$RESET"
+    printf '  %b[10]%b GOST TCP/UDP tunnels\n' "$YELLOW" "$RESET"
+    printf '  %b[11]%b Web UI Dashboard & Speedtest\n' "$GREEN" "$RESET"
+    printf '  %b[12]%b Run self-test\n' "$BLUE" "$RESET"
+    printf '  %b[13]%b Delete mesh configuration\n' "$YELLOW" "$RESET"
+    printf '  %b[14]%b Uninstall XRayMesh completely\n' "$RED" "$RESET"
     printf '  %b[0]%b  Exit\n\n' "$GRAY" "$RESET"
     printf '%b  Tip: Ctrl+C exits here; inside a screen it returns to this menu.%b\n\n' "$DIM$GRAY" "$RESET"
-    read -r -p "  Select an option [0-13]: " choice || { choice=""; continue; }
+    read -r -p "  Select an option [0-14]: " choice || { choice=""; continue; }
     case "$choice" in
       1) IN_MAIN_MENU=0; run_screen setup_node; IN_MAIN_MENU=1 ;;
       2) IN_MAIN_MENU=0; run_screen live_status; IN_MAIN_MENU=1 ;;
@@ -2236,10 +2720,11 @@ menu() {
       7) IN_MAIN_MENU=0; run_screen diagnostics; IN_MAIN_MENU=1 ;;
       8) IN_MAIN_MENU=0; run_screen haproxy_tunnel_menu; IN_MAIN_MENU=1 ;;
       9) IN_MAIN_MENU=0; run_screen iptables_tunnel_menu; IN_MAIN_MENU=1 ;;
-      10) IN_MAIN_MENU=0; run_screen web_menu; IN_MAIN_MENU=1 ;;
-      11) IN_MAIN_MENU=0; run_screen self_test; IN_MAIN_MENU=1 ;;
-      12) IN_MAIN_MENU=0; run_screen delete_mesh; IN_MAIN_MENU=1 ;;
-      13)
+      10) IN_MAIN_MENU=0; run_screen gost_tunnel_menu; IN_MAIN_MENU=1 ;;
+      11) IN_MAIN_MENU=0; run_screen web_menu; IN_MAIN_MENU=1 ;;
+      12) IN_MAIN_MENU=0; run_screen self_test; IN_MAIN_MENU=1 ;;
+      13) IN_MAIN_MENU=0; run_screen delete_mesh; IN_MAIN_MENU=1 ;;
+      14)
         IN_MAIN_MENU=0
         run_screen uninstall_app
         IN_MAIN_MENU=1
@@ -2267,6 +2752,12 @@ case "${1:-menu}" in
   iptables) require_root; require_linux; iptables_tunnel_menu ;;
   iptables-create) shift; require_linux; create_iptables_tunnel_noninteractive "$@" ;;
   iptables-delete) shift; require_linux; delete_iptables_tunnel_noninteractive "$@" ;;
+  gost) require_root; require_linux; gost_tunnel_menu ;;
+  gost-create) shift; require_linux; create_gost_tunnel_noninteractive "$@" ;;
+  gost-delete) shift; require_linux; delete_gost_tunnel_noninteractive "$@" ;;
+  gost-start) require_root; require_linux; systemctl start xraymesh-gost.service ;;
+  gost-stop) require_root; require_linux; systemctl stop xraymesh-gost.service ;;
+  gost-restart) require_root; require_linux; systemctl restart xraymesh-gost.service ;;
   web|dashboard-web) require_root; require_linux; web_menu ;;
   token|web-token) require_root; require_linux; generate_web_token ;;
   web-start) require_root; require_linux; systemctl start xraymesh-web.service xraymesh-iperf.service ;;
@@ -2289,7 +2780,7 @@ case "${1:-menu}" in
   start|stop|restart) require_root; systemctl "$1" xraymesh.service ;;
   version|-v|--version) echo "${APP} ${VERSION} - © ${OWNER}" ;;
   *)
-    echo "Usage: $0 [menu|install|status|peers|routes|logs|update|delete|haproxy|iptables|web|token|web-update|self-test|start|stop|restart|version]"
+    echo "Usage: $0 [menu|install|status|peers|routes|logs|update|delete|haproxy|iptables|gost|web|token|web-update|self-test|start|stop|restart|version]"
     exit 2
     ;;
 esac

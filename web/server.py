@@ -34,6 +34,7 @@ WEB_ENV_FILE = os.environ.get("WEB_ENV_FILE", "/etc/xraymesh/web.env")
 WEB_TOKEN_FILE = os.environ.get("WEB_TOKEN_FILE", "/etc/xraymesh/web-tokens.json")
 HAPROXY_DIR = os.environ.get("HAPROXY_DIR", "/etc/xraymesh/haproxy-tunnels")
 IPTABLES_DIR = os.environ.get("IPTABLES_DIR", "/etc/xraymesh/iptables-tunnels")
+GOST_TUNNEL_DIR = os.environ.get("GOST_TUNNEL_DIR", "/etc/xraymesh/gost-tunnels")
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
 PORT = int(os.environ.get("WEB_PORT", "11080"))
@@ -287,8 +288,8 @@ def get_easytier_routes():
 
 
 def get_tunnels():
-    """Read HAProxy and iptables configured tunnels."""
-    tunnels = {"haproxy": [], "iptables": []}
+    """Read HAProxy, iptables, and GOST configured tunnels."""
+    tunnels = {"haproxy": [], "iptables": [], "gost": []}
 
     # HAProxy tunnels
     if os.path.isdir(HAPROXY_DIR):
@@ -306,6 +307,14 @@ def get_tunnels():
                 if data:
                     tunnels["iptables"].append(data)
 
+    # GOST tunnels
+    if os.path.isdir(GOST_TUNNEL_DIR):
+        for fname in os.listdir(GOST_TUNNEL_DIR):
+            if fname.endswith(".env"):
+                data = load_env_file(os.path.join(GOST_TUNNEL_DIR, fname))
+                if data:
+                    tunnels["gost"].append(data)
+
     # Check systemd status
     def check_service(name):
         try:
@@ -316,6 +325,7 @@ def get_tunnels():
 
     tunnels["haproxy_service"] = check_service("xraymesh-haproxy.service")
     tunnels["iptables_service"] = check_service("xraymesh-iptables.service")
+    tunnels["gost_service"] = check_service("xraymesh-gost.service")
     tunnels["iperf_service"] = check_service("xraymesh-iperf.service")
 
     return tunnels
@@ -780,6 +790,36 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"ok": True, "message": msg or "iptables tunnel deleted successfully."})
             else:
                 self.send_json({"ok": False, "error": msg or "Failed to delete iptables tunnel."}, status=400)
+            return
+
+        elif path == "/api/tunnels/gost/create":
+            name = data.get("name", "").strip()
+            target = data.get("target", "").strip()
+            ports = data.get("ports", "").strip()
+            protocol = data.get("protocol", "both").strip().lower()
+
+            if not name or not target or not ports:
+                self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
+                return
+
+            ok, msg = run_xraymesh_cmd(["gost-create", name, target, ports, protocol])
+            if ok:
+                self.send_json({"ok": True, "message": msg or "GOST tunnel created successfully."})
+            else:
+                self.send_json({"ok": False, "error": msg or "Failed to create GOST tunnel."}, status=400)
+            return
+
+        elif path == "/api/tunnels/gost/delete":
+            name = data.get("name", "").strip()
+            if not name:
+                self.send_json({"ok": False, "error": "Missing tunnel name"}, status=400)
+                return
+
+            ok, msg = run_xraymesh_cmd(["gost-delete", name])
+            if ok:
+                self.send_json({"ok": True, "message": msg or "GOST tunnel deleted successfully."})
+            else:
+                self.send_json({"ok": False, "error": msg or "Failed to delete GOST tunnel."}, status=400)
             return
 
         self.send_error(404, "Endpoint not found")

@@ -21,7 +21,8 @@ Developed by **ErfanXRay**
 - Displays connected peers, latency, routes, traffic, and transport information
 - Creates isolated HAProxy TCP tunnels to existing EasyTier nodes
 - Creates managed iptables TCP/UDP forwarding tunnels to EasyTier nodes
-- Supports comma-separated ports and port ranges for HAProxy and iptables forwarding
+- Creates high-performance user-space GOST v3 TCP/UDP forwarding tunnels to EasyTier nodes
+- Supports comma-separated ports and port ranges for HAProxy, iptables, and GOST forwarding
 - Provides service logs and connection diagnostics for failed handshakes
 - Shows physical server IPv4/IPv6 addresses separately from mesh addresses
 - Safely edits or deletes a node without requiring a complete reinstall

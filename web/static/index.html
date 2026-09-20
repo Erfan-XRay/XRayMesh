@@ -836,6 +836,63 @@
     </div>
   </div>
 
+  <!-- Create GOST Tunnel Modal -->
+  <div id="modalGost" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <h2 class="modal-title">Create GOST TCP/UDP Tunnel</h2>
+      <p class="modal-desc">High-performance user-space port forwarder via GOST v3</p>
+
+      <div class="form-group">
+        <label class="form-label">Tunnel Name</label>
+        <input type="text" id="gostTunnelName" class="form-control" placeholder="e.g. gost_forward">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Destination Mesh Node</label>
+        <select id="gostTargetSelect" class="form-control">
+          <option value="">-- Select Target Node --</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Target Virtual IP (Manual)</label>
+        <input type="text" id="gostTargetIp" class="form-control" placeholder="10.144.144.2">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Protocol</label>
+        <div class="radio-group">
+          <div class="radio-btn">
+            <input type="radio" id="gostProtoBoth" name="gostProto" value="both" checked>
+            <label for="gostProtoBoth">Both (TCP + UDP)</label>
+          </div>
+          <div class="radio-btn">
+            <input type="radio" id="gostProtoTcp" name="gostProto" value="tcp">
+            <label for="gostProtoTcp">TCP Only</label>
+          </div>
+          <div class="radio-btn">
+            <input type="radio" id="gostProtoUdp" name="gostProto" value="udp">
+            <label for="gostProtoUdp">UDP Only</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Ports or Ranges</label>
+        <input type="text" id="gostPorts" class="form-control" placeholder="e.g. 80,443 or 8000-8010">
+      </div>
+
+      <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+        <button id="btnCreateGost" class="btn btn-primary" style="flex: 1;" onclick="submitCreateGost()">
+          Create Tunnel
+        </button>
+        <button class="btn btn-ghost" onclick="closeModal('modalGost')">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Main Container -->
   <div class="container">
 
@@ -1151,6 +1208,29 @@
           <div class="empty-box">Loading iptables tunnels...</div>
         </div>
       </div>
+
+      <!-- GOST Tunnels -->
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">
+              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              GOST Tunnels (TCP / UDP)
+            </h2>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">High-performance user-space proxy & forwarder (TCP, UDP, Both)</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn btn-primary btn-sm" onclick="openCreateGostModal()">
+              + New GOST Tunnel
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="fetchTunnels()">Refresh</button>
+          </div>
+        </div>
+
+        <div id="gostTunnelsContainer">
+          <div class="empty-box">Loading GOST tunnels...</div>
+        </div>
+      </div>
     </div>
 
   </div>
@@ -1444,6 +1524,13 @@
           if (iptSelect.value) document.getElementById('iptTargetIp').value = iptSelect.value;
         };
       }
+      const gostSelect = document.getElementById('gostTargetSelect');
+      if (gostSelect) {
+        gostSelect.innerHTML = buildOpts();
+        gostSelect.onchange = () => {
+          if (gostSelect.value) document.getElementById('gostTargetIp').value = gostSelect.value;
+        };
+      }
     }
 
     // Quick Actions from Peer Card
@@ -1599,6 +1686,7 @@
     async function fetchTunnels() {
       const haBox = document.getElementById('haproxyTunnelsContainer');
       const iptBox = document.getElementById('iptablesTunnelsContainer');
+      const gostBox = document.getElementById('gostTunnelsContainer');
 
       try {
         const res = await fetch('/api/tunnels');
@@ -1606,6 +1694,7 @@
         const data = d.data || {};
         const haproxy = data.haproxy || [];
         const iptables = data.iptables || [];
+        const gost = data.gost || [];
 
         // Render HAProxy
         if (haproxy.length === 0) {
@@ -1682,9 +1771,48 @@
           iptBox.innerHTML = html;
         }
 
+        // Render GOST
+        if (gost.length === 0) {
+          gostBox.innerHTML = '<div class="empty-box">No GOST tunnels configured. Click "+ New GOST Tunnel" to create one.</div>';
+        } else {
+          let html = '<div class="peers-grid">';
+          gost.forEach(t => {
+            const proto = (t.PROTOCOL || 'both').toUpperCase();
+            html += `
+              <div class="peer-card">
+                <div class="peer-card-top">
+                  <div>
+                    <div class="peer-ip">${t.TUNNEL_NAME || 'Tunnel'}</div>
+                    <div class="peer-meta">Destination: ${t.TARGET_IP || '--'}</div>
+                  </div>
+                  <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: var(--accent-yellow);">${proto} Forwarder</span>
+                </div>
+                <div class="peer-details">
+                  <div class="peer-detail-item">
+                    <span class="peer-detail-label">Ports</span>
+                    <span class="peer-detail-value" style="color: var(--primary);">${t.PORT_SPEC || '--'}</span>
+                  </div>
+                  <div class="peer-detail-item">
+                    <span class="peer-detail-label">Protocol</span>
+                    <span class="peer-detail-value">${proto}</span>
+                  </div>
+                </div>
+                <div class="peer-actions">
+                  <button class="btn btn-danger btn-sm" style="width: 100%;" onclick="deleteGostTunnel('${t.TUNNEL_NAME}')">
+                    Delete Tunnel
+                  </button>
+                </div>
+              </div>
+            `;
+          });
+          html += '</div>';
+          gostBox.innerHTML = html;
+        }
+
       } catch (e) {
         haBox.innerHTML = '<div class="empty-box">Error loading tunnels</div>';
         iptBox.innerHTML = '<div class="empty-box">Error loading tunnels</div>';
+        gostBox.innerHTML = '<div class="empty-box">Error loading tunnels</div>';
       }
     }
 
@@ -1835,6 +1963,69 @@
           fetchTunnels();
         } else {
           showToast(d.error || "Failed to delete tunnel", "error");
+        }
+      } catch (e) {
+        showToast("Error deleting tunnel", "error");
+      }
+    }
+
+    function openCreateGostModal() {
+      populateTunnelTargetDropdowns();
+      openModal('modalGost');
+    }
+
+    async function submitCreateGost() {
+      const name = document.getElementById('gostTunnelName').value.trim();
+      const target = document.getElementById('gostTargetIp').value.trim();
+      const ports = document.getElementById('gostPorts').value.trim();
+      const protocol = document.querySelector('input[name="gostProto"]:checked').value;
+
+      if (!name || !target || !ports) {
+        return showToast("Please fill in tunnel name, destination IP, and ports", "error");
+      }
+
+      const btn = document.getElementById('btnCreateGost');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Creating...';
+
+      try {
+        const res = await fetch('/api/tunnels/gost/create', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({name, target, ports, protocol})
+        });
+        const d = await res.json();
+        if (d.ok) {
+          showToast(d.message || "GOST tunnel created successfully", "success");
+          closeModal('modalGost');
+          document.getElementById('gostTunnelName').value = '';
+          document.getElementById('gostPorts').value = '';
+          fetchTunnels();
+        } else {
+          showToast(d.error || "Failed to create GOST tunnel", "error");
+        }
+      } catch (e) {
+        showToast("Error communicating with server", "error");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Create Tunnel";
+      }
+    }
+
+    async function deleteGostTunnel(name) {
+      if (!confirm(`Are you sure you want to delete GOST tunnel '${name}'?`)) return;
+      try {
+        const res = await fetch('/api/tunnels/gost/delete', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({name})
+        });
+        const d = await res.json();
+        if (d.ok) {
+          showToast(`GOST tunnel '${name}' deleted`, "success");
+          fetchTunnels();
+        } else {
+          showToast(d.error || "Failed to delete GOST tunnel", "error");
         }
       } catch (e) {
         showToast("Error deleting tunnel", "error");

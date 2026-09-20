@@ -23,6 +23,8 @@ declare -F create_haproxy_tunnel_noninteractive >/dev/null
 declare -F delete_haproxy_tunnel_noninteractive >/dev/null
 declare -F create_iptables_tunnel_noninteractive >/dev/null
 declare -F delete_iptables_tunnel_noninteractive >/dev/null
+declare -F create_gost_tunnel_noninteractive >/dev/null
+declare -F delete_gost_tunnel_noninteractive >/dev/null
 
 # Test static assets exist
 test -f "${ROOT_DIR}/web/server.py"
