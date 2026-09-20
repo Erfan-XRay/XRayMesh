@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { NodeInfo, PaletteId, Language } from '../types';
 import { PaletteDef } from '../theme/palettes';
 import { RefreshCw, LogOut, Palette, Layers } from 'lucide-react';
@@ -59,7 +60,7 @@ export const Header: React.FC<HeaderProps> = ({
   }, [themeMenuOpen, updateMenuPos]);
 
   return (
-    <header className="flex flex-wrap items-center justify-between gap-4 p-4 md:p-6 mb-6 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
+    <header className="relative z-20 flex flex-wrap items-center justify-between gap-4 p-4 md:p-6 mb-6 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
       {/* Brand */}
       <div className="flex items-center gap-3.5">
         <div className="w-10 h-10 rounded-xl bg-primary/20 border border-primary/40 flex items-center justify-center text-primary shadow-sm">
@@ -141,15 +142,15 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
       </div>
 
-      {/* Palette Dropdown — rendered as fixed portal to escape stacking context */}
-      {themeMenuOpen && menuPos && (
+      {/* Palette Dropdown — rendered via createPortal directly into document.body to fully escape backdrop-blur stacking context */}
+      {themeMenuOpen && menuPos && createPortal(
         <>
           <div
             className="fixed inset-0 z-[9998]"
             onClick={() => setThemeMenuOpen(false)}
           />
           <div
-            className="fixed w-48 rounded-xl bg-slate-900 border border-white/15 shadow-2xl p-1.5 z-[9999] animate-modal-in"
+            className="fixed w-48 rounded-xl bg-slate-900/95 backdrop-blur-2xl border border-white/20 shadow-2xl p-1.5 z-[9999] animate-modal-in"
             style={{ top: menuPos.top, left: menuPos.left }}
           >
             {availablePalettes.map((p) => (
@@ -173,7 +174,8 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             ))}
           </div>
-        </>
+        </>,
+        document.body
       )}
     </header>
   );
