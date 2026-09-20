@@ -100,7 +100,7 @@ export type PaletteId = 'sky' | 'emerald' | 'violet' | 'amber' | 'rose' | 'oled'
 
 export type TabId = 'peers' | 'node' | 'speedtest' | 'ping' | 'tunnels';
 
-export type MeshProtocol = 'dual' | 'tcp' | 'ws' | 'wss' | 'quic' | 'faketcp' | 'wg';
+export type MeshProtocol = 'dual' | 'udp' | 'tcp' | 'ws' | 'wss' | 'quic' | 'faketcp' | 'wg';
 
 export interface NodeConfig {
   network_name: string;

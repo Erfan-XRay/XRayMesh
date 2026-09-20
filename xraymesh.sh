@@ -294,6 +294,9 @@ fi
 
 # Configure listeners based on protocol
 case "$proto_lower" in
+  udp)
+    args+=(--listeners "udp://0.0.0.0:${PORT}")
+    ;;
   tcp)
     args+=(--listeners "tcp://0.0.0.0:${PORT}")
     ;;
@@ -312,7 +315,7 @@ case "$proto_lower" in
   wg)
     args+=(--listeners "wg://0.0.0.0:${PORT}")
     ;;
-  dual|udp|*)
+  dual|*)
     args+=(--listeners "$PORT")
     ;;
 esac
@@ -347,14 +350,17 @@ if [[ -n "${PEERS:-}" ]]; then
     else
       [[ "$peer" =~ :[0-9]+$ ]] || peer="${peer}:${PORT}"
       case "$proto_lower" in
+        udp)
+          peer_args+=("udp://${peer}")
+          ;;
+        tcp)
+          peer_args+=("tcp://${peer}")
+          ;;
         ws)
           peer_args+=("ws://${peer}/")
           ;;
         wss)
           peer_args+=("wss://${peer}/")
-          ;;
-        tcp)
-          peer_args+=("tcp://${peer}")
           ;;
         quic)
           peer_args+=("quic://${peer}")
@@ -365,7 +371,7 @@ if [[ -n "${PEERS:-}" ]]; then
         wg)
           peer_args+=("wg://${peer}")
           ;;
-        dual|udp|*)
+        dual|*)
           peer_args+=("udp://${peer}" "tcp://${peer}")
           ;;
       esac
@@ -459,7 +465,6 @@ setup_node() {
     default_hostname="${HOSTNAME:-$default_hostname}"
     default_ipv4="${IPV4:-$default_ipv4}"
     default_protocol="${PROTOCOL:-$default_protocol}"
-    [[ "$default_protocol" == "udp" ]] && default_protocol="dual"
     default_port="${PORT:-$default_port}"
     default_peers="${PEERS:-}"
     default_encryption="${ENCRYPTION:-$default_encryption}"
@@ -497,9 +502,8 @@ setup_node() {
     valid_ip "$ipv4" && break
     warn "Enter a valid address from the 10.x.x.x range."
   done
-  protocol="$(prompt_default "Preferred protocol (dual/tcp/ws/wss/quic/faketcp/wg)" "$default_protocol")"
-  [[ "$protocol" =~ ^(dual|tcp|udp|ws|wss|quic|faketcp|wg)$ ]] || protocol="dual"
-  [[ "$protocol" == "udp" ]] && protocol="dual"
+  protocol="$(prompt_default "Preferred protocol (dual/udp/tcp/ws/wss/quic/faketcp/wg)" "$default_protocol")"
+  [[ "$protocol" =~ ^(dual|udp|tcp|ws|wss|quic|faketcp|wg)$ ]] || protocol="dual"
 
   while :; do
     port="$(prompt_default "Mesh port" "$default_port")"

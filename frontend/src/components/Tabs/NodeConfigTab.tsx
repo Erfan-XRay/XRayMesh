@@ -226,6 +226,13 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
       badgeColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
     },
     {
+      id: 'udp',
+      label: t('proto_udp'),
+      desc: t('proto_udp_desc'),
+      badge: 'UDP Only',
+      badgeColor: 'text-teal-400 bg-teal-500/10 border-teal-500/30',
+    },
+    {
       id: 'tcp',
       label: t('proto_tcp'),
       desc: t('proto_tcp_desc'),
