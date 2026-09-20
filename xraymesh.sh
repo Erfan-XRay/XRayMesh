@@ -1353,6 +1353,7 @@ EOF_SCRIPT
     in_if="$IN_IF"
     source_cidr="$SOURCE_CIDR"
 
+    # shellcheck disable=SC2016,SC2129
     while IFS= read -r proto; do
       while IFS= read -r port; do
         printf '  "$IPT" -w -t nat -A "$DNAT_CHAIN"' >> "$tmp"
@@ -2006,6 +2007,14 @@ self_test_config_permissions() {
   [[ "$(stat -c '%a' "$CONFIG_FILE")" == "600" ]]
 }
 
+self_test_iptables_command() {
+  command -v iptables >/dev/null 2>&1
+}
+
+self_test_ipv4_forwarding() {
+  [[ "$(sysctl -n net.ipv4.ip_forward 2>/dev/null)" == "1" ]]
+}
+
 self_test() {
   local failures=0 checks=0
   header
@@ -2047,9 +2056,9 @@ self_test() {
   fi
   if compgen -G "${IPTABLES_TUNNEL_DIR}/*.env" >/dev/null; then
     SELF_TEST_LABEL="iptables command is available"
-    test_result bash -c 'command -v iptables >/dev/null 2>&1'
+    test_result self_test_iptables_command
     SELF_TEST_LABEL="IPv4 forwarding is enabled"
-    test_result bash -c '[[ "$(sysctl -n net.ipv4.ip_forward 2>/dev/null)" == "1" ]]'
+    test_result self_test_ipv4_forwarding
     SELF_TEST_LABEL="iptables tunnel service is active"
     test_result systemctl is-active --quiet xraymesh-iptables.service
     SELF_TEST_LABEL="XRayMesh DNAT chain is active"
