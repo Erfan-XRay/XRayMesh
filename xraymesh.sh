@@ -2548,7 +2548,8 @@ generate_realm_config() {
 
   {
     printf '{\n'
-    printf '  "log": {\n    "level": "warn",\n    "output": "/var/log/xraymesh-realm.log"\n  },\n'
+    printf '  "log": {\n    "level": "warn",\n    "output": "stdout"\n  },\n'
+    printf '  "network": {\n    "no_tcp": false,\n    "use_udp": true\n  },\n'
     printf '  "endpoints": [\n'
     for definition in "${REALM_TUNNEL_DIR}"/*.env; do
       [[ -f "$definition" ]] || continue
@@ -2559,13 +2560,16 @@ generate_realm_config() {
       local port_spec="${PORT_SPEC:-}"
       local protocol="${PROTOCOL:-both}"
       protocol="${protocol,,}"
-      local net_val="tcp,udp"
+      local no_tcp="false" use_udp="true"
       if [[ "$protocol" == "tcp" ]]; then
-        net_val="tcp"
+        no_tcp="false"
+        use_udp="false"
       elif [[ "$protocol" == "udp" ]]; then
-        net_val="udp"
+        no_tcp="true"
+        use_udp="true"
       else
-        net_val="tcp,udp"
+        no_tcp="false"
+        use_udp="true"
       fi
 
       [[ -n "$target" && -n "$port_spec" ]] || continue
@@ -2581,7 +2585,10 @@ generate_realm_config() {
     {
       "listen": "0.0.0.0:${port}",
       "remote": "${target}:${port}",
-      "network": "${net_val}"
+      "network": {
+        "no_tcp": ${no_tcp},
+        "use_udp": ${use_udp}
+      }
     }
 EOF_EP
       done < <(expand_port_spec "$port_spec")
