@@ -13,20 +13,26 @@
   <style>
     :root {
       --bg-dark: #090d16;
-      --card-bg: rgba(16, 24, 39, 0.75);
-      --card-border: rgba(56, 189, 248, 0.15);
-      --card-border-hover: rgba(56, 189, 248, 0.4);
-      --primary: #00e5ff;
-      --primary-glow: rgba(0, 229, 255, 0.35);
-      --accent-purple: #a855f7;
-      --accent-pink: #ec4899;
+      --card-bg: rgba(15, 23, 42, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-border-hover: rgba(56, 189, 248, 0.35);
+      --primary: #38bdf8;
+      --primary-hover: #0ea5e9;
+      --primary-subtle: rgba(56, 189, 248, 0.1);
+      --primary-border: rgba(56, 189, 248, 0.25);
       --accent-green: #10b981;
       --accent-yellow: #f59e0b;
-      --accent-red: #ef4444;
-      --text-main: #f1f5f9;
+      --accent-red: #f43f5e;
+      --status-danger: #f43f5e;
+      --status-danger-subtle: rgba(244, 63, 94, 0.12);
+      --text-main: #f8fafc;
       --text-muted: #94a3b8;
+      --text-subtle: #64748b;
       --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
+      --z-base: 1;
+      --z-toast: 1000;
+      --z-modal: 2000;
     }
 
     * {
@@ -37,25 +43,38 @@
 
     body {
       background-color: var(--bg-dark);
-      background-image: 
-        radial-gradient(circle at 15% 15%, rgba(0, 229, 255, 0.08) 0%, transparent 40%),
-        radial-gradient(circle at 85% 85%, rgba(168, 85, 247, 0.08) 0%, transparent 40%);
+      background-image: radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.04) 0%, transparent 60%);
       background-attachment: fixed;
       color: var(--text-main);
       font-family: var(--font-sans);
-      min-height: 100vh;
+      min-height: 100dvh;
       overflow-x: hidden;
-      line-height: 1.6;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    h1, h2, h3, .modal-title, .panel-title {
+      text-wrap: balance;
+    }
+
+    p, .modal-desc, .stat-desc, .empty-state-desc {
+      text-wrap: pretty;
+    }
+
+    .stat-value, .speed-number, .peer-ip, .peer-detail-value, .metric-chip-value, .badge, code, pre, .form-control {
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
     }
 
     /* Scrollbar */
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
-    ::-webkit-scrollbar-thumb { background: rgba(56, 189, 248, 0.3); border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(56, 189, 248, 0.4); }
 
     .container {
-      max-width: 1300px;
+      max-width: 1280px;
       margin: 0 auto;
       padding: 1.5rem;
     }
@@ -71,7 +90,7 @@
       border-radius: 16px;
       backdrop-filter: blur(12px);
       margin-bottom: 2rem;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
       flex-wrap: wrap;
       gap: 1rem;
     }
@@ -79,33 +98,33 @@
     .brand {
       display: flex;
       align-items: center;
-      gap: 1rem;
+      gap: 0.85rem;
     }
 
     .brand-logo {
-      width: 44px;
-      height: 44px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, #00e5ff, #8b5cf6);
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: #0284c7;
+      border: 1px solid rgba(56, 189, 248, 0.3);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 0 20px var(--primary-glow);
+      color: #ffffff;
+      box-shadow: 0 2px 10px rgba(2, 132, 199, 0.3);
     }
 
     .brand-logo svg {
-      width: 26px;
-      height: 26px;
-      fill: #090d16;
+      width: 22px;
+      height: 22px;
+      fill: #ffffff;
     }
 
     .brand-text h1 {
-      font-size: 1.35rem;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-      background: linear-gradient(to right, #00e5ff, #c084fc);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #ffffff;
     }
 
     .brand-text p {
@@ -123,156 +142,182 @@
       display: inline-flex;
       align-items: center;
       gap: 0.4rem;
-      padding: 0.35rem 0.75rem;
+      padding: 0.3rem 0.65rem;
       border-radius: 9999px;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       font-weight: 600;
       font-family: var(--font-mono);
     }
 
     .badge-online {
-      background: rgba(16, 185, 129, 0.15);
+      background: rgba(16, 185, 129, 0.12);
       color: #34d399;
-      border: 1px solid rgba(16, 185, 129, 0.3);
+      border: 1px solid rgba(16, 185, 129, 0.25);
     }
 
     .badge-pulse {
-      width: 8px;
-      height: 8px;
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
-      background: #34d399;
-      box-shadow: 0 0 10px #34d399;
+      background: #10b981;
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
       animation: pulse 2s infinite;
     }
 
     @keyframes pulse {
       0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(1.3); }
+      50% { opacity: 0.4; transform: scale(1.25); }
     }
 
     .btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 0.5rem;
-      padding: 0.55rem 1.1rem;
-      border-radius: 10px;
+      gap: 0.45rem;
+      min-height: 40px;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
       font-family: var(--font-sans);
-      font-size: 0.88rem;
-      font-weight: 600;
+      font-size: 0.875rem;
+      font-weight: 500;
       cursor: pointer;
-      transition: all 0.2s ease;
-      border: none;
+      transition: all 0.15s ease-out;
+      border: 1px solid transparent;
       outline: none;
       text-decoration: none;
+      user-select: none;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
     }
 
     .btn-primary {
-      background: linear-gradient(135deg, #00e5ff, #0284c7);
-      color: #041325;
-      box-shadow: 0 4px 15px rgba(0, 229, 255, 0.3);
+      background: #0284c7;
+      color: #ffffff;
+      border-color: rgba(56, 189, 248, 0.3);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     }
 
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 229, 255, 0.45);
+    .btn-primary:hover:not(:disabled) {
+      background: #0369a1;
+      border-color: rgba(56, 189, 248, 0.5);
     }
 
     .btn-ghost {
-      background: rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.04);
       color: var(--text-main);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.08);
     }
 
-    .btn-ghost:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: var(--primary);
+    .btn-ghost:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.16);
     }
 
     .btn-danger {
-      background: rgba(239, 68, 68, 0.15);
-      color: #f87171;
-      border: 1px solid rgba(239, 68, 68, 0.3);
+      background: rgba(244, 63, 94, 0.12);
+      color: #fb7185;
+      border-color: rgba(244, 63, 94, 0.25);
     }
 
-    .btn-danger:hover {
-      background: rgba(239, 68, 68, 0.25);
+    .btn-danger:hover:not(:disabled) {
+      background: rgba(244, 63, 94, 0.2);
+      border-color: rgba(244, 63, 94, 0.4);
     }
 
     .btn-sm {
-      padding: 0.4rem 0.8rem;
+      min-height: 32px;
+      padding: 0.3rem 0.7rem;
       font-size: 0.8rem;
+      border-radius: 6px;
+    }
+
+    .btn-copy {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease-out;
+    }
+
+    .btn-copy:hover {
+      background: var(--primary-subtle);
+      border-color: var(--primary);
+      color: var(--primary);
     }
 
     /* Stats Grid */
     .stats-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 1.25rem;
+      gap: 1rem;
       margin-bottom: 2rem;
     }
 
     .stat-card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      border-radius: 14px;
+      border-radius: 12px;
       padding: 1.25rem;
       backdrop-filter: blur(10px);
-      transition: transform 0.2s ease, border-color 0.2s ease;
+      transition: transform 0.15s ease-out, border-color 0.15s ease-out;
       position: relative;
-      overflow: hidden;
     }
 
     .stat-card:hover {
-      transform: translateY(-2px);
+      transform: translateY(-1px);
       border-color: var(--card-border-hover);
-    }
-
-    .stat-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 3px;
-      background: linear-gradient(90deg, var(--primary), var(--accent-purple));
-      opacity: 0.8;
     }
 
     .stat-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 0.75rem;
+      margin-bottom: 0.65rem;
     }
 
     .stat-title {
-      font-size: 0.85rem;
+      font-size: 0.8rem;
       color: var(--text-muted);
       font-weight: 500;
     }
 
     .stat-icon {
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
-      background: rgba(0, 229, 255, 0.1);
+      width: 30px;
+      height: 30px;
+      border-radius: 6px;
+      background: rgba(56, 189, 248, 0.08);
       display: flex;
       align-items: center;
       justify-content: center;
       color: var(--primary);
+      font-size: 0.75rem;
+      font-weight: 700;
     }
 
     .stat-value {
-      font-size: 1.5rem;
+      font-size: 1.45rem;
       font-weight: 700;
       font-family: var(--font-mono);
-      letter-spacing: -0.5px;
-      color: #fff;
+      color: #ffffff;
+      line-height: 1.2;
     }
 
     .stat-desc {
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       color: var(--text-muted);
       margin-top: 0.35rem;
       display: flex;
@@ -283,8 +328,8 @@
     /* Tabs Navigation */
     .tabs-nav {
       display: flex;
-      gap: 0.5rem;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      gap: 0.35rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       margin-bottom: 1.5rem;
       overflow-x: auto;
       padding-bottom: 0.5rem;
@@ -292,18 +337,18 @@
 
     .tab-btn {
       background: transparent;
-      border: none;
+      border: 1px solid transparent;
       color: var(--text-muted);
       font-family: var(--font-sans);
-      font-size: 0.95rem;
-      font-weight: 600;
-      padding: 0.65rem 1.25rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      padding: 0.5rem 1rem;
       border-radius: 8px;
       cursor: pointer;
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      transition: all 0.2s ease;
+      transition: all 0.15s ease-out;
       white-space: nowrap;
     }
 
@@ -313,9 +358,9 @@
     }
 
     .tab-btn.active {
-      color: var(--primary);
-      background: rgba(0, 229, 255, 0.1);
-      border-bottom: 2px solid var(--primary);
+      color: #ffffff;
+      background: rgba(56, 189, 248, 0.12);
+      border-color: rgba(56, 189, 248, 0.25);
     }
 
     /* Main Tab Content */
@@ -325,11 +370,11 @@
 
     .tab-pane.active {
       display: block;
-      animation: fadeIn 0.25s ease-out;
+      animation: fadeIn 0.15s ease-out;
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(6px); }
+      from { opacity: 0; transform: translateY(4px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
@@ -337,10 +382,10 @@
     .panel {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      border-radius: 16px;
+      border-radius: 14px;
       backdrop-filter: blur(12px);
       padding: 1.5rem;
-      margin-bottom: 2rem;
+      margin-bottom: 1.75rem;
     }
 
     .panel-header {
@@ -353,27 +398,27 @@
     }
 
     .panel-title {
-      font-size: 1.15rem;
-      font-weight: 700;
+      font-size: 1.1rem;
+      font-weight: 600;
       display: flex;
       align-items: center;
       gap: 0.6rem;
-      color: #fff;
+      color: #ffffff;
     }
 
-    /* Peers Table */
+    /* Peers & Tunnels Table/Grid */
     .peers-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-      gap: 1.25rem;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 1rem;
     }
 
     .peer-card {
-      background: rgba(15, 23, 42, 0.6);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 14px;
-      padding: 1.25rem;
-      transition: all 0.2s ease;
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 1.15rem;
+      transition: all 0.15s ease-out;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
@@ -381,38 +426,39 @@
 
     .peer-card:hover {
       border-color: var(--card-border-hover);
-      box-shadow: 0 4px 20px rgba(0, 229, 255, 0.15);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
     }
 
     .peer-card-top {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-bottom: 1rem;
+      margin-bottom: 0.85rem;
     }
 
     .peer-ip {
-      font-size: 1.15rem;
-      font-weight: 700;
+      font-size: 1.1rem;
+      font-weight: 600;
       font-family: var(--font-mono);
       color: var(--primary);
     }
 
     .peer-meta {
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       color: var(--text-muted);
-      margin-top: 0.2rem;
+      margin-top: 0.15rem;
     }
 
     .peer-details {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 0.75rem;
-      background: rgba(0, 0, 0, 0.25);
+      gap: 0.65rem;
+      background: rgba(0, 0, 0, 0.2);
       padding: 0.75rem;
       border-radius: 8px;
-      font-size: 0.85rem;
-      margin-bottom: 1rem;
+      font-size: 0.82rem;
+      margin-bottom: 0.85rem;
+      border: 1px solid rgba(255, 255, 255, 0.04);
     }
 
     .peer-detail-item {
@@ -421,13 +467,14 @@
     }
 
     .peer-detail-label {
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       color: var(--text-muted);
     }
 
     .peer-detail-value {
       font-family: var(--font-mono);
-      font-weight: 600;
+      font-weight: 500;
+      color: #e2e8f0;
     }
 
     .peer-actions {
@@ -438,44 +485,45 @@
     /* Speedtest Suite */
     .speedtest-container {
       display: grid;
-      grid-template-columns: 360px 1fr;
+      grid-template-columns: 340px 1fr;
       gap: 1.5rem;
     }
 
-    @media (max-width: 900px) {
+    @media (max-width: 860px) {
       .speedtest-container {
         grid-template-columns: 1fr;
       }
     }
 
     .form-group {
-      margin-bottom: 1.25rem;
+      margin-bottom: 1.15rem;
     }
 
     .form-label {
       display: block;
-      font-size: 0.85rem;
-      font-weight: 600;
-      margin-bottom: 0.4rem;
+      font-size: 0.8rem;
+      font-weight: 500;
+      margin-bottom: 0.35rem;
       color: var(--text-muted);
     }
 
     .form-control {
       width: 100%;
-      padding: 0.65rem 0.9rem;
+      min-height: 40px;
+      padding: 0.55rem 0.85rem;
       background: rgba(15, 23, 42, 0.8);
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: 8px;
-      color: #fff;
+      color: #ffffff;
       font-family: var(--font-mono);
-      font-size: 0.9rem;
+      font-size: 0.875rem;
       outline: none;
-      transition: border-color 0.2s;
+      transition: border-color 0.15s ease-out;
     }
 
     .form-control:focus {
       border-color: var(--primary);
-      box-shadow: 0 0 10px var(--primary-glow);
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
     }
 
     .radio-group {
@@ -499,27 +547,28 @@
       align-items: center;
       justify-content: center;
       gap: 0.4rem;
-      padding: 0.65rem;
+      min-height: 38px;
+      padding: 0.5rem;
       background: rgba(15, 23, 42, 0.8);
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: 8px;
-      font-size: 0.85rem;
-      font-weight: 600;
+      font-size: 0.82rem;
+      font-weight: 500;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all 0.15s ease-out;
       text-align: center;
     }
 
     .radio-btn input:checked + label {
-      background: rgba(0, 229, 255, 0.15);
+      background: rgba(56, 189, 248, 0.12);
       border-color: var(--primary);
       color: var(--primary);
     }
 
     .speed-gauge-box {
-      background: rgba(15, 23, 42, 0.6);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
       padding: 2rem;
       display: flex;
       flex-direction: column;
@@ -531,49 +580,47 @@
     }
 
     .speed-number {
-      font-size: 3.5rem;
+      font-size: 3.25rem;
       font-weight: 800;
       font-family: var(--font-mono);
-      background: linear-gradient(135deg, #00e5ff, #c084fc);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      color: var(--primary);
       line-height: 1;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.4rem;
     }
 
     .speed-unit {
-      font-size: 1rem;
+      font-size: 0.95rem;
       color: var(--text-muted);
       font-family: var(--font-mono);
-      letter-spacing: 1px;
     }
 
     .speed-metrics-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-      gap: 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 0.75rem;
       width: 100%;
       margin-top: 1.5rem;
     }
 
     .metric-chip {
-      background: rgba(0, 0, 0, 0.3);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.06);
       border-radius: 8px;
-      padding: 0.75rem;
+      padding: 0.65rem;
       text-align: center;
     }
 
     .metric-chip-label {
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       color: var(--text-muted);
     }
 
     .metric-chip-value {
-      font-size: 1.1rem;
-      font-weight: 700;
+      font-size: 1.05rem;
+      font-weight: 600;
       font-family: var(--font-mono);
-      margin-top: 0.2rem;
+      margin-top: 0.15rem;
+      color: #ffffff;
     }
 
     /* Chart Containers */
@@ -588,44 +635,58 @@
     .modal-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(4, 7, 15, 0.85);
-      backdrop-filter: blur(16px);
+      background: rgba(3, 7, 18, 0.75);
+      backdrop-filter: blur(8px);
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 9999;
+      z-index: var(--z-modal);
       padding: 1.5rem;
+      padding-top: env(safe-area-inset-top, 1.5rem);
+      padding-bottom: env(safe-area-inset-bottom, 1.5rem);
     }
 
     .modal-card {
-      background: rgba(16, 24, 39, 0.95);
-      border: 1px solid var(--primary);
-      box-shadow: 0 0 40px rgba(0, 229, 255, 0.25);
-      border-radius: 20px;
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+      border-radius: 16px;
       width: 100%;
       max-width: 480px;
-      padding: 2rem;
+      padding: 1.75rem;
       position: relative;
+      animation: modalIn 150ms ease-out;
+    }
+
+    @keyframes modalIn {
+      from {
+        opacity: 0;
+        transform: scale(0.97);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
     }
 
     .modal-title {
-      font-size: 1.35rem;
-      font-weight: 800;
-      margin-bottom: 0.5rem;
-      color: #fff;
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+      color: #ffffff;
     }
 
     .modal-desc {
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       color: var(--text-muted);
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.25rem;
     }
 
     .token-tip {
       margin-top: 1.25rem;
       padding: 0.75rem;
-      background: rgba(0, 229, 255, 0.06);
-      border: 1px dashed rgba(0, 229, 255, 0.3);
+      background: rgba(56, 189, 248, 0.06);
+      border: 1px dashed rgba(56, 189, 248, 0.25);
       border-radius: 8px;
       font-size: 0.8rem;
       color: var(--primary);
@@ -635,38 +696,39 @@
     /* Toast */
     .toast-box {
       position: fixed;
-      bottom: 2rem;
-      right: 2rem;
-      z-index: 10000;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      z-index: var(--z-toast);
       display: flex;
       flex-direction: column;
       gap: 0.5rem;
+      max-width: 380px;
     }
 
     .toast {
-      padding: 0.75rem 1.25rem;
-      border-radius: 10px;
-      font-size: 0.88rem;
+      padding: 0.65rem 1rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      background: rgba(15, 23, 42, 0.95);
+      background: #0f172a;
       border: 1px solid rgba(255, 255, 255, 0.1);
-      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-      animation: slideIn 0.3s ease;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+      animation: slideIn 0.15s ease-out;
     }
 
     @keyframes slideIn {
-      from { transform: translateX(100%); opacity: 0; }
-      to { transform: translateX(0); opacity: 1; }
+      from { transform: translateY(10px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
     }
 
     .spinner {
-      border: 3px solid rgba(255, 255, 255, 0.1);
-      border-top: 3px solid var(--primary);
+      border: 2px solid rgba(255, 255, 255, 0.15);
+      border-top: 2px solid var(--primary);
       border-radius: 50%;
-      width: 20px;
-      height: 20px;
+      width: 16px;
+      height: 16px;
       animation: spin 0.8s linear infinite;
       display: inline-block;
     }
@@ -676,11 +738,64 @@
       100% { transform: rotate(360deg); }
     }
 
-    /* Empty state */
+    /* Modern Empty State */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 1.5rem;
+      text-align: center;
+      background: rgba(15, 23, 42, 0.35);
+      border: 1px dashed rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+    }
+
+    .empty-state-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: rgba(56, 189, 248, 0.08);
+      border: 1px solid rgba(56, 189, 248, 0.18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--primary);
+      margin-bottom: 0.85rem;
+    }
+
+    .empty-state-icon svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .empty-state-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #ffffff;
+      margin-bottom: 0.25rem;
+    }
+
+    .empty-state-desc {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      max-width: 380px;
+      margin-bottom: 1.1rem;
+    }
+
     .empty-box {
       text-align: center;
-      padding: 3rem 1rem;
+      padding: 2.5rem 1rem;
       color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
     }
   </style>
 </head>
@@ -721,9 +836,14 @@
         </button>
       </div>
 
-      <div class="token-tip">
-        <div># Generate instant login link on server:</div>
-        <div>sudo ./xraymesh.sh token</div>
+      <div class="token-tip" style="display: flex; align-items: center; justify-content: space-between; text-align: left;">
+        <div>
+          <div style="font-size: 0.75rem; color: var(--text-muted);"># Generate instant login link on server:</div>
+          <div id="cmdTokenTip" style="font-weight: 600; color: var(--primary);">sudo ./xraymesh.sh token</div>
+        </div>
+        <button class="btn-copy" onclick="copyRawText('sudo ./xraymesh.sh token')" aria-label="Copy command" title="Copy command">
+          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+        </button>
       </div>
     </div>
   </div>
@@ -893,6 +1013,25 @@
     </div>
   </div>
 
+  <!-- Delete Confirmation Modal -->
+  <div id="modalConfirmDelete" class="modal-overlay" style="display: none;">
+    <div class="modal-card" style="max-width: 440px;">
+      <div style="display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1.25rem;">
+        <div style="width: 42px; height: 42px; border-radius: 10px; background: rgba(244, 63, 94, 0.12); display: flex; align-items: center; justify-content: center; color: var(--status-danger); flex-shrink: 0;">
+          <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+        </div>
+        <div>
+          <h2 class="modal-title" style="font-size: 1.2rem; margin-bottom: 0.35rem;">Delete Tunnel?</h2>
+          <p class="modal-desc" style="margin-bottom: 0;">Are you sure you want to delete tunnel <strong id="deleteTargetName" style="color: #ffffff; font-family: var(--font-mono);">--</strong>? Inbound traffic forwarding will immediately cease.</p>
+        </div>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+        <button class="btn btn-ghost" onclick="closeModal('modalConfirmDelete')">Cancel</button>
+        <button id="btnConfirmDelete" class="btn btn-danger" onclick="executeDeleteTunnel()">Delete Tunnel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Main Container -->
   <div class="container">
 
@@ -930,7 +1069,12 @@
           <span class="stat-title">Mesh Virtual IP</span>
           <div class="stat-icon">IP</div>
         </div>
-        <div class="stat-value" id="valVirtualIp">--</div>
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div class="stat-value" id="valVirtualIp">--</div>
+          <button class="btn-copy" onclick="copyElementText('valVirtualIp')" aria-label="Copy Virtual IP" title="Copy Virtual IP">
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+          </button>
+        </div>
         <div class="stat-desc" id="valHostname">Hostname: --</div>
       </div>
 
@@ -1265,6 +1409,50 @@
       document.getElementById(id).style.display = 'none';
     }
 
+    // Clipboard helpers
+    function copyRawText(text) {
+      if (!navigator.clipboard) {
+        showToast("Clipboard API unavailable", "error");
+        return;
+      }
+      navigator.clipboard.writeText(text).then(() => {
+        showToast("Copied to clipboard", "success");
+      }).catch(() => {
+        showToast("Failed to copy to clipboard", "error");
+      });
+    }
+
+    function copyElementText(elementId) {
+      const el = document.getElementById(elementId);
+      if (!el) return;
+      const val = el.textContent.trim();
+      if (!val || val === '--') return;
+      copyRawText(val);
+    }
+
+    // Global Modal Escape & Backdrop Dismissal
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-overlay').forEach(modal => {
+          if (modal.id === 'loginModal' && !currentAuth) return;
+          if (modal.style.display === 'flex') {
+            closeModal(modal.id);
+          }
+        });
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.modal-overlay').forEach(overlay => {
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) {
+            if (overlay.id === 'loginModal' && !currentAuth) return;
+            closeModal(overlay.id);
+          }
+        });
+      });
+    });
+
     // Tabs
     function switchMainTab(tabId) {
       document.querySelectorAll('.tabs-nav .tab-btn').forEach(b => b.classList.remove('active'));
@@ -1432,9 +1620,16 @@
 
       if (activePeers.length === 0) {
         container.innerHTML = `
-          <div class="empty-box" style="grid-column: 1 / -1;">
-            <p>No connected mesh peers discovered yet.</p>
-            <p style="font-size: 0.85rem; margin-top: 0.5rem;">Ensure other nodes share the same Network Name and Network Secret.</p>
+          <div class="empty-state" style="grid-column: 1 / -1;">
+            <div class="empty-state-icon">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+            </div>
+            <div class="empty-state-title">No Connected Mesh Peers Discovered</div>
+            <p class="empty-state-desc">Join additional nodes to this network with the same Network Name and Secret to establish encrypted mesh connections.</p>
+            <button class="btn btn-ghost btn-sm" onclick="fetchStatus(true)">
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              Refresh Peers
+            </button>
           </div>
         `;
         document.getElementById('valAvgLatency').textContent = '-- ms';
@@ -1698,7 +1893,18 @@
 
         // Render HAProxy
         if (haproxy.length === 0) {
-          haBox.innerHTML = '<div class="empty-box">No HAProxy tunnels configured. Click "+ New TCP Tunnel" to create one.</div>';
+          haBox.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+              </div>
+              <div class="empty-state-title">No HAProxy TCP Tunnels</div>
+              <p class="empty-state-desc">Forward inbound TCP ports to any mesh destination node with low latency.</p>
+              <button class="btn btn-primary btn-sm" onclick="openCreateHaproxyModal()">
+                + New TCP Tunnel
+              </button>
+            </div>
+          `;
         } else {
           let html = '<div class="peers-grid">';
           haproxy.forEach(t => {
@@ -1709,7 +1915,7 @@
                     <div class="peer-ip">${t.TUNNEL_NAME || 'Tunnel'}</div>
                     <div class="peer-meta">Destination: ${t.TARGET_IP || '--'}</div>
                   </div>
-                  <span class="badge" style="background: rgba(236, 72, 153, 0.15); color: var(--accent-pink);">TCP Proxy</span>
+                  <span class="badge" style="background: rgba(56, 189, 248, 0.12); color: var(--primary); border: 1px solid rgba(56, 189, 248, 0.25);">TCP Proxy</span>
                 </div>
                 <div class="peer-details">
                   <div class="peer-detail-item" style="grid-column: 1 / -1;">
@@ -1734,7 +1940,18 @@
 
         // Render iptables
         if (iptables.length === 0) {
-          iptBox.innerHTML = '<div class="empty-box">No iptables tunnels configured. Click "+ New Raw Tunnel" to create one.</div>';
+          iptBox.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+              </div>
+              <div class="empty-state-title">No iptables Raw Tunnels</div>
+              <p class="empty-state-desc">Forward UDP (QUIC/Hysteria) and TCP at wire speed via kernel DNAT.</p>
+              <button class="btn btn-primary btn-sm" onclick="openCreateIptablesModal()">
+                + New Raw Tunnel
+              </button>
+            </div>
+          `;
         } else {
           let html = '<div class="peers-grid">';
           iptables.forEach(t => {
@@ -1746,7 +1963,7 @@
                     <div class="peer-ip">${t.TUNNEL_NAME || 'Tunnel'}</div>
                     <div class="peer-meta">Destination: ${t.TARGET_IP || '--'}</div>
                   </div>
-                  <span class="badge" style="background: rgba(0, 229, 255, 0.15); color: var(--primary);">${proto} DNAT</span>
+                  <span class="badge" style="background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25);">${proto} DNAT</span>
                 </div>
                 <div class="peer-details">
                   <div class="peer-detail-item">
@@ -1779,7 +1996,18 @@
 
         // Render GOST
         if (gost.length === 0) {
-          gostBox.innerHTML = '<div class="empty-box">No GOST tunnels configured. Click "+ New GOST Tunnel" to create one.</div>';
+          gostBox.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              </div>
+              <div class="empty-state-title">No GOST Tunnels</div>
+              <p class="empty-state-desc">High-performance user-space tunnel for TCP, UDP, or dual-stack forwarding.</p>
+              <button class="btn btn-primary btn-sm" onclick="openCreateGostModal()">
+                + New GOST Tunnel
+              </button>
+            </div>
+          `;
         } else {
           let html = '<div class="peers-grid">';
           gost.forEach(t => {
@@ -1791,7 +2019,7 @@
                     <div class="peer-ip">${t.TUNNEL_NAME || 'Tunnel'}</div>
                     <div class="peer-meta">Destination: ${t.TARGET_IP || '--'}</div>
                   </div>
-                  <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: var(--accent-yellow);">${proto} Forwarder</span>
+                  <span class="badge" style="background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.25);">${proto} Forwarder</span>
                 </div>
                 <div class="peer-details">
                   <div class="peer-detail-item">
@@ -2084,63 +2312,64 @@
       }
     }
 
-    async function deleteHaproxyTunnel(name) {
-      if (!confirm(`Are you sure you want to delete HAProxy tunnel '${name}'?`)) return;
+    let pendingDeleteType = null;
+    let pendingDeleteName = null;
+
+    function deleteHaproxyTunnel(name) {
+      pendingDeleteType = 'haproxy';
+      pendingDeleteName = name;
+      document.getElementById('deleteTargetName').textContent = name + ' (HAProxy)';
+      openModal('modalConfirmDelete');
+    }
+
+    function deleteIptablesTunnel(name) {
+      pendingDeleteType = 'iptables';
+      pendingDeleteName = name;
+      document.getElementById('deleteTargetName').textContent = name + ' (iptables)';
+      openModal('modalConfirmDelete');
+    }
+
+    function deleteGostTunnel(name) {
+      pendingDeleteType = 'gost';
+      pendingDeleteName = name;
+      document.getElementById('deleteTargetName').textContent = name + ' (GOST)';
+      openModal('modalConfirmDelete');
+    }
+
+    async function executeDeleteTunnel() {
+      if (!pendingDeleteType || !pendingDeleteName) return;
+      const name = pendingDeleteName;
+      const type = pendingDeleteType;
+      const btn = document.getElementById('btnConfirmDelete');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Deleting...';
+
+      let endpoint = '';
+      if (type === 'haproxy') endpoint = '/api/tunnels/haproxy/delete';
+      else if (type === 'iptables') endpoint = '/api/tunnels/iptables/delete';
+      else if (type === 'gost') endpoint = '/api/tunnels/gost/delete';
+
       try {
-        const res = await fetch('/api/tunnels/haproxy/delete', {
+        const res = await fetch(endpoint, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({name})
         });
         const d = await res.json();
         if (d.ok) {
-          showToast(`Tunnel '${name}' deleted`, "success");
+          showToast(d.message || `Tunnel '${name}' deleted successfully`, "success");
+          closeModal('modalConfirmDelete');
           fetchTunnels();
         } else {
           showToast(d.error || "Failed to delete tunnel", "error");
         }
       } catch (e) {
         showToast("Error deleting tunnel", "error");
-      }
-    }
-
-    async function deleteIptablesTunnel(name) {
-      if (!confirm(`Are you sure you want to delete iptables tunnel '${name}'?`)) return;
-      try {
-        const res = await fetch('/api/tunnels/iptables/delete', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({name})
-        });
-        const d = await res.json();
-        if (d.ok) {
-          showToast(`Tunnel '${name}' deleted`, "success");
-          fetchTunnels();
-        } else {
-          showToast(d.error || "Failed to delete tunnel", "error");
-        }
-      } catch (e) {
-        showToast("Error deleting tunnel", "error");
-      }
-    }
-
-    async function deleteGostTunnel(name) {
-      if (!confirm(`Are you sure you want to delete GOST tunnel '${name}'?`)) return;
-      try {
-        const res = await fetch('/api/tunnels/gost/delete', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({name})
-        });
-        const d = await res.json();
-        if (d.ok) {
-          showToast(`GOST tunnel '${name}' deleted`, "success");
-          fetchTunnels();
-        } else {
-          showToast(d.error || "Failed to delete GOST tunnel", "error");
-        }
-      } catch (e) {
-        showToast("Error deleting tunnel", "error");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Delete Tunnel";
+        pendingDeleteType = null;
+        pendingDeleteName = null;
       }
     }
 
