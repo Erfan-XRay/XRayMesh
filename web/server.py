@@ -396,6 +396,9 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(content)))
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
             if extra_headers:
                 for k, v in extra_headers.items():
                     self.send_header(k, v)

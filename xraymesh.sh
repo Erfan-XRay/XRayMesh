@@ -1744,27 +1744,44 @@ delete_iptables_tunnel_noninteractive() {
   ok "iptables tunnel '${name}' deleted."
 }
 
-install_web_runtime() {
-  install_dependencies
+update_web_assets() {
   mkdir -p "${WEB_DIR}/static" /etc/xraymesh
-
-  local script_dir
+  local script_dir branch="${XRAYMESH_BRANCH:-beta}" updated=0
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
   if [[ -f "${script_dir}/web/server.py" && -f "${script_dir}/web/static/index.html" ]]; then
     install -m 0755 "${script_dir}/web/server.py" "${WEB_DIR}/server.py"
     install -m 0644 "${script_dir}/web/static/index.html" "${WEB_DIR}/static/index.html"
-  elif [[ ! -f "${WEB_DIR}/server.py" ]]; then
-    info "Downloading Web Dashboard files..."
-    local branch="${XRAYMESH_BRANCH:-beta}"
-    curl -fsSL --connect-timeout 10 \
+    updated=1
+  else
+    local tmp_srv tmp_idx
+    tmp_srv="$(mktemp)"
+    tmp_idx="$(mktemp)"
+    if curl -fsSL --connect-timeout 8 \
       "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/${branch}/web/server.py" \
-      -o "${WEB_DIR}/server.py" || true
-    chmod 0755 "${WEB_DIR}/server.py" 2>/dev/null || true
-    curl -fsSL --connect-timeout 10 \
+      -o "$tmp_srv" 2>/dev/null && [[ -s "$tmp_srv" ]]; then
+      install -m 0755 "$tmp_srv" "${WEB_DIR}/server.py"
+      updated=1
+    fi
+    rm -f "$tmp_srv"
+
+    if curl -fsSL --connect-timeout 8 \
       "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/${branch}/web/static/index.html" \
-      -o "${WEB_DIR}/static/index.html" || true
-    chmod 0644 "${WEB_DIR}/static/index.html" 2>/dev/null || true
+      -o "$tmp_idx" 2>/dev/null && [[ -s "$tmp_idx" ]]; then
+      install -m 0644 "$tmp_idx" "${WEB_DIR}/static/index.html"
+      updated=1
+    fi
+    rm -f "$tmp_idx"
   fi
+
+  if (( updated )) && systemctl is-active --quiet xraymesh-web.service 2>/dev/null; then
+    systemctl restart xraymesh-web.service 2>/dev/null || true
+  fi
+}
+
+install_web_runtime() {
+  install_dependencies
+  update_web_assets
 
   if [[ ! -f "$WEB_CONFIG_FILE" ]]; then
     umask 077
@@ -2021,6 +2038,9 @@ update_core() {
   install_core
   after="$(cat "${INSTALL_DIR}/easytier.version")"
   [[ -f "$SERVICE_FILE" ]] && systemctl restart xraymesh.service
+  if [[ -d "$WEB_DIR" || -f "$WEB_SERVICE_FILE" ]]; then
+    update_web_assets
+  fi
   ok "EasyTier: ${before} → ${after}"
   pause
 }
@@ -2157,6 +2177,9 @@ menu() {
   require_root
   require_linux
   install_dependencies
+  if [[ -d "$WEB_DIR" || -f "$WEB_SERVICE_FILE" ]]; then
+    update_web_assets >/dev/null 2>&1 || true
+  fi
   IN_MAIN_MENU=1
   while true; do
     # Keep the menu alive if Ctrl+C interrupts dashboard rendering.
