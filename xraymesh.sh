@@ -1684,12 +1684,13 @@ install_web_runtime() {
     install -m 0644 "${script_dir}/web/static/index.html" "${WEB_DIR}/static/index.html"
   elif [[ ! -f "${WEB_DIR}/server.py" ]]; then
     info "Downloading Web Dashboard files..."
+    local branch="${XRAYMESH_BRANCH:-beta}"
     curl -fsSL --connect-timeout 10 \
-      "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/web/server.py" \
+      "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/${branch}/web/server.py" \
       -o "${WEB_DIR}/server.py" || true
     chmod 0755 "${WEB_DIR}/server.py" 2>/dev/null || true
     curl -fsSL --connect-timeout 10 \
-      "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/web/static/index.html" \
+      "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/${branch}/web/static/index.html" \
       -o "${WEB_DIR}/static/index.html" || true
     chmod 0644 "${WEB_DIR}/static/index.html" 2>/dev/null || true
   fi
