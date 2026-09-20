@@ -124,14 +124,14 @@ require_linux() {
 install_dependencies() {
   local missing=()
   local cmd
-  for cmd in curl unzip openssl ip ping figlet jq sha256sum ss python3 iperf3; do
+  for cmd in curl unzip openssl ip ping figlet jq sha256sum ss python3 iperf3 tar; do
     command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
   done
   ((${#missing[@]} == 0)) && return
   info "Installing dependencies..."
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
-  apt-get install -y -qq curl unzip openssl iproute2 iputils-ping ca-certificates figlet jq python3 iperf3
+  apt-get install -y -qq curl unzip openssl iproute2 iputils-ping ca-certificates figlet jq python3 iperf3 tar
 }
 
 arch_asset() {
@@ -1796,7 +1796,13 @@ install_gost_runtime() {
 
   info "Downloading GOST ${version} for $(uname -m)..."
   mkdir -p "$BIN_DIR" "$GOST_TUNNEL_DIR" /etc/xraymesh
-  if ! curl -fL --retry 3 --connect-timeout 10 --progress-bar "$url" -o "${tmp}/gost.tar.gz"; then
+  local curl_opts=(-fL --retry 3 --connect-timeout 10)
+  if [[ -t 1 ]]; then
+    curl_opts+=(--progress-bar)
+  else
+    curl_opts+=(-sS)
+  fi
+  if ! curl "${curl_opts[@]}" "$url" -o "${tmp}/gost.tar.gz"; then
     fail "Download failed: $url"
     rm -rf -- "$tmp"
     return 1
@@ -2221,8 +2227,38 @@ delete_gost_tunnel_noninteractive() {
   ok "GOST tunnel '${name}' deleted."
 }
 
+ensure_xraymesh_cli() {
+  local target="${INSTALL_DIR}/xraymesh.sh"
+  mkdir -p "$INSTALL_DIR"
+  local current_source="${BASH_SOURCE[0]:-}"
+
+  if [[ -n "$current_source" && -f "$current_source" && "$current_source" != /dev/fd/* && "$current_source" != /proc/* ]]; then
+    if [[ "$current_source" != "$target" ]]; then
+      install -m 0755 "$current_source" "$target" 2>/dev/null || cp -f "$current_source" "$target" 2>/dev/null || true
+    fi
+  else
+    local branch="${XRAYMESH_BRANCH:-beta}" ts
+    ts="$(date +%s)"
+    local tmp_sh
+    tmp_sh="$(mktemp)"
+    if curl -fsSL -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' --connect-timeout 5 --max-time 15 \
+      "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/${branch}/xraymesh.sh?t=${ts}" \
+      -o "$tmp_sh" 2>/dev/null && [[ -s "$tmp_sh" ]]; then
+      install -m 0755 "$tmp_sh" "$target" 2>/dev/null || cp -f "$tmp_sh" "$target" 2>/dev/null || true
+      chmod 0755 "$target" 2>/dev/null || true
+    fi
+    rm -f "$tmp_sh"
+  fi
+
+  if [[ -f "$target" ]]; then
+    chmod 0755 "$target" 2>/dev/null || true
+    ln -sf "$target" /usr/local/bin/xraymesh 2>/dev/null || true
+  fi
+}
+
 update_web_assets() {
-  mkdir -p "${WEB_DIR}/static" /etc/xraymesh
+  mkdir -p "${WEB_DIR}/static" "${INSTALL_DIR}" /etc/xraymesh
+  ensure_xraymesh_cli
   local script_dir branch="${XRAYMESH_BRANCH:-beta}" updated=0
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -2297,11 +2333,7 @@ Restart=always
 RestartSec=3
 TimeoutStopSec=5
 KillMode=mixed
-NoNewPrivileges=true
-ProtectHome=true
-ProtectSystem=strict
-PrivateTmp=true
-ReadWritePaths=/etc/xraymesh ${INSTALL_DIR}
+ProtectHome=read-only
 SyslogIdentifier=xraymesh-web
 
 [Install]
@@ -2570,12 +2602,13 @@ uninstall_app() {
   systemctl disable --now xraymesh.service 2>/dev/null || true
   systemctl disable --now xraymesh-haproxy.service 2>/dev/null || true
   systemctl disable --now xraymesh-iptables.service 2>/dev/null || true
+  systemctl disable --now xraymesh-gost.service 2>/dev/null || true
   systemctl disable --now xraymesh-web.service 2>/dev/null || true
   systemctl disable --now xraymesh-iperf.service 2>/dev/null || true
   if [[ -x "$IPTABLES_APPLY_SCRIPT" ]]; then
     "$IPTABLES_APPLY_SCRIPT" remove >/dev/null 2>&1 || true
   fi
-  rm -f "$SERVICE_FILE" "$HAPROXY_SERVICE_FILE" "$IPTABLES_SERVICE_FILE" "$IPTABLES_SYSCTL_FILE" "$WEB_SERVICE_FILE" "$IPERF_SERVICE_FILE"
+  rm -f "$SERVICE_FILE" "$HAPROXY_SERVICE_FILE" "$IPTABLES_SERVICE_FILE" "$IPTABLES_SYSCTL_FILE" "$GOST_SERVICE_FILE" "$GOST_CONFIG_FILE" "$WEB_SERVICE_FILE" "$IPERF_SERVICE_FILE" /usr/local/bin/xraymesh
   rm -rf -- "$INSTALL_DIR" /etc/xraymesh
   systemctl daemon-reload
   ok "XRayMesh has been removed."
@@ -2737,7 +2770,10 @@ menu() {
 }
 
 main() {
-case "${1:-menu}" in
+  if (( EUID == 0 )); then
+    ensure_xraymesh_cli >/dev/null 2>&1 || true
+  fi
+  case "${1:-menu}" in
   menu) menu ;;
   install|setup) require_linux; setup_node ;;
   status) dashboard ;;

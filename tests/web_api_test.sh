@@ -25,6 +25,7 @@ declare -F create_iptables_tunnel_noninteractive >/dev/null
 declare -F delete_iptables_tunnel_noninteractive >/dev/null
 declare -F create_gost_tunnel_noninteractive >/dev/null
 declare -F delete_gost_tunnel_noninteractive >/dev/null
+declare -F ensure_xraymesh_cli >/dev/null
 
 # Test static assets exist
 test -f "${ROOT_DIR}/web/server.py"
@@ -41,5 +42,6 @@ grep -Fq 'TimeoutStopSec=5' "${ROOT_DIR}/xraymesh.sh"
 grep -Fq 'KillMode=mixed' "${ROOT_DIR}/systemd/xraymesh-web.service"
 grep -Fq 'KillMode=mixed' "${ROOT_DIR}/xraymesh.sh"
 grep -Fq 'threading.Thread(target=server.shutdown' "${ROOT_DIR}/web/server.py"
+grep -Fq 'ensure_xraymesh_script' "${ROOT_DIR}/web/server.py"
 
 printf 'Web UI & speedtest helper tests passed.\n'

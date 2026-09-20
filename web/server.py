@@ -331,18 +331,60 @@ def get_tunnels():
     return tunnels
 
 
-def get_xraymesh_script():
-    """Find the xraymesh.sh script path."""
+def ensure_xraymesh_script():
+    """Find the xraymesh.sh script path or automatically download it if missing."""
+    import shutil
     candidates = [
         os.path.join(INSTALL_DIR, "xraymesh.sh"),
         os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "xraymesh.sh"),
         "/usr/local/bin/xraymesh",
-        "xraymesh"
     ]
+    which_xraymesh = shutil.which("xraymesh")
+    if which_xraymesh and which_xraymesh not in candidates:
+        candidates.append(which_xraymesh)
+
     for c in candidates:
-        if os.path.isfile(c):
+        if os.path.isfile(c) and os.access(c, os.R_OK):
             return c
-    return candidates[0]
+
+    for loc in ["/root/xraymesh.sh", "/root/XRayMesh/xraymesh.sh"]:
+        if os.path.isfile(loc) and os.access(loc, os.R_OK):
+            return loc
+
+    target = os.path.join(INSTALL_DIR, "xraymesh.sh")
+    try:
+        os.makedirs(INSTALL_DIR, exist_ok=True)
+        branch = os.environ.get("XRAYMESH_BRANCH", "beta")
+        url = f"https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/{branch}/xraymesh.sh?t={int(time.time())}"
+        import urllib.request
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+                "User-Agent": "XRayMesh-Web/1.8.0"
+            }
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            if resp.status == 200:
+                with open(target, "wb") as f:
+                    f.write(resp.read())
+                os.chmod(target, 0o755)
+                try:
+                    if not os.path.exists("/usr/local/bin/xraymesh"):
+                        os.symlink(target, "/usr/local/bin/xraymesh")
+                except Exception:
+                    pass
+                return target
+    except Exception as e:
+        sys.stderr.write(f"Failed to auto-download xraymesh.sh: {e}\n")
+
+    return target
+
+
+def get_xraymesh_script():
+    """Find the xraymesh.sh script path."""
+    return ensure_xraymesh_script()
 
 
 def get_network_interfaces():
@@ -363,15 +405,22 @@ def get_network_interfaces():
     return interfaces
 
 
-def run_xraymesh_cmd(args):
+def run_xraymesh_cmd(args, timeout=45):
     """Execute an xraymesh.sh command with arguments and return (success, message)."""
     script = get_xraymesh_script()
+    if not os.path.isfile(script):
+        return False, (
+            f"XRayMesh CLI script not found at {script}. "
+            "Please run: bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh)"
+        )
     cmd = ["bash", script] + args
     try:
-        r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15)
+        r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout)
         output = (r.stdout + "\n" + r.stderr).strip()
         clean_out = re.sub(r'\x1b\[[0-9;]*[mGKF]', '', output).strip()
         return r.returncode == 0, clean_out
+    except subprocess.TimeoutExpired:
+        return False, f"Command timed out after {timeout}s."
     except Exception as e:
         return False, str(e)
 
@@ -832,6 +881,9 @@ def run_server():
         os.makedirs(os.path.dirname(WEB_TOKEN_FILE), exist_ok=True)
     except Exception:
         pass
+
+    # Prefetch and verify xraymesh script in background
+    threading.Thread(target=ensure_xraymesh_script, daemon=True).start()
 
     # Threading server to handle multiple simultaneous requests (e.g. live status + ping)
     class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):

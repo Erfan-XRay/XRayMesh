@@ -12,11 +12,7 @@ Restart=always
 RestartSec=3
 TimeoutStopSec=5
 KillMode=mixed
-NoNewPrivileges=true
-ProtectHome=true
-ProtectSystem=strict
-PrivateTmp=true
-ReadWritePaths=/etc/xraymesh /opt/xraymesh
+ProtectHome=read-only
 SyslogIdentifier=xraymesh-web
 
 [Install]
