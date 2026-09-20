@@ -57,10 +57,22 @@ export interface GostTunnel {
   PROTOCOL?: string;
 }
 
+export interface RealmTunnel {
+  TUNNEL_NAME: string;
+  TARGET_IP: string;
+  PORT_SPEC: string;
+  PROTOCOL?: string;
+}
+
 export interface TunnelsData {
   haproxy: HaproxyTunnel[];
   iptables: IptablesTunnel[];
   gost: GostTunnel[];
+  realm: RealmTunnel[];
+  haproxy_service?: string;
+  iptables_service?: string;
+  gost_service?: string;
+  realm_service?: string;
 }
 
 export interface SpeedtestInterval {

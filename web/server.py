@@ -37,6 +37,7 @@ WEB_TOKEN_FILE = os.environ.get("WEB_TOKEN_FILE", "/etc/xraymesh/web-tokens.json
 HAPROXY_DIR = os.environ.get("HAPROXY_DIR", "/etc/xraymesh/haproxy-tunnels")
 IPTABLES_DIR = os.environ.get("IPTABLES_DIR", "/etc/xraymesh/iptables-tunnels")
 GOST_TUNNEL_DIR = os.environ.get("GOST_TUNNEL_DIR", "/etc/xraymesh/gost-tunnels")
+REALM_TUNNEL_DIR = os.environ.get("REALM_TUNNEL_DIR", "/etc/xraymesh/realm-tunnels")
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
 PORT = int(os.environ.get("WEB_PORT", "11080"))
@@ -347,8 +348,8 @@ def get_easytier_routes():
 
 
 def get_tunnels():
-    """Read HAProxy, iptables, and GOST configured tunnels."""
-    tunnels = {"haproxy": [], "iptables": [], "gost": []}
+    """Read HAProxy, iptables, GOST, and Realm configured tunnels."""
+    tunnels = {"haproxy": [], "iptables": [], "gost": [], "realm": []}
 
     # HAProxy tunnels
     if os.path.isdir(HAPROXY_DIR):
@@ -374,6 +375,14 @@ def get_tunnels():
                 if data:
                     tunnels["gost"].append(data)
 
+    # Realm tunnels
+    if os.path.isdir(REALM_TUNNEL_DIR):
+        for fname in os.listdir(REALM_TUNNEL_DIR):
+            if fname.endswith(".env"):
+                data = load_env_file(os.path.join(REALM_TUNNEL_DIR, fname))
+                if data:
+                    tunnels["realm"].append(data)
+
     # Check systemd status
     def check_service(name):
         try:
@@ -385,6 +394,7 @@ def get_tunnels():
     tunnels["haproxy_service"] = check_service("xraymesh-haproxy.service")
     tunnels["iptables_service"] = check_service("xraymesh-iptables.service")
     tunnels["gost_service"] = check_service("xraymesh-gost.service")
+    tunnels["realm_service"] = check_service("xraymesh-realm.service")
     tunnels["iperf_service"] = check_service("xraymesh-iperf.service")
 
     return tunnels
@@ -1105,6 +1115,53 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": msg or "Failed to delete GOST tunnel."}, status=400)
             return
 
+        elif path == "/api/tunnels/realm/create":
+            name = data.get("name", "").strip()
+            target = data.get("target", "").strip()
+            ports = data.get("ports", "").strip()
+            protocol = data.get("protocol", "both").strip().lower()
+
+            if not name or not target or not ports:
+                self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
+                return
+
+            ok, msg = run_xraymesh_cmd(["realm-create", name, target, ports, protocol])
+            if ok:
+                self.send_json({"ok": True, "message": msg or "Realm tunnel created successfully."})
+            else:
+                self.send_json({"ok": False, "error": msg or "Failed to create Realm tunnel."}, status=400)
+            return
+
+        elif path == "/api/tunnels/realm/edit":
+            name = data.get("name", "").strip()
+            target = data.get("target", "").strip()
+            ports = data.get("ports", "").strip()
+            protocol = data.get("protocol", "both").strip().lower()
+
+            if not name or not target or not ports:
+                self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
+                return
+
+            ok, msg = run_xraymesh_cmd(["realm-edit", name, target, ports, protocol])
+            if ok:
+                self.send_json({"ok": True, "message": msg or "Realm tunnel updated successfully."})
+            else:
+                self.send_json({"ok": False, "error": msg or "Failed to update Realm tunnel."}, status=400)
+            return
+
+        elif path == "/api/tunnels/realm/delete":
+            name = data.get("name", "").strip()
+            if not name:
+                self.send_json({"ok": False, "error": "Missing tunnel name"}, status=400)
+                return
+
+            ok, msg = run_xraymesh_cmd(["realm-delete", name])
+            if ok:
+                self.send_json({"ok": True, "message": msg or "Realm tunnel deleted successfully."})
+            else:
+                self.send_json({"ok": False, "error": msg or "Failed to delete Realm tunnel."}, status=400)
+            return
+
         elif path == "/api/node/config":
             net_name = data.get("network_name", "").strip()
             secret = data.get("network_secret", "").strip()
@@ -1248,6 +1305,14 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                     "peer": endpoint
                 }
             })
+            return
+
+        elif path == "/api/node/delete":
+            ok, msg = run_xraymesh_cmd(["delete-node"])
+            if ok:
+                self.send_json({"ok": True, "message": "Mesh node configuration deleted successfully."})
+            else:
+                self.send_json({"ok": False, "error": msg or "Failed to delete node configuration."}, status=400)
             return
 
         self.send_error(404, "Endpoint not found")

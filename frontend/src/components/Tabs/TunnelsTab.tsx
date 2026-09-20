@@ -1,23 +1,27 @@
 import React, { useState } from 'react';
-import { TunnelsData, HaproxyTunnel, IptablesTunnel, GostTunnel } from '../../types';
+import { TunnelsData, HaproxyTunnel, IptablesTunnel, GostTunnel, RealmTunnel } from '../../types';
 import { Network, Plus, RefreshCw, Trash2, Edit3, Cpu, Zap } from 'lucide-react';
 
 interface TunnelsTabProps {
   tunnels: TunnelsData;
   onRefresh: () => void;
+  onOpenCreateRealm: () => void;
+  onOpenEditRealm: (t: RealmTunnel) => void;
   onOpenCreateHaproxy: () => void;
   onOpenEditHaproxy: (t: HaproxyTunnel) => void;
   onOpenCreateIptables: () => void;
   onOpenEditIptables: (t: IptablesTunnel) => void;
   onOpenCreateGost: () => void;
   onOpenEditGost: (t: GostTunnel) => void;
-  onDeleteTunnel: (type: 'haproxy' | 'iptables' | 'gost', name: string) => void;
+  onDeleteTunnel: (type: 'haproxy' | 'iptables' | 'gost' | 'realm', name: string) => void;
   t: (key: any) => string;
 }
 
 export const TunnelsTab: React.FC<TunnelsTabProps> = ({
   tunnels,
   onRefresh,
+  onOpenCreateRealm,
+  onOpenEditRealm,
   onOpenCreateHaproxy,
   onOpenEditHaproxy,
   onOpenCreateIptables,
@@ -27,12 +31,13 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
   onDeleteTunnel,
   t,
 }) => {
-  const [filter, setFilter] = useState<'all' | 'haproxy' | 'iptables' | 'gost'>('all');
+  const [filter, setFilter] = useState<'all' | 'realm' | 'haproxy' | 'iptables' | 'gost'>('all');
 
-  const haproxyCount = tunnels.haproxy.length;
-  const iptablesCount = tunnels.iptables.length;
-  const gostCount = tunnels.gost.length;
-  const totalCount = haproxyCount + iptablesCount + gostCount;
+  const realmCount = (tunnels.realm || []).length;
+  const haproxyCount = (tunnels.haproxy || []).length;
+  const iptablesCount = (tunnels.iptables || []).length;
+  const gostCount = (tunnels.gost || []).length;
+  const totalCount = realmCount + haproxyCount + iptablesCount + gostCount;
 
   return (
     <div className="space-y-6">
@@ -48,6 +53,16 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
             }`}
           >
             {t('tunnels_subtab_all')} ({totalCount})
+          </button>
+          <button
+            onClick={() => setFilter('realm')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              filter === 'realm'
+                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold'
+                : 'text-text-muted hover:text-text-main hover:bg-white/5'
+            }`}
+          >
+            {t('tunnels_subtab_realm')} ({realmCount})
           </button>
           <button
             onClick={() => setFilter('haproxy')}
@@ -73,7 +88,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
             onClick={() => setFilter('gost')}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
               filter === 'gost'
-                ? 'bg-primary/20 text-primary border border-primary/30 font-semibold'
+                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 font-semibold'
                 : 'text-text-muted hover:text-text-main hover:bg-white/5'
             }`}
           >
@@ -90,7 +105,95 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
         </button>
       </div>
 
-      {/* 1. HAProxy Section */}
+      {/* 1. Realm Section (Rust) */}
+      {(filter === 'all' || filter === 'realm') && (
+        <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-sm font-bold text-text-main flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-emerald-400" />
+                {t('tunnels_realm_title')}
+              </h3>
+              <p className="text-xs text-text-muted mt-0.5">{t('tunnels_realm_desc')}</p>
+            </div>
+            <button
+              onClick={onOpenCreateRealm}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/30 text-xs font-semibold transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              {t('tunnels_btn_new_realm')}
+            </button>
+          </div>
+
+          {(tunnels.realm || []).length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-8 text-center rounded-xl bg-white/[0.02] border border-dashed border-white/10">
+              <p className="text-xs font-semibold text-text-main mb-1">{t('tunnels_empty_realm')}</p>
+              <p className="text-xs text-text-muted max-w-sm mb-3">{t('tunnels_empty_realm_desc')}</p>
+              <button
+                onClick={onOpenCreateRealm}
+                className="px-3.5 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 text-xs font-medium border border-emerald-500/30 transition-colors"
+              >
+                {t('tunnels_btn_new_realm')}
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {(tunnels.realm || []).map((tItem) => {
+                const proto = (tItem.PROTOCOL || 'both').toUpperCase();
+                return (
+                  <div
+                    key={tItem.TUNNEL_NAME}
+                    className="p-4 rounded-xl bg-slate-900/50 border border-white/10 hover:border-card-border-hover transition-all"
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div>
+                        <div className="text-sm font-bold font-mono text-emerald-400 truncate">
+                          {tItem.TUNNEL_NAME}
+                        </div>
+                        <div className="text-xs text-text-muted mt-0.5 font-mono">
+                          {t('tunnels_col_destination')}: {tItem.TARGET_IP || '--'}
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                        {proto} Relay
+                      </span>
+                    </div>
+
+                    <div className="p-2 rounded bg-black/20 text-xs mb-3 space-y-1">
+                      <div>
+                        <span className="text-text-muted">{t('tunnels_col_ports')}: </span>
+                        <span className="font-mono text-text-main font-medium">{tItem.PORT_SPEC}</span>
+                      </div>
+                      <div className="text-[11px] text-text-subtle">
+                        {t('tunnels_col_protocol')}: {proto}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => onOpenEditRealm(tItem)}
+                        className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-white/5 hover:bg-white/10 text-xs text-text-main border border-white/10 transition-colors"
+                      >
+                        <Edit3 className="w-3 h-3 text-text-muted" />
+                        {t('btn_edit')}
+                      </button>
+                      <button
+                        onClick={() => onDeleteTunnel('realm', tItem.TUNNEL_NAME)}
+                        className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-rose-500/10 hover:bg-rose-500/20 text-xs text-rose-400 border border-rose-500/25 transition-colors"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        {t('btn_delete')}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 2. HAProxy Section */}
       {(filter === 'all' || filter === 'haproxy') && (
         <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">

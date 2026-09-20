@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Peer, HaproxyTunnel, IptablesTunnel, GostTunnel } from '../../types';
+import { Peer, HaproxyTunnel, IptablesTunnel, GostTunnel, RealmTunnel } from '../../types';
 import { X, Loader2 } from 'lucide-react';
 
-export type TunnelModalType = 'haproxy' | 'iptables' | 'gost';
+export type TunnelModalType = 'haproxy' | 'iptables' | 'gost' | 'realm';
 
 interface TunnelModalProps {
   isOpen: boolean;
   type: TunnelModalType;
   isEdit: boolean;
-  initialData?: HaproxyTunnel | IptablesTunnel | GostTunnel | null;
+  initialData?: HaproxyTunnel | IptablesTunnel | GostTunnel | RealmTunnel | null;
   peers: Peer[];
   interfaces: string[];
   onClose: () => void;
@@ -49,12 +49,15 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
       } else if (type === 'gost') {
         const gst = initialData as GostTunnel;
         setProtocol(gst.PROTOCOL || 'both');
+      } else if (type === 'realm') {
+        const rlm = initialData as RealmTunnel;
+        setProtocol(rlm.PROTOCOL || 'both');
       }
     } else {
       setName('');
       setTarget('');
       setPorts('');
-      setProtocol(type === 'gost' ? 'both' : 'udp');
+      setProtocol(type === 'gost' || type === 'realm' ? 'both' : 'udp');
       setIface('any');
       setSourceCidr('0.0.0.0/0');
     }
@@ -116,6 +119,14 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
       { label: '80,443 (Multi)', val: '80,443' },
       { label: '53 (DNS)', val: '53' },
     ];
+  } else if (type === 'realm') {
+    title = isEdit ? 'Edit Realm Relay Tunnel (Rust)' : 'Create Realm Relay Tunnel (Rust)';
+    presets = [
+      { label: '80,443 (Web Dual)', val: '80,443' },
+      { label: '443 (HTTPS/TLS)', val: '443' },
+      { label: '8000-8010 (Range)', val: '8000-8010' },
+      { label: '2222 (SSH)', val: '2222' },
+    ];
   } else {
     title = isEdit ? 'Edit GOST TCP/UDP Tunnel' : 'Create GOST TCP/UDP Tunnel';
     presets = [
@@ -148,34 +159,50 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={isEdit}
-              placeholder="e.g. web_forward"
+              placeholder="e.g. web-forward"
               className="w-full px-3.5 py-2 bg-slate-950 border border-white/15 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary disabled:opacity-50"
               required
             />
           </div>
 
-          {/* Destination Node select */}
+          {/* Destination Node Select / Manual IP */}
           <div>
             <label className="block font-medium text-text-muted mb-1.5">{t('modal_tunnel_dest')}</label>
-            <select
-              onChange={(e) => handleTargetSelect(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-950 border border-white/15 rounded-xl font-mono text-text-main focus:outline-none focus:border-primary mb-2"
-            >
-              <option value="">{t('modal_tunnel_dest_select')}</option>
-              {peers.map((p) => (
-                <option key={p.ipv4} value={p.ipv4}>
-                  {p.ipv4} ({p.hostname || 'Peer'})
-                </option>
-              ))}
-            </select>
-            <input
-              type="text"
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-              placeholder="10.144.144.2"
-              className="w-full px-3.5 py-2 bg-slate-950 border border-white/15 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
-              required
-            />
+            {peers.length > 0 ? (
+              <div className="space-y-2">
+                <select
+                  onChange={(e) => handleTargetSelect(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-slate-950 border border-white/15 rounded-xl font-mono text-text-main focus:outline-none focus:border-primary"
+                  defaultValue=""
+                >
+                  <option value="" disabled>
+                    {t('modal_tunnel_dest_select')}
+                  </option>
+                  {peers.map((p) => (
+                    <option key={p.ipv4} value={p.ipv4}>
+                      {p.hostname || p.ipv4} ({p.ipv4})
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={target}
+                  onChange={(e) => setTarget(e.target.value)}
+                  placeholder="Or enter target 10.x.x.x IP manually"
+                  className="w-full px-3.5 py-2 bg-slate-950 border border-white/15 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                  required
+                />
+              </div>
+            ) : (
+              <input
+                type="text"
+                value={target}
+                onChange={(e) => setTarget(e.target.value)}
+                placeholder="Target Virtual IP (10.x.x.x)"
+                className="w-full px-3.5 py-2 bg-slate-950 border border-white/15 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                required
+              />
+            )}
           </div>
 
           {/* Protocol selector for iptables / GOST */}
@@ -201,7 +228,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
             </div>
           )}
 
-          {type === 'gost' && (
+          {(type === 'gost' || type === 'realm') && (
             <div>
               <label className="block font-medium text-text-muted mb-1.5">{t('modal_tunnel_proto')}</label>
               <div className="grid grid-cols-3 gap-2">
@@ -216,7 +243,9 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
                     onClick={() => setProtocol(item.id)}
                     className={`py-1.5 rounded-lg border text-xs font-mono transition-all ${
                       protocol === item.id
-                        ? 'bg-amber-500/20 border-amber-500 text-amber-400 font-bold'
+                        ? type === 'realm'
+                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-bold'
+                          : 'bg-amber-500/20 border-amber-500 text-amber-400 font-bold'
                         : 'bg-white/5 border-white/10 text-text-muted hover:text-text-main'
                     }`}
                   >

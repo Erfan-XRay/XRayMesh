@@ -193,6 +193,46 @@ export async function deleteGostTunnel(name: string): Promise<string> {
   return d.message;
 }
 
+export async function saveRealmTunnel(
+  isEdit: boolean,
+  name: string,
+  target: string,
+  ports: string,
+  protocol: string
+): Promise<string> {
+  const endpoint = isEdit ? '/api/tunnels/realm/edit' : '/api/tunnels/realm/create';
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, target, ports, protocol }),
+  });
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to save Realm tunnel');
+  return d.message;
+}
+
+export async function deleteRealmTunnel(name: string): Promise<string> {
+  const res = await fetch('/api/tunnels/realm/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to delete Realm tunnel');
+  return d.message;
+}
+
+export async function deleteNodeConfig(): Promise<string> {
+  const res = await fetch('/api/node/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to delete node');
+  return d.message;
+}
+
 export async function fetchNodeConfig(): Promise<NodeConfig> {
   const res = await fetch('/api/node/config');
   const d = await res.json();

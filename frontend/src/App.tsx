@@ -9,6 +9,7 @@ import {
   HaproxyTunnel,
   IptablesTunnel,
   GostTunnel,
+  RealmTunnel,
   TabId,
 } from './types';
 import { useTheme } from './theme/useTheme';
@@ -53,7 +54,7 @@ export default function App() {
   // Dashboard data
   const [status, setStatus] = useState<StatusResponse>(EMPTY_STATUS);
   const [peers, setPeers] = useState<Peer[]>([]);
-  const [tunnels, setTunnels] = useState<TunnelsData>({ haproxy: [], iptables: [], gost: [] });
+  const [tunnels, setTunnels] = useState<TunnelsData>({ haproxy: [], iptables: [], gost: [], realm: [] });
   const [interfaces, setInterfaces] = useState<string[]>(['any']);
 
   // Active tab
@@ -74,13 +75,13 @@ export default function App() {
   const [tunnelModalType, setTunnelModalType] = useState<TunnelModalType>('haproxy');
   const [tunnelModalEdit, setTunnelModalEdit] = useState(false);
   const [tunnelModalData, setTunnelModalData] = useState<
-    HaproxyTunnel | IptablesTunnel | GostTunnel | null
+    HaproxyTunnel | IptablesTunnel | GostTunnel | RealmTunnel | null
   >(null);
 
   // Delete confirm state
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{
-    type: 'haproxy' | 'iptables' | 'gost';
+    type: 'haproxy' | 'iptables' | 'gost' | 'realm';
     name: string;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -278,7 +279,10 @@ export default function App() {
   }, []);
 
   const openEditTunnel = useCallback(
-    (type: TunnelModalType, data: HaproxyTunnel | IptablesTunnel | GostTunnel) => {
+    (
+      type: TunnelModalType,
+      data: HaproxyTunnel | IptablesTunnel | GostTunnel | RealmTunnel
+    ) => {
       setTunnelModalType(type);
       setTunnelModalEdit(true);
       setTunnelModalData(data);
@@ -316,6 +320,14 @@ export default function App() {
             formData.ports,
             formData.protocol || 'tcp'
           );
+        } else if (tunnelModalType === 'realm') {
+          msg = await api.saveRealmTunnel(
+            tunnelModalEdit,
+            formData.name,
+            formData.target,
+            formData.ports,
+            formData.protocol || 'tcp,udp'
+          );
         }
         addToast(msg || '✓ Saved', 'success');
         setTunnelModalOpen(false);
@@ -331,7 +343,7 @@ export default function App() {
   );
 
   const handleDeleteTunnelRequest = useCallback(
-    (type: 'haproxy' | 'iptables' | 'gost', name: string) => {
+    (type: 'haproxy' | 'iptables' | 'gost' | 'realm', name: string) => {
       setDeleteTarget({ type, name });
       setDeleteModalOpen(true);
     },
@@ -347,8 +359,10 @@ export default function App() {
         msg = await api.deleteHaproxyTunnel(deleteTarget.name);
       } else if (deleteTarget.type === 'iptables') {
         msg = await api.deleteIptablesTunnel(deleteTarget.name);
-      } else {
+      } else if (deleteTarget.type === 'gost') {
         msg = await api.deleteGostTunnel(deleteTarget.name);
+      } else if (deleteTarget.type === 'realm') {
+        msg = await api.deleteRealmTunnel(deleteTarget.name);
       }
       addToast(msg || '✓ Deleted', 'success');
       setDeleteModalOpen(false);
@@ -512,6 +526,8 @@ export default function App() {
               onOpenEditIptables={(t) => openEditTunnel('iptables', t)}
               onOpenCreateGost={() => openCreateTunnel('gost')}
               onOpenEditGost={(t) => openEditTunnel('gost', t)}
+              onOpenCreateRealm={() => openCreateTunnel('realm')}
+              onOpenEditRealm={(t) => openEditTunnel('realm', t)}
               onDeleteTunnel={handleDeleteTunnelRequest}
               t={t}
             />

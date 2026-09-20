@@ -24,6 +24,11 @@ readonly GOST_SERVICE_FILE="/etc/systemd/system/xraymesh-gost.service"
 readonly GOST_CONFIG_FILE="${GOST_CONFIG_FILE:-/etc/xraymesh/gost.json}"
 readonly GOST_TUNNEL_DIR="${GOST_TUNNEL_DIR:-/etc/xraymesh/gost-tunnels}"
 readonly FALLBACK_GOST_VERSION="v3.3.0"
+readonly REALM_BIN="${BIN_DIR}/realm"
+readonly REALM_SERVICE_FILE="/etc/systemd/system/xraymesh-realm.service"
+readonly REALM_CONFIG_FILE="${REALM_CONFIG_FILE:-/etc/xraymesh/realm.json}"
+readonly REALM_TUNNEL_DIR="${REALM_TUNNEL_DIR:-/etc/xraymesh/realm-tunnels}"
+readonly FALLBACK_REALM_VERSION="v2.6.2"
 readonly WEB_DIR="${INSTALL_DIR}/web"
 readonly WEB_CONFIG_FILE="/etc/xraymesh/web.env"
 readonly WEB_SERVICE_FILE="/etc/systemd/system/xraymesh-web.service"
@@ -579,6 +584,26 @@ setup_node() {
     info "Re-enabling the existing GOST TCP/UDP tunnels."
     apply_gost_config || warn "The mesh is online, but GOST tunnels need attention."
   fi
+  if compgen -G "${REALM_TUNNEL_DIR}/*.env" >/dev/null; then
+    info "Re-enabling the existing Realm TCP/UDP tunnels."
+    apply_realm_config || warn "The mesh is online, but Realm tunnels need attention."
+  fi
+}
+
+delete_mesh_noninteractive() {
+  require_root
+  systemctl disable --now xraymesh.service 2>/dev/null || true
+  systemctl disable --now xraymesh-haproxy.service 2>/dev/null || true
+  systemctl disable --now xraymesh-iptables.service 2>/dev/null || true
+  systemctl disable --now xraymesh-gost.service 2>/dev/null || true
+  systemctl disable --now xraymesh-realm.service 2>/dev/null || true
+  if [[ -x "$IPTABLES_APPLY_SCRIPT" ]]; then
+    "$IPTABLES_APPLY_SCRIPT" remove >/dev/null 2>&1 || true
+  fi
+  rm -f "$SERVICE_FILE" "$CONFIG_FILE" "${INSTALL_DIR}/xraymesh-runner"
+  systemctl daemon-reload
+  systemctl reset-failed xraymesh.service 2>/dev/null || true
+  ok "The mesh node and its configuration have been deleted."
 }
 
 delete_mesh() {
@@ -599,23 +624,16 @@ delete_mesh() {
     return
   fi
 
-  systemctl disable --now xraymesh.service 2>/dev/null || true
-  systemctl disable --now xraymesh-haproxy.service 2>/dev/null || true
-  systemctl disable --now xraymesh-iptables.service 2>/dev/null || true
-  systemctl disable --now xraymesh-gost.service 2>/dev/null || true
-  if [[ -x "$IPTABLES_APPLY_SCRIPT" ]]; then
-    "$IPTABLES_APPLY_SCRIPT" remove >/dev/null 2>&1 || true
-  fi
   compgen -G "${HAPROXY_TUNNEL_DIR}/*.env" >/dev/null &&
     info "HAProxy tunnels were disabled and preserved for the next mesh configuration."
   compgen -G "${IPTABLES_TUNNEL_DIR}/*.env" >/dev/null &&
     info "iptables tunnels were disabled and preserved for the next mesh configuration."
   compgen -G "${GOST_TUNNEL_DIR}/*.env" >/dev/null &&
     info "GOST tunnels were disabled and preserved for the next mesh configuration."
-  rm -f "$SERVICE_FILE" "$CONFIG_FILE" "${INSTALL_DIR}/xraymesh-runner"
-  systemctl daemon-reload
-  systemctl reset-failed xraymesh.service 2>/dev/null || true
-  ok "The mesh node and its configuration have been deleted."
+  compgen -G "${REALM_TUNNEL_DIR}/*.env" >/dev/null &&
+    info "Realm tunnels were disabled and preserved for the next mesh configuration."
+
+  delete_mesh_noninteractive
   info "Select option 1 whenever you want to create a new mesh node."
   pause
 }
@@ -2442,6 +2460,450 @@ edit_gost_tunnel_noninteractive() {
   fi
 }
 
+# ==============================================================================
+# REALM RELAY TUNNELS (RUST)
+# ==============================================================================
+
+install_realm_runtime() {
+  [[ -x "$REALM_BIN" ]] && return 0
+
+  header
+  info "Installing Realm high-performance relay runtime..."
+  mkdir -p "$BIN_DIR" "$REALM_TUNNEL_DIR"
+  local arch target_arch version="$FALLBACK_REALM_VERSION"
+  arch="$(uname -m)"
+  case "$arch" in
+    x86_64|amd64) target_arch="x86_64-unknown-linux-gnu" ;;
+    aarch64|arm64) target_arch="aarch64-unknown-linux-gnu" ;;
+    armv7*|armv8l|armhf) target_arch="armv7-unknown-linux-musleabihf" ;;
+    arm*) target_arch="arm-unknown-linux-musleabi" ;;
+    i386|i686) target_arch="i686-unknown-linux-musl" ;;
+    *)
+      fail "Unsupported CPU architecture for Realm: $arch"
+      return 1
+      ;;
+  esac
+
+  local tmp download_url
+  tmp="$(mktemp -d)"
+  download_url="https://github.com/zhboner/realm/releases/download/${version}/realm-${target_arch}.tar.gz"
+
+  info "Downloading Realm ${version} (${target_arch})..."
+  if ! curl -fsSL --connect-timeout 10 --max-time 60 "$download_url" -o "${tmp}/realm.tar.gz"; then
+    fail "Failed to download Realm from ${download_url}."
+    rm -rf -- "$tmp"
+    return 1
+  fi
+
+  tar -xzf "${tmp}/realm.tar.gz" -C "$tmp"
+  local bin
+  bin="$(find "$tmp" -type f -name realm | head -n1)"
+  if [[ -z "$bin" ]]; then
+    fail "Realm binary not found in archive."
+    rm -rf -- "$tmp"
+    return 1
+  fi
+
+  install -m 0755 "$bin" "$REALM_BIN"
+  printf '%s\n' "$version" > "${INSTALL_DIR}/realm.version"
+  write_realm_service
+  rm -rf -- "$tmp"
+  ok "Realm ${version} installed successfully."
+}
+
+write_realm_service() {
+  cat > "$REALM_SERVICE_FILE" <<EOF_REALM_SVC
+[Unit]
+Description=XRayMesh Realm Tunnel Daemon (Rust)
+Documentation=https://github.com/zhboner/realm
+Wants=network-online.target xraymesh.service
+After=network-online.target xraymesh.service
+
+[Service]
+Type=simple
+ExecStart=${REALM_BIN} -c ${REALM_CONFIG_FILE}
+Restart=always
+RestartSec=3
+TimeoutStopSec=5
+KillMode=mixed
+LimitNOFILE=1048576
+SyslogIdentifier=xraymesh-realm
+
+[Install]
+WantedBy=multi-user.target
+EOF_REALM_SVC
+  systemctl daemon-reload
+}
+
+generate_realm_config() {
+  if ! compgen -G "${REALM_TUNNEL_DIR}/*.env" >/dev/null; then
+    systemctl disable --now xraymesh-realm.service 2>/dev/null || true
+    rm -f "$REALM_CONFIG_FILE"
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$REALM_CONFIG_FILE")"
+  local tmp first_ep=1 definition port
+  tmp="$(mktemp)"
+
+  {
+    printf '{\n'
+    printf '  "log": {\n    "level": "warn",\n    "output": "/var/log/xraymesh-realm.log"\n  },\n'
+    printf '  "endpoints": [\n'
+    for definition in "${REALM_TUNNEL_DIR}"/*.env; do
+      [[ -f "$definition" ]] || continue
+      unset TUNNEL_NAME TARGET_IP PORT_SPEC PROTOCOL
+      # shellcheck disable=SC1090
+      source "$definition"
+      local target="${TARGET_IP:-}"
+      local port_spec="${PORT_SPEC:-}"
+      local protocol="${PROTOCOL:-both}"
+      protocol="${protocol,,}"
+      local net_val="tcp,udp"
+      if [[ "$protocol" == "tcp" ]]; then
+        net_val="tcp"
+      elif [[ "$protocol" == "udp" ]]; then
+        net_val="udp"
+      else
+        net_val="tcp,udp"
+      fi
+
+      [[ -n "$target" && -n "$port_spec" ]] || continue
+
+      while IFS= read -r port; do
+        [[ -n "$port" ]] || continue
+        if (( first_ep )); then
+          first_ep=0
+        else
+          printf ',\n'
+        fi
+        cat <<EOF_EP
+    {
+      "listen": "0.0.0.0:${port}",
+      "remote": "${target}:${port}",
+      "network": "${net_val}"
+    }
+EOF_EP
+      done < <(expand_port_spec "$port_spec")
+    done
+    printf '\n  ]\n}\n'
+  } > "$tmp"
+
+  if [[ ! -s "$tmp" ]]; then
+    rm -f "$tmp"
+    fail "Failed to generate Realm configuration."
+    return 1
+  fi
+
+  install -m 0600 "$tmp" "$REALM_CONFIG_FILE"
+  rm -f "$tmp"
+  return 0
+}
+
+apply_realm_config() {
+  if ! compgen -G "${REALM_TUNNEL_DIR}/*.env" >/dev/null; then
+    systemctl disable --now xraymesh-realm.service 2>/dev/null || true
+    rm -f "$REALM_CONFIG_FILE"
+    return 0
+  fi
+
+  generate_realm_config || return 1
+  write_realm_service
+  systemctl enable --now xraymesh-realm.service >/dev/null 2>&1 || true
+  systemctl restart xraymesh-realm.service
+  if systemctl is-active --quiet xraymesh-realm.service; then
+    return 0
+  else
+    fail "Realm service failed to start. Showing recent logs:"
+    journalctl -u xraymesh-realm.service -n 20 --no-pager
+    return 1
+  fi
+}
+
+validate_realm_ports() {
+  local tunnel_name="$1" port_spec="$2" protocol="${3:-both}"
+  local definition port other_port
+  local -A requested=()
+  while IFS= read -r port; do requested["$port"]=1; done < <(expand_port_spec "$port_spec")
+
+  for definition in "$REALM_TUNNEL_DIR"/*.env; do
+    [[ -f "$definition" ]] || continue
+    unset TUNNEL_NAME TARGET_IP PORT_SPEC PROTOCOL
+    # shellcheck disable=SC1090
+    source "$definition"
+    [[ "$TUNNEL_NAME" == "$tunnel_name" ]] && continue
+    local other_proto="${PROTOCOL:-both}"
+    if [[ "$protocol" == "both" || "$other_proto" == "both" || "$protocol" == "$other_proto" ]]; then
+      while IFS= read -r other_port; do
+        if [[ -n "${requested[$other_port]:-}" ]]; then
+          fail "Port ${other_port} (${protocol^^}) is already assigned to Realm tunnel '${TUNNEL_NAME}' (${other_proto^^})."
+          return 1
+        fi
+      done < <(expand_port_spec "$PORT_SPEC")
+    fi
+  done
+
+  if [[ "$protocol" == "tcp" || "$protocol" == "both" ]]; then
+    for definition in "$HAPROXY_TUNNEL_DIR"/*.env; do
+      [[ -f "$definition" ]] || continue
+      unset TUNNEL_NAME TARGET_IP PORT_SPEC
+      # shellcheck disable=SC1090
+      source "$definition"
+      while IFS= read -r other_port; do
+        if [[ -n "${requested[$other_port]:-}" ]]; then
+          fail "TCP port ${other_port} conflicts with HAProxy tunnel '${TUNNEL_NAME}'."
+          return 1
+        fi
+      done < <(expand_port_spec "$PORT_SPEC")
+    done
+  fi
+
+  return 0
+}
+
+save_realm_tunnel() {
+  local name="$1" target="$2" ports="$3" protocol="${4:-both}"
+  local file="${REALM_TUNNEL_DIR}/${name}.env"
+  mkdir -p "$REALM_TUNNEL_DIR"
+  umask 077
+  {
+    printf 'TUNNEL_NAME="%s"\n' "$name"
+    printf 'TARGET_IP="%s"\n' "$target"
+    printf 'PORT_SPEC="%s"\n' "$ports"
+    printf 'PROTOCOL="%s"\n' "$protocol"
+  } > "$file"
+}
+
+list_realm_tunnels() {
+  local count=0
+  if compgen -G "${REALM_TUNNEL_DIR}/*.env" >/dev/null; then
+    count="$(find "$REALM_TUNNEL_DIR" -type f -name '*.env' | wc -l)"
+  fi
+  local state
+  state="$(systemctl is-active xraymesh-realm.service 2>/dev/null || echo inactive)"
+  printf '  Configured Realm Tunnels: %b%s%b (Service: %s)\n\n' "$CYAN" "$count" "$RESET" "$state"
+  if (( count == 0 )); then
+    info "No Realm tunnels configured yet."
+    return
+  fi
+  printf '  %-20s %-16s %-10s %s\n' "TUNNEL NAME" "TARGET IP" "PROTOCOL" "PORTS"
+  printf '  %-20s %-16s %-10s %s\n' "-----------" "---------" "--------" "-----"
+  local f name target ports proto
+  for f in "${REALM_TUNNEL_DIR}"/*.env; do
+    [[ -f "$f" ]] || continue
+    name="$(basename "$f" .env)"
+    target="$(grep -E '^TARGET_IP=' "$f" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
+    ports="$(grep -E '^PORT_SPEC=' "$f" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
+    proto="$(grep -E '^PROTOCOL=' "$f" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
+    printf '  %-20s %-16s %-10s %s\n' "$name" "$target" "${proto^^:-BOTH}" "$ports"
+  done
+  printf '\n'
+}
+
+create_realm_tunnel() {
+  header
+  section "CREATE REALM TUNNEL (RUST)"
+  info "Realm provides ultra-low latency TCP & UDP forwarding with zero garbage collection overhead."
+  install_realm_runtime || return 1
+
+  local name ports protocol
+  while :; do
+    read -r -p "  Tunnel name (letters, numbers, _ or -): " name
+    validate_tunnel_name "$name" || { warn "Enter a valid name with up to 32 characters."; continue; }
+    [[ ! -f "${REALM_TUNNEL_DIR}/${name}.env" ]] || { warn "A tunnel with this name already exists."; continue; }
+    break
+  done
+
+  select_mesh_target || return 1
+
+  printf '\n  Select Protocol:\n'
+  printf '    %b[1]%b Both TCP + UDP (Recommended)\n' "$GREEN" "$RESET"
+  printf '    %b[2]%b TCP Only\n' "$CYAN" "$RESET"
+  printf '    %b[3]%b UDP Only\n' "$YELLOW" "$RESET"
+  local proto_choice="1"
+  read -r -p "  Enter choice [1-3, default 1]: " proto_choice
+  case "${proto_choice:-1}" in
+    2) protocol="tcp" ;;
+    3) protocol="udp" ;;
+    *) protocol="both" ;;
+  esac
+
+  while :; do
+    read -r -p "  Ports to forward (e.g. 80,443,8000-8010): " ports
+    expand_port_spec "$ports" >/dev/null && validate_realm_ports "$name" "$ports" "$protocol" && break
+    warn "Invalid ports or port conflict detected. Maximum 256 expanded ports."
+  done
+
+  save_realm_tunnel "$name" "$SELECTED_TARGET" "$ports" "$protocol"
+  if apply_realm_config; then
+    ok "Realm tunnel '${name}' forwards ${protocol^^} ports ${ports} to ${SELECTED_TARGET}."
+  else
+    rm -f "${REALM_TUNNEL_DIR}/${name}.env"
+    generate_realm_config
+    return 1
+  fi
+  pause
+}
+
+edit_realm_tunnel() {
+  header
+  section "EDIT REALM TUNNEL (RUST)"
+  list_realm_tunnels
+  local count=0
+  if compgen -G "${REALM_TUNNEL_DIR}/*.env" >/dev/null; then
+    count="$(find "$REALM_TUNNEL_DIR" -type f -name '*.env' | wc -l)"
+  fi
+  (( count > 0 )) || { pause; return; }
+
+  local name file
+  read -r -p "  Enter tunnel name to edit: " name
+  file="${REALM_TUNNEL_DIR}/${name}.env"
+  [[ -f "$file" ]] || { fail "Realm tunnel '${name}' does not exist."; pause; return 1; }
+
+  local old_target old_ports old_proto
+  old_target="$(grep -E '^TARGET_IP=' "$file" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
+  old_ports="$(grep -E '^PORT_SPEC=' "$file" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
+  old_proto="$(grep -E '^PROTOCOL=' "$file" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
+
+  info "Editing tunnel '${name}' (current target: ${old_target}, protocol: ${old_proto^^:-BOTH})."
+  select_mesh_target || return 1
+
+  printf '\n  Select Protocol:\n'
+  printf '    %b[1]%b Both TCP + UDP (Recommended)\n' "$GREEN" "$RESET"
+  printf '    %b[2]%b TCP Only\n' "$CYAN" "$RESET"
+  printf '    %b[3]%b UDP Only\n' "$YELLOW" "$RESET"
+  local proto_choice="" protocol="${old_proto:-both}"
+  read -r -p "  Enter choice [1-3, default ${old_proto:-both}]: " proto_choice
+  case "${proto_choice}" in
+    1) protocol="both" ;;
+    2) protocol="tcp" ;;
+    3) protocol="udp" ;;
+    *) protocol="${old_proto:-both}" ;;
+  esac
+
+  local ports
+  while :; do
+    read -r -p "  Ports [${old_ports}]: " ports
+    ports="${ports:-$old_ports}"
+    expand_port_spec "$ports" >/dev/null && validate_realm_ports "$name" "$ports" "$protocol" && break
+    warn "Invalid ports or conflict detected."
+  done
+
+  save_realm_tunnel "$name" "$SELECTED_TARGET" "$ports" "$protocol"
+  if apply_realm_config; then
+    ok "Realm tunnel '${name}' updated successfully."
+  else
+    fail "Failed to apply updated Realm configuration."
+  fi
+  pause
+}
+
+delete_realm_tunnel() {
+  header
+  section "DELETE REALM TUNNEL (RUST)"
+  list_realm_tunnels
+  local count=0
+  if compgen -G "${REALM_TUNNEL_DIR}/*.env" >/dev/null; then
+    count="$(find "$REALM_TUNNEL_DIR" -type f -name '*.env' | wc -l)"
+  fi
+  (( count > 0 )) || { pause; return; }
+
+  local name file
+  read -r -p "  Enter tunnel name to delete: " name
+  file="${REALM_TUNNEL_DIR}/${name}.env"
+  [[ -f "$file" ]] || { fail "Realm tunnel '${name}' does not exist."; pause; return 1; }
+
+  rm -f "$file"
+  apply_realm_config
+  ok "Realm tunnel '${name}' deleted."
+  pause
+}
+
+realm_tunnel_menu() {
+  while true; do
+    header
+    section "REALM TUNNELS (RUST - TCP / UDP)"
+    list_realm_tunnels
+
+    printf '  %b[1]%b  Create New Realm Tunnel\n' "$GREEN" "$RESET"
+    printf '  %b[2]%b  Edit Existing Realm Tunnel\n' "$CYAN" "$RESET"
+    printf '  %b[3]%b  Delete Realm Tunnel\n' "$RED" "$RESET"
+    printf '  %b[4]%b  Restart Realm Service\n' "$BLUE" "$RESET"
+    printf '  %b[5]%b  View Realm Logs\n' "$YELLOW" "$RESET"
+    printf '  %b[0]%b  Back\n\n' "$GRAY" "$RESET"
+
+    read -r -p "  Select an option [0-5]: " choice
+    case "$choice" in
+      1) run_screen create_realm_tunnel ;;
+      2) run_screen edit_realm_tunnel ;;
+      3) run_screen delete_realm_tunnel ;;
+      4)
+        systemctl restart xraymesh-realm.service 2>/dev/null || true
+        ok "Realm service restarted."
+        pause
+        ;;
+      5) journalctl -u xraymesh-realm.service -f -n 50 ;;
+      0) return ;;
+      *) warn "Invalid option"; sleep 1 ;;
+    esac
+  done
+}
+
+create_realm_tunnel_noninteractive() {
+  require_root
+  install_realm_runtime
+  local name="${1:-}" target="${2:-}" ports="${3:-}" protocol="${4:-both}"
+  protocol="${protocol,,}"
+  validate_tunnel_name "$name" || { fail "Enter a valid tunnel name with up to 32 characters."; return 1; }
+  [[ ! -f "${REALM_TUNNEL_DIR}/${name}.env" ]] || { fail "A tunnel with this name already exists."; return 1; }
+  valid_ip "$target" || { fail "Target must be a valid 10.x.x.x mesh IP."; return 1; }
+  expand_port_spec "$ports" >/dev/null || { fail "Invalid port list or range."; return 1; }
+  validate_realm_ports "$name" "$ports" "$protocol" || return 1
+
+  save_realm_tunnel "$name" "$target" "$ports" "$protocol"
+  if apply_realm_config; then
+    ok "Realm tunnel '${name}' forwards ${protocol^^} ports ${ports} to ${target}."
+  else
+    rm -f "${REALM_TUNNEL_DIR}/${name}.env"
+    generate_realm_config
+    return 1
+  fi
+}
+
+delete_realm_tunnel_noninteractive() {
+  require_root
+  local name="${1:-}" file="${REALM_TUNNEL_DIR}/${1}.env"
+  [[ -f "$file" ]] || { fail "Realm tunnel '${name}' not found."; return 1; }
+  rm -f "$file"
+  apply_realm_config
+  ok "Realm tunnel '${name}' deleted."
+}
+
+edit_realm_tunnel_noninteractive() {
+  require_root
+  install_realm_runtime
+  local name="${1:-}" target="${2:-}" ports="${3:-}" protocol="${4:-both}"
+  protocol="${protocol,,}"
+  validate_tunnel_name "$name" || { fail "Enter a valid tunnel name with up to 32 characters."; return 1; }
+  [[ -f "${REALM_TUNNEL_DIR}/${name}.env" ]] || { fail "Realm tunnel '${name}' not found."; return 1; }
+  valid_ip "$target" || { fail "Target must be a valid 10.x.x.x mesh IP."; return 1; }
+  expand_port_spec "$ports" >/dev/null || { fail "Invalid port list or range."; return 1; }
+  validate_realm_ports "$name" "$ports" "$protocol" || return 1
+
+  local backup
+  backup="$(mktemp)"
+  cp "${REALM_TUNNEL_DIR}/${name}.env" "$backup"
+  save_realm_tunnel "$name" "$target" "$ports" "$protocol"
+  if apply_realm_config; then
+    rm -f "$backup"
+    ok "Realm tunnel '${name}' updated."
+  else
+    mv "$backup" "${REALM_TUNNEL_DIR}/${name}.env"
+    generate_realm_config
+    return 1
+  fi
+}
+
 ensure_xraymesh_cli() {
   local target="${INSTALL_DIR}/xraymesh.sh"
   mkdir -p "$INSTALL_DIR"
@@ -2815,12 +3277,13 @@ uninstall_app() {
   systemctl disable --now xraymesh-haproxy.service 2>/dev/null || true
   systemctl disable --now xraymesh-iptables.service 2>/dev/null || true
   systemctl disable --now xraymesh-gost.service 2>/dev/null || true
+  systemctl disable --now xraymesh-realm.service 2>/dev/null || true
   systemctl disable --now xraymesh-web.service 2>/dev/null || true
   systemctl disable --now xraymesh-iperf.service 2>/dev/null || true
   if [[ -x "$IPTABLES_APPLY_SCRIPT" ]]; then
     "$IPTABLES_APPLY_SCRIPT" remove >/dev/null 2>&1 || true
   fi
-  rm -f "$SERVICE_FILE" "$HAPROXY_SERVICE_FILE" "$IPTABLES_SERVICE_FILE" "$IPTABLES_SYSCTL_FILE" "$GOST_SERVICE_FILE" "$GOST_CONFIG_FILE" "$WEB_SERVICE_FILE" "$IPERF_SERVICE_FILE" /usr/local/bin/xraymesh
+  rm -f "$SERVICE_FILE" "$HAPROXY_SERVICE_FILE" "$IPTABLES_SERVICE_FILE" "$IPTABLES_SYSCTL_FILE" "$GOST_SERVICE_FILE" "$GOST_CONFIG_FILE" "$REALM_SERVICE_FILE" "$REALM_CONFIG_FILE" "$WEB_SERVICE_FILE" "$IPERF_SERVICE_FILE" /usr/local/bin/xraymesh
   rm -rf -- "$INSTALL_DIR" /etc/xraymesh
   systemctl daemon-reload
   ok "XRayMesh has been removed."
@@ -2909,6 +3372,12 @@ self_test() {
     SELF_TEST_LABEL="GOST service is active"
     test_result systemctl is-active --quiet xraymesh-gost.service
   fi
+  if compgen -G "${REALM_TUNNEL_DIR}/*.env" >/dev/null; then
+    SELF_TEST_LABEL="Realm binary is installed"
+    test_result test -x "$REALM_BIN"
+    SELF_TEST_LABEL="Realm service is active"
+    test_result systemctl is-active --quiet xraymesh-realm.service
+  fi
   if [[ -f "$WEB_SERVICE_FILE" ]]; then
     SELF_TEST_LABEL="Web Dashboard service is active"
     test_result systemctl is-active --quiet xraymesh-web.service
@@ -2926,6 +3395,48 @@ self_test() {
   (( failures == 0 ))
 }
 
+tunnels_menu() {
+  while true; do
+    header
+    section "TUNNELS MANAGEMENT"
+    info "Forward local ports across the mesh overlay using high-performance engines."
+
+    local r_count=0 h_count=0 i_count=0 g_count=0
+    compgen -G "${REALM_TUNNEL_DIR}/*.env" >/dev/null && r_count="$(find "$REALM_TUNNEL_DIR" -type f -name '*.env' | wc -l)"
+    compgen -G "${HAPROXY_TUNNEL_DIR}/*.env" >/dev/null && h_count="$(find "$HAPROXY_TUNNEL_DIR" -type f -name '*.env' | wc -l)"
+    compgen -G "${IPTABLES_TUNNEL_DIR}/*.env" >/dev/null && i_count="$(find "$IPTABLES_TUNNEL_DIR" -type f -name '*.env' | wc -l)"
+    compgen -G "${GOST_TUNNEL_DIR}/*.env" >/dev/null && g_count="$(find "$GOST_TUNNEL_DIR" -type f -name '*.env' | wc -l)"
+
+    printf '  %b[1]%b  Realm Tunnels        %b(Rust / Ultra-low RAM & CPU)%b     [%s configured]\n' "$GREEN" "$RESET" "$DIM$GRAY" "$RESET" "$r_count"
+    printf '  %b[2]%b  HAProxy Tunnels      %b(TCP Layer 7 & Load Balancing)%b  [%s configured]\n' "$CYAN" "$RESET" "$DIM$GRAY" "$RESET" "$h_count"
+    printf '  %b[3]%b  iptables Tunnels     %b(Kernel-level NAT & Raw Speed)%b  [%s configured]\n' "$BLUE" "$RESET" "$DIM$GRAY" "$RESET" "$i_count"
+    printf '  %b[4]%b  GOST Tunnels         %b(Multi-Protocol TCP & UDP)%b      [%s configured]\n' "$YELLOW" "$RESET" "$DIM$GRAY" "$RESET" "$g_count"
+    printf '  %b[5]%b  View all configured tunnels\n' "$PURPLE" "$RESET"
+    printf '  %b[0]%b  Back to Main Menu\n\n' "$GRAY" "$RESET"
+
+    read -r -p "  Select tunnel engine [0-5]: " t_choice || break
+    case "$t_choice" in
+      1) run_screen realm_tunnel_menu ;;
+      2) run_screen haproxy_tunnel_menu ;;
+      3) run_screen iptables_tunnel_menu ;;
+      4) run_screen gost_tunnel_menu ;;
+      5) run_screen view_all_tunnels ;;
+      0) return ;;
+      *) warn "Invalid option"; sleep 1 ;;
+    esac
+  done
+}
+
+view_all_tunnels() {
+  header
+  section "ALL CONFIGURED TUNNELS"
+  list_realm_tunnels
+  list_haproxy_tunnels
+  list_iptables_tunnels
+  list_gost_tunnels
+  pause
+}
+
 menu() {
   require_root
   require_linux
@@ -2940,36 +3451,32 @@ menu() {
     section "MAIN MENU"
     printf '  %b[1]%b  Configure or edit node\n' "$CYAN" "$RESET"
     printf '  %b[2]%b  Live status and connected peers\n' "$CYAN" "$RESET"
-    printf '  %b[3]%b  View network routes\n' "$BLUE" "$RESET"
-    printf '  %b[4]%b  View live logs\n' "$BLUE" "$RESET"
-    printf '  %b[5]%b  Control service\n' "$PURPLE" "$RESET"
-    printf '  %b[6]%b  Install or update EasyTier\n' "$PURPLE" "$RESET"
-    printf '  %b[7]%b  Connection diagnostics\n' "$YELLOW" "$RESET"
-    printf '  %b[8]%b  HAProxy TCP tunnels\n' "$PINK" "$RESET"
-    printf '  %b[9]%b  iptables UDP/TCP tunnels\n' "$CYAN" "$RESET"
-    printf '  %b[10]%b GOST TCP/UDP tunnels\n' "$YELLOW" "$RESET"
-    printf '  %b[11]%b Web UI Dashboard & Speedtest\n' "$GREEN" "$RESET"
-    printf '  %b[12]%b Run self-test\n' "$BLUE" "$RESET"
-    printf '  %b[13]%b Delete mesh configuration\n' "$YELLOW" "$RESET"
-    printf '  %b[14]%b Uninstall XRayMesh completely\n' "$RED" "$RESET"
+    printf '  %b[3]%b  Tunnel Management (Realm / HAProxy / iptables / GOST)\n' "$GREEN" "$RESET"
+    printf '  %b[4]%b  Web UI Dashboard & Speedtest\n' "$PURPLE" "$RESET"
+    printf '  %b[5]%b  View network routes\n' "$BLUE" "$RESET"
+    printf '  %b[6]%b  View live logs\n' "$BLUE" "$RESET"
+    printf '  %b[7]%b  Control mesh service\n' "$PURPLE" "$RESET"
+    printf '  %b[8]%b  Install or update EasyTier\n' "$YELLOW" "$RESET"
+    printf '  %b[9]%b  Connection diagnostics\n' "$YELLOW" "$RESET"
+    printf '  %b[10]%b Run self-test\n' "$BLUE" "$RESET"
+    printf '  %b[11]%b Delete mesh configuration\n' "$YELLOW" "$RESET"
+    printf '  %b[12]%b Uninstall XRayMesh completely\n' "$RED" "$RESET"
     printf '  %b[0]%b  Exit\n\n' "$GRAY" "$RESET"
     printf '%b  Tip: Ctrl+C exits here; inside a screen it returns to this menu.%b\n\n' "$DIM$GRAY" "$RESET"
-    read -r -p "  Select an option [0-14]: " choice || { choice=""; continue; }
+    read -r -p "  Select an option [0-12]: " choice || { choice=""; continue; }
     case "$choice" in
       1) IN_MAIN_MENU=0; run_screen setup_node; IN_MAIN_MENU=1 ;;
       2) IN_MAIN_MENU=0; run_screen live_status; IN_MAIN_MENU=1 ;;
-      3) IN_MAIN_MENU=0; run_screen show_routes; IN_MAIN_MENU=1 ;;
-      4) IN_MAIN_MENU=0; run_screen show_logs; IN_MAIN_MENU=1 ;;
-      5) IN_MAIN_MENU=0; run_screen control_service; IN_MAIN_MENU=1 ;;
-      6) IN_MAIN_MENU=0; run_screen update_core; IN_MAIN_MENU=1 ;;
-      7) IN_MAIN_MENU=0; run_screen diagnostics; IN_MAIN_MENU=1 ;;
-      8) IN_MAIN_MENU=0; run_screen haproxy_tunnel_menu; IN_MAIN_MENU=1 ;;
-      9) IN_MAIN_MENU=0; run_screen iptables_tunnel_menu; IN_MAIN_MENU=1 ;;
-      10) IN_MAIN_MENU=0; run_screen gost_tunnel_menu; IN_MAIN_MENU=1 ;;
-      11) IN_MAIN_MENU=0; run_screen web_menu; IN_MAIN_MENU=1 ;;
-      12) IN_MAIN_MENU=0; run_screen self_test; IN_MAIN_MENU=1 ;;
-      13) IN_MAIN_MENU=0; run_screen delete_mesh; IN_MAIN_MENU=1 ;;
-      14)
+      3) IN_MAIN_MENU=0; run_screen tunnels_menu; IN_MAIN_MENU=1 ;;
+      4) IN_MAIN_MENU=0; run_screen web_menu; IN_MAIN_MENU=1 ;;
+      5) IN_MAIN_MENU=0; run_screen show_routes; IN_MAIN_MENU=1 ;;
+      6) IN_MAIN_MENU=0; run_screen show_logs; IN_MAIN_MENU=1 ;;
+      7) IN_MAIN_MENU=0; run_screen control_service; IN_MAIN_MENU=1 ;;
+      8) IN_MAIN_MENU=0; run_screen update_core; IN_MAIN_MENU=1 ;;
+      9) IN_MAIN_MENU=0; run_screen diagnostics; IN_MAIN_MENU=1 ;;
+      10) IN_MAIN_MENU=0; run_screen self_test; IN_MAIN_MENU=1 ;;
+      11) IN_MAIN_MENU=0; run_screen delete_mesh; IN_MAIN_MENU=1 ;;
+      12)
         IN_MAIN_MENU=0
         run_screen uninstall_app
         IN_MAIN_MENU=1
@@ -2993,7 +3500,22 @@ main() {
   routes) "${BIN_DIR}/easytier-cli" route ;;
   logs) journalctl -u xraymesh.service -f -n 100 ;;
   update) require_linux; update_core ;;
-  delete) require_root; require_linux; delete_mesh ;;
+  delete|delete-node|node-delete)
+    require_root; require_linux
+    if [[ "$1" == "delete" && -t 0 ]]; then
+      delete_mesh
+    else
+      delete_mesh_noninteractive
+    fi
+    ;;
+  tunnels) require_root; require_linux; tunnels_menu ;;
+  realm) require_root; require_linux; realm_tunnel_menu ;;
+  realm-create) shift; require_linux; create_realm_tunnel_noninteractive "$@" ;;
+  realm-edit) shift; require_linux; edit_realm_tunnel_noninteractive "$@" ;;
+  realm-delete) shift; require_linux; delete_realm_tunnel_noninteractive "$@" ;;
+  realm-start) require_root; require_linux; systemctl start xraymesh-realm.service ;;
+  realm-stop) require_root; require_linux; systemctl stop xraymesh-realm.service ;;
+  realm-restart) require_root; require_linux; systemctl restart xraymesh-realm.service ;;
   haproxy) require_root; require_linux; haproxy_tunnel_menu ;;
   haproxy-create) shift; require_linux; create_haproxy_tunnel_noninteractive "$@" ;;
   haproxy-edit) shift; require_linux; edit_haproxy_tunnel_noninteractive "$@" ;;
@@ -3036,7 +3558,7 @@ main() {
   start|stop|restart) require_root; systemctl "$1" xraymesh.service ;;
   version|-v|--version) echo "${APP} ${VERSION} - © ${OWNER}" ;;
   *)
-    echo "Usage: $0 [menu|install|status|peers|routes|logs|update|delete|haproxy|iptables|gost|web|token|web-update|write-runner|node-restart|self-test|start|stop|restart|version]"
+    echo "Usage: $0 [menu|install|status|peers|routes|logs|update|delete|delete-node|tunnels|realm|haproxy|iptables|gost|web|token|web-update|write-runner|node-restart|self-test|start|stop|restart|version]"
     exit 2
     ;;
 esac
