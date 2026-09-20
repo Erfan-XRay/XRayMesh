@@ -18,6 +18,10 @@ declare -F generate_web_token >/dev/null
 declare -F set_web_password >/dev/null
 declare -F configure_web_port >/dev/null
 declare -F web_menu >/dev/null
+declare -F create_haproxy_tunnel_noninteractive >/dev/null
+declare -F delete_haproxy_tunnel_noninteractive >/dev/null
+declare -F create_iptables_tunnel_noninteractive >/dev/null
+declare -F delete_iptables_tunnel_noninteractive >/dev/null
 
 # Test static assets exist
 test -f "${ROOT_DIR}/web/server.py"

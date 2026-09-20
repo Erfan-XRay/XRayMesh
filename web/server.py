@@ -320,6 +320,51 @@ def get_tunnels():
     return tunnels
 
 
+def get_xraymesh_script():
+    """Find the xraymesh.sh script path."""
+    candidates = [
+        os.path.join(INSTALL_DIR, "xraymesh.sh"),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "xraymesh.sh"),
+        "/usr/local/bin/xraymesh",
+        "xraymesh"
+    ]
+    for c in candidates:
+        if os.path.isfile(c):
+            return c
+    return candidates[0]
+
+
+def get_network_interfaces():
+    """Retrieve available host network interfaces."""
+    interfaces = ["any"]
+    try:
+        r = subprocess.run(["ip", "-o", "link", "show"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=2)
+        if r.returncode == 0:
+            for line in r.stdout.splitlines():
+                parts = line.split(":", 2)
+                if len(parts) >= 2:
+                    iface = parts[1].strip().split("@")[0]
+                    if iface and iface not in ("lo", "any") and not iface.startswith("easytier") and not iface.startswith("docker"):
+                        if iface not in interfaces:
+                            interfaces.append(iface)
+    except Exception:
+        pass
+    return interfaces
+
+
+def run_xraymesh_cmd(args):
+    """Execute an xraymesh.sh command with arguments and return (success, message)."""
+    script = get_xraymesh_script()
+    cmd = ["bash", script] + args
+    try:
+        r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15)
+        output = (r.stdout + "\n" + r.stderr).strip()
+        clean_out = re.sub(r'\x1b\[[0-9;]*[mGKF]', '', output).strip()
+        return r.returncode == 0, clean_out
+    except Exception as e:
+        return False, str(e)
+
+
 class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
     """Custom HTTP handler with REST API and Single Page Application routing."""
 
@@ -460,6 +505,14 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             self.send_json({
                 "ok": True,
                 "data": tunnels_data
+            })
+            return
+
+        elif path == "/api/interfaces":
+            ifaces = get_network_interfaces()
+            self.send_json({
+                "ok": True,
+                "data": ifaces
             })
             return
 
@@ -662,6 +715,67 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": "iperf3 test timed out. Ensure the target node is running an iperf3 server on port 5201."}, status=504)
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, status=500)
+            return
+
+        elif path == "/api/tunnels/haproxy/create":
+            name = data.get("name", "").strip()
+            target = data.get("target", "").strip()
+            ports = data.get("ports", "").strip()
+
+            if not name or not target or not ports:
+                self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
+                return
+
+            ok, msg = run_xraymesh_cmd(["haproxy-create", name, target, ports])
+            if ok:
+                self.send_json({"ok": True, "message": msg or "HAProxy tunnel created successfully."})
+            else:
+                self.send_json({"ok": False, "error": msg or "Failed to create HAProxy tunnel."}, status=400)
+            return
+
+        elif path == "/api/tunnels/haproxy/delete":
+            name = data.get("name", "").strip()
+            if not name:
+                self.send_json({"ok": False, "error": "Missing tunnel name"}, status=400)
+                return
+
+            ok, msg = run_xraymesh_cmd(["haproxy-delete", name])
+            if ok:
+                self.send_json({"ok": True, "message": msg or "HAProxy tunnel deleted successfully."})
+            else:
+                self.send_json({"ok": False, "error": msg or "Failed to delete HAProxy tunnel."}, status=400)
+            return
+
+        elif path == "/api/tunnels/iptables/create":
+            name = data.get("name", "").strip()
+            target = data.get("target", "").strip()
+            ports = data.get("ports", "").strip()
+            protocol = data.get("protocol", "udp").strip().lower()
+            in_if = data.get("interface", "any").strip()
+            source_cidr = data.get("source_cidr", "0.0.0.0/0").strip()
+
+            if not name or not target or not ports:
+                self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
+                return
+
+            ok, msg = run_xraymesh_cmd(["iptables-create", name, target, ports, protocol, in_if, source_cidr])
+            if ok:
+                self.send_json({"ok": True, "message": msg or "iptables tunnel created successfully."})
+            else:
+                self.send_json({"ok": False, "error": msg or "Failed to create iptables tunnel."}, status=400)
+            return
+
+        elif path == "/api/tunnels/iptables/delete":
+            name = data.get("name", "").strip()
+            if not name:
+                self.send_json({"ok": False, "error": "Missing tunnel name"}, status=400)
+                return
+
+            ok, msg = run_xraymesh_cmd(["iptables-delete", name])
+            if ok:
+                self.send_json({"ok": True, "message": msg or "iptables tunnel deleted successfully."})
+            else:
+                self.send_json({"ok": False, "error": msg or "Failed to delete iptables tunnel."}, status=400)
             return
 
         self.send_error(404, "Endpoint not found")

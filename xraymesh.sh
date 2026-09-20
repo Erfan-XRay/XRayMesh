@@ -1138,6 +1138,41 @@ haproxy_tunnel_menu() {
   done
 }
 
+create_haproxy_tunnel_noninteractive() {
+  require_root
+  install_haproxy_runtime
+  local name="${1:-}" target="${2:-}" ports="${3:-}"
+  validate_tunnel_name "$name" || { fail "Enter a valid tunnel name with up to 32 characters."; return 1; }
+  [[ ! -f "${HAPROXY_TUNNEL_DIR}/${name}.env" ]] || { fail "A tunnel with this name already exists."; return 1; }
+  valid_ip "$target" || { fail "Target must be a valid 10.x.x.x mesh IP."; return 1; }
+  expand_port_spec "$ports" >/dev/null || { fail "Invalid port list or range."; return 1; }
+  validate_haproxy_ports "$name" "$ports" || return 1
+
+  save_haproxy_tunnel "$name" "$target" "$ports"
+  if apply_haproxy_config; then
+    ok "HAProxy tunnel '${name}' forwards TCP ports ${ports} to ${target}."
+  else
+    rm -f "${HAPROXY_TUNNEL_DIR}/${name}.env"
+    generate_haproxy_config
+    return 1
+  fi
+}
+
+delete_haproxy_tunnel_noninteractive() {
+  require_root
+  local name="${1:-}" file="${HAPROXY_TUNNEL_DIR}/${1}.env"
+  [[ -f "$file" ]] || { fail "HAProxy tunnel '${name}' not found."; return 1; }
+  rm -f "$file"
+  if compgen -G "${HAPROXY_TUNNEL_DIR}/*.env" >/dev/null; then
+    apply_haproxy_config
+  else
+    systemctl disable --now xraymesh-haproxy.service 2>/dev/null || true
+    rm -f "$HAPROXY_CONFIG" "$HAPROXY_SERVICE_FILE"
+    systemctl daemon-reload
+  fi
+  ok "HAProxy tunnel '${name}' deleted."
+}
+
 install_iptables_runtime() {
   if command -v iptables >/dev/null 2>&1; then return; fi
   info "Installing iptables..."
@@ -1673,6 +1708,42 @@ iptables_tunnel_menu() {
   done
 }
 
+create_iptables_tunnel_noninteractive() {
+  require_root
+  install_iptables_runtime
+  local name="${1:-}" target="${2:-}" ports="${3:-}" protocol="${4:-udp}" in_if="${5:-any}" source_cidr="${6:-0.0.0.0/0}"
+  validate_tunnel_name "$name" || { fail "Enter a valid tunnel name with up to 32 characters."; return 1; }
+  [[ ! -f "${IPTABLES_TUNNEL_DIR}/${name}.env" ]] || { fail "A tunnel with this name already exists."; return 1; }
+  valid_ip "$target" || { fail "Target must be a valid 10.x.x.x mesh IP."; return 1; }
+  [[ "$protocol" =~ ^(tcp|udp|both)$ ]] || { fail "Protocol must be tcp, udp, or both."; return 1; }
+  validate_iptables_interface "$in_if" || { fail "Interface '${in_if}' does not exist."; return 1; }
+  valid_ipv4_cidr "$source_cidr" || { fail "Invalid source IPv4/CIDR '${source_cidr}'."; return 1; }
+  expand_port_spec "$ports" >/dev/null || { fail "Invalid port specification."; return 1; }
+  validate_iptables_ports "$name" "$protocol" "$ports" "$in_if" || return 1
+
+  save_iptables_tunnel "$name" "$target" "$ports" "$protocol" "$in_if" "$source_cidr"
+  if apply_iptables_config; then
+    ok "iptables tunnel '${name}' forwards ${protocol^^} ports ${ports} to ${target}."
+  else
+    rm -f "${IPTABLES_TUNNEL_DIR}/${name}.env"
+    generate_iptables_apply_script
+    return 1
+  fi
+}
+
+delete_iptables_tunnel_noninteractive() {
+  require_root
+  local name="${1:-}" file="${IPTABLES_TUNNEL_DIR}/${1}.env"
+  [[ -f "$file" ]] || { fail "iptables tunnel '${name}' not found."; return 1; }
+  rm -f "$file"
+  if compgen -G "${IPTABLES_TUNNEL_DIR}/*.env" >/dev/null; then
+    apply_iptables_config
+  else
+    disable_iptables_tunnels
+  fi
+  ok "iptables tunnel '${name}' deleted."
+}
+
 install_web_runtime() {
   install_dependencies
   mkdir -p "${WEB_DIR}/static" /etc/xraymesh
@@ -2143,7 +2214,11 @@ case "${1:-menu}" in
   update) require_linux; update_core ;;
   delete) require_root; require_linux; delete_mesh ;;
   haproxy) require_root; require_linux; haproxy_tunnel_menu ;;
+  haproxy-create) shift; require_linux; create_haproxy_tunnel_noninteractive "$@" ;;
+  haproxy-delete) shift; require_linux; delete_haproxy_tunnel_noninteractive "$@" ;;
   iptables) require_root; require_linux; iptables_tunnel_menu ;;
+  iptables-create) shift; require_linux; create_iptables_tunnel_noninteractive "$@" ;;
+  iptables-delete) shift; require_linux; delete_iptables_tunnel_noninteractive "$@" ;;
   web|dashboard-web) require_root; require_linux; web_menu ;;
   token|web-token) require_root; require_linux; generate_web_token ;;
   web-start) require_root; require_linux; systemctl start xraymesh-web.service xraymesh-iperf.service ;;
