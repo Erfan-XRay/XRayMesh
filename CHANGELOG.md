@@ -2,6 +2,19 @@
 
 All notable XRayMesh changes are documented here.
 
+## [1.8.0] - 2026-09-20
+
+### Added
+
+- Interactive Web UI Dashboard with real-time EasyTier mesh monitoring and host server stats.
+- In-Mesh Speedtest Suite powered by `iperf3` for both TCP (bandwidth capacity) and UDP (jitter, latency & packet loss) benchmarking.
+- Hybrid Authentication: Instant One-Click login links (`xraymesh.sh token`) and optional admin password protection.
+- Live multi-packet ping diagnostics with minimum, average, maximum latency and packet loss calculation.
+- Tunnels status tab in Web UI showing active HAProxy TCP and iptables TCP/UDP rules.
+- Standalone zero-dependency Python 3 HTTP daemon (`xraymesh-web.service`) and automated in-mesh iperf listener (`xraymesh-iperf.service`).
+- Web management CLI commands and sub-menu in `xraymesh.sh`.
+- Test suite for Web UI helpers in `tests/web_api_test.sh`.
+
 ## [1.7.0] - 2026-07-24
 
 ### Added

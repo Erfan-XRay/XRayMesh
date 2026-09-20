@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XRayMesh Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Vazirmatn:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #090d16;
+      --card-bg: rgba(16, 24, 39, 0.75);
+      --card-border: rgba(56, 189, 248, 0.15);
+      --card-border-hover: rgba(56, 189, 248, 0.4);
+      --primary: #00e5ff;
+      --primary-glow: rgba(0, 229, 255, 0.35);
+      --accent-purple: #a855f7;
+      --accent-pink: #ec4899;
+      --accent-green: #10b981;
+      --accent-yellow: #f59e0b;
+      --accent-red: #ef4444;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --font-fa: 'Vazirmatn', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(0, 229, 255, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(168, 85, 247, 0.08) 0%, transparent 40%);
+      background-attachment: fixed;
+      color: var(--text-main);
+      font-family: var(--font-fa);
+      min-height: 100vh;
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+    ::-webkit-scrollbar-thumb { background: rgba(56, 189, 248, 0.3); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+    .container {
+      max-width: 1300px;
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 1.5rem;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      backdrop-filter: blur(12px);
+      margin-bottom: 2rem;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .brand-logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #00e5ff, #8b5cf6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 20px var(--primary-glow);
+    }
+
+    .brand-logo svg {
+      width: 26px;
+      height: 26px;
+      fill: #090d16;
+    }
+
+    .brand-text h1 {
+      font-size: 1.4rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(to right, #00e5ff, #c084fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-text p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      font-family: var(--font-mono);
+    }
+
+    .badge-online {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .badge-pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #34d399;
+      box-shadow: 0 0 10px #34d399;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.3); }
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.55rem 1.1rem;
+      border-radius: 10px;
+      font-family: var(--font-fa);
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+      outline: none;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #00e5ff, #0284c7);
+      color: #041325;
+      box-shadow: 0 4px 15px rgba(0, 229, 255, 0.3);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 229, 255, 0.45);
+    }
+
+    .btn-ghost {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-main);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-ghost:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: var(--primary);
+    }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .btn-danger:hover {
+      background: rgba(239, 68, 68, 0.25);
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.25rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 1.25rem;
+      backdrop-filter: blur(10px);
+      transition: transform 0.2s ease, border-color 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--card-border-hover);
+    }
+
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--primary), var(--accent-purple));
+      opacity: 0.8;
+    }
+
+    .stat-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .stat-title {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .stat-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: rgba(0, 229, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--primary);
+    }
+
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      letter-spacing: -0.5px;
+      color: #fff;
+    }
+
+    .stat-desc {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 0.35rem;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    /* Tabs Navigation */
+    .tabs-nav {
+      display: flex;
+      gap: 0.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      margin-bottom: 1.5rem;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-family: var(--font-fa);
+      font-size: 0.95rem;
+      font-weight: 600;
+      padding: 0.65rem 1.25rem;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .tab-btn.active {
+      color: var(--primary);
+      background: rgba(0, 229, 255, 0.1);
+      border-bottom: 2px solid var(--primary);
+    }
+
+    /* Main Tab Content */
+    .tab-pane {
+      display: none;
+    }
+
+    .tab-pane.active {
+      display: block;
+      animation: fadeIn 0.25s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Card Panels */
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      backdrop-filter: blur(12px);
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.25rem;
+    }
+
+    .panel-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      color: #fff;
+    }
+
+    /* Peers Table */
+    .peers-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .peer-card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 1.25rem;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .peer-card:hover {
+      border-color: var(--card-border-hover);
+      box-shadow: 0 4px 20px rgba(0, 229, 255, 0.15);
+    }
+
+    .peer-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1rem;
+    }
+
+    .peer-ip {
+      font-size: 1.2rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      color: var(--primary);
+    }
+
+    .peer-meta {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 0.2rem;
+    }
+
+    .peer-details {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      background: rgba(0, 0, 0, 0.25);
+      padding: 0.75rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+    }
+
+    .peer-detail-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .peer-detail-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .peer-detail-value {
+      font-family: var(--font-mono);
+      font-weight: 600;
+    }
+
+    .peer-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    /* Speedtest Suite */
+    .speedtest-container {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 900px) {
+      .speedtest-container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.88rem;
+      font-weight: 600;
+      margin-bottom: 0.4rem;
+      color: var(--text-muted);
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 0.65rem 0.9rem;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      color: #fff;
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .form-control:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 10px var(--primary-glow);
+    }
+
+    .radio-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+    }
+
+    .radio-btn {
+      position: relative;
+    }
+
+    .radio-btn input {
+      position: absolute;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .radio-btn label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      padding: 0.65rem;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .radio-btn input:checked + label {
+      background: rgba(0, 229, 255, 0.15);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .speed-gauge-box {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 280px;
+      text-align: center;
+      position: relative;
+    }
+
+    .speed-number {
+      font-size: 3.5rem;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      background: linear-gradient(135deg, #00e5ff, #c084fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1;
+      margin-bottom: 0.5rem;
+    }
+
+    .speed-unit {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      letter-spacing: 1px;
+    }
+
+    .speed-metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 1rem;
+      width: 100%;
+      margin-top: 1.5rem;
+    }
+
+    .metric-chip {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 0.75rem;
+      text-align: center;
+    }
+
+    .metric-chip-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .metric-chip-value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      margin-top: 0.2rem;
+    }
+
+    /* Chart Containers */
+    .chart-container {
+      width: 100%;
+      height: 120px;
+      position: relative;
+      margin-top: 1rem;
+    }
+
+    /* Login Modal Overlay */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 7, 15, 0.85);
+      backdrop-filter: blur(16px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 1.5rem;
+    }
+
+    .login-card {
+      background: rgba(16, 24, 39, 0.95);
+      border: 1px solid var(--primary);
+      box-shadow: 0 0 40px rgba(0, 229, 255, 0.25);
+      border-radius: 20px;
+      width: 100%;
+      max-width: 440px;
+      padding: 2.25rem;
+      text-align: center;
+      position: relative;
+    }
+
+    .login-title {
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin-bottom: 0.5rem;
+      color: #fff;
+    }
+
+    .login-desc {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+    }
+
+    .token-tip {
+      margin-top: 1.25rem;
+      padding: 0.75rem;
+      background: rgba(0, 229, 255, 0.06);
+      border: 1px dashed rgba(0, 229, 255, 0.3);
+      border-radius: 8px;
+      font-size: 0.8rem;
+      color: var(--primary);
+      text-align: right;
+      font-family: var(--font-mono);
+      direction: ltr;
+    }
+
+    /* Toast */
+    .toast-box {
+      position: fixed;
+      bottom: 2rem;
+      left: 2rem;
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .toast {
+      padding: 0.75rem 1.25rem;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from { transform: translateX(-100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    .spinner {
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top: 3px solid var(--primary);
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Empty state */
+    .empty-box {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-box"></div>
+
+  <!-- Login Modal Overlay (Hidden when authenticated) -->
+  <div id="loginModal" class="modal-overlay" style="display: none;">
+    <div class="login-card">
+      <div class="brand-logo" style="margin: 0 auto 1.25rem auto;">
+        <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      </div>
+      <h2 class="login-title">ورود به XRayMesh</h2>
+      <p class="login-desc">برای دسترسی به داشبورد، رمز عبور یا توکن موقت را وارد کنید</p>
+
+      <div class="tabs-nav" style="justify-content: center; margin-bottom: 1.25rem;">
+        <button class="tab-btn active" onclick="switchLoginTab('pw')">رمز عبور</button>
+        <button class="tab-btn" onclick="switchLoginTab('tk')">توکن یک‌بارمصرف</button>
+      </div>
+
+      <div id="loginPwTab">
+        <div class="form-group">
+          <input type="password" id="inputPassword" class="form-control" placeholder="رمز عبور ادمین..." style="text-align: center;">
+        </div>
+        <button class="btn btn-primary" style="width: 100%; padding: 0.75rem;" onclick="loginWithPassword()">
+          ورود با رمز عبور
+        </button>
+      </div>
+
+      <div id="loginTkTab" style="display: none;">
+        <div class="form-group">
+          <input type="text" id="inputToken" class="form-control" placeholder="توکن موقت..." style="text-align: center;">
+        </div>
+        <button class="btn btn-primary" style="width: 100%; padding: 0.75rem;" onclick="loginWithToken()">
+          ورود با توکن
+        </button>
+      </div>
+
+      <div class="token-tip">
+        <div># دریافت لینک/توکن سریع در سرور:</div>
+        <div>sudo ./xraymesh.sh web token</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Container -->
+  <div class="container">
+
+    <!-- Header -->
+    <header>
+      <div class="brand">
+        <div class="brand-logo">
+          <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+        <div class="brand-text">
+          <h1>XRayMesh Dashboard</h1>
+          <p id="networkBadge">شبکه: بارگذاری...</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="badge badge-online">
+          <div class="badge-pulse"></div>
+          <span id="serviceStatusText">Mesh Active</span>
+        </div>
+        <button class="btn btn-ghost" onclick="fetchStatus(true)" title="بروزرسانی داده‌ها">
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          بروزرسانی
+        </button>
+        <button class="btn btn-danger" onclick="logout()" title="خروج">
+          خروج
+        </button>
+      </div>
+    </header>
+
+    <!-- Overview Stats Cards -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-header">
+          <span class="stat-title">آدرس IP مجازی (Mesh IP)</span>
+          <div class="stat-icon">IP</div>
+        </div>
+        <div class="stat-value" id="valVirtualIp">--</div>
+        <div class="stat-desc" id="valHostname">Hostname: --</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-header">
+          <span class="stat-title">نودهای متصل (Peers)</span>
+          <div class="stat-icon">
+            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+          </div>
+        </div>
+        <div class="stat-value" id="valPeerCount">0</div>
+        <div class="stat-desc">نودهای آنلاین در شبکه مش</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-header">
+          <span class="stat-title">میانگین تاخیر (Latency)</span>
+          <div class="stat-icon">
+            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          </div>
+        </div>
+        <div class="stat-value" id="valAvgLatency">-- ms</div>
+        <div class="stat-desc" id="valTransportDesc">Transport: --</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-header">
+          <span class="stat-title">مصرف سرور (Host Load)</span>
+          <div class="stat-icon">
+            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          </div>
+        </div>
+        <div class="stat-value" id="valRam">-- %</div>
+        <div class="stat-desc" id="valUptime">Uptime: --</div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="tabs-nav">
+      <button class="tab-btn active" onclick="switchMainTab('peers')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+        نودها و Peerهای مش
+      </button>
+      <button class="tab-btn" onclick="switchMainTab('speedtest')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        تست سرعت مش (iperf3)
+      </button>
+      <button class="tab-btn" onclick="switchMainTab('ping')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        تست پینگ زنده
+      </button>
+      <button class="tab-btn" onclick="switchMainTab('tunnels')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+        تونل‌ها (HAProxy & iptables)
+      </button>
+    </div>
+
+    <!-- TAB 1: PEERS -->
+    <div id="tabPeers" class="tab-pane active">
+      <div class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg>
+            لیست نودهای متصل به شبکه مش
+          </h2>
+          <span class="badge" style="background: rgba(0, 229, 255, 0.1); color: var(--primary);">EasyTier RPC</span>
+        </div>
+
+        <div id="peersListContainer" class="peers-grid">
+          <div class="empty-box" style="grid-column: 1 / -1;">در حال بارگذاری اطلاعات نودها...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: SPEEDTEST -->
+    <div id="tabSpeedtest" class="tab-pane">
+      <div class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            تست عملکرد و سرعت داخل مش (In-Mesh iperf3)
+          </h2>
+          <span class="badge" style="background: rgba(168, 85, 247, 0.15); color: var(--accent-purple);">TCP & UDP Benchmark</span>
+        </div>
+
+        <div class="speedtest-container">
+          <!-- Control Column -->
+          <div>
+            <div class="form-group">
+              <label class="form-label">نود مقصد (Target Node)</label>
+              <select id="speedtestTarget" class="form-control">
+                <option value="">-- انتخاب نود مقصد --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">پروتکل تست (Protocol)</label>
+              <div class="radio-group">
+                <div class="radio-btn">
+                  <input type="radio" id="protoTcp" name="speedProto" value="tcp" checked onchange="toggleBandwidthInput()">
+                  <label for="protoTcp">TCP (سرعت خام)</label>
+                </div>
+                <div class="radio-btn">
+                  <input type="radio" id="protoUdp" name="speedProto" value="udp" onchange="toggleBandwidthInput()">
+                  <label for="protoUdp">UDP (پکت لاس و Jitter)</label>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group" id="groupBandwidth" style="display: none;">
+              <label class="form-label">حداکثر پهنای باند تست UDP</label>
+              <select id="speedtestBandwidth" class="form-control">
+                <option value="20M">20 Mbps</option>
+                <option value="50M" selected>50 Mbps</option>
+                <option value="100M">100 Mbps</option>
+                <option value="300M">300 Mbps</option>
+                <option value="1G">1 Gbps</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">مدت زمان تست (Duration)</label>
+              <select id="speedtestDuration" class="form-control">
+                <option value="3">۳ ثانیه (سریع)</option>
+                <option value="5" selected>۵ ثانیه (استاندارد)</option>
+                <option value="10">۱۰ ثانیه (دقیق)</option>
+                <option value="15">۱۵ ثانیه (طولانی)</option>
+              </select>
+            </div>
+
+            <button id="btnRunSpeedtest" class="btn btn-primary" style="width: 100%; padding: 0.85rem;" onclick="runSpeedtest()">
+              <span>شروع تست سرعت</span>
+            </button>
+            <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.75rem; text-align: center;">
+              نکته: نود مقصد باید سرویس iperf3 را فعال داشته باشد.
+            </p>
+          </div>
+
+          <!-- Output / Gauge Column -->
+          <div class="speed-gauge-box">
+            <div id="speedGaugeLoader" style="display: none; margin-bottom: 1rem;">
+              <div class="spinner" style="width: 40px; height: 40px; border-width: 4px;"></div>
+              <p style="margin-top: 0.5rem; color: var(--primary);">در حال اجرای تست iperf3 روی شبکه مش...</p>
+            </div>
+
+            <div id="speedResultSection">
+              <div class="speed-number" id="valSpeedMain">0.00</div>
+              <div class="speed-unit" id="valSpeedUnit">Mbps Throughput</div>
+
+              <div class="speed-metrics-grid" id="speedMetricsGrid">
+                <div class="metric-chip">
+                  <div class="metric-chip-label">حجم تبادلی</div>
+                  <div class="metric-chip-value" id="valSpeedTransfer">--</div>
+                </div>
+                <div class="metric-chip">
+                  <div class="metric-chip-label">Jitter / نوسان</div>
+                  <div class="metric-chip-value" id="valSpeedJitter">--</div>
+                </div>
+                <div class="metric-chip">
+                  <div class="metric-chip-label">Packet Loss</div>
+                  <div class="metric-chip-value" id="valSpeedLoss">--</div>
+                </div>
+                <div class="metric-chip">
+                  <div class="metric-chip-label">Retransmits</div>
+                  <div class="metric-chip-value" id="valSpeedRetrans">--</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SVG Intervals Chart -->
+            <div class="chart-container" id="chartIntervalsContainer" style="display: none;">
+              <svg id="chartIntervals" width="100%" height="100%" viewBox="0 0 500 100" preserveAspectRatio="none"></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: PING -->
+    <div id="tabPing" class="tab-pane">
+      <div class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            تست تاخیر و پینگ زنده بین نودها
+          </h2>
+        </div>
+
+        <div style="display: flex; gap: 1rem; align-items: flex-end; margin-bottom: 1.5rem; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 220px;">
+            <label class="form-label">نود یا آدرس IP مجازی هدف</label>
+            <input type="text" id="pingTargetIp" class="form-control" placeholder="10.144.144.2">
+          </div>
+          <div style="width: 140px;">
+            <label class="form-label">تعداد پکت</label>
+            <select id="pingCount" class="form-control">
+              <option value="4" selected>4 پاکت</option>
+              <option value="8">8 پاکت</option>
+              <option value="10">10 پاکت</option>
+            </select>
+          </div>
+          <button id="btnRunPing" class="btn btn-primary" onclick="runPing()" style="padding: 0.65rem 1.5rem;">
+            ارسال پینگ
+          </button>
+        </div>
+
+        <!-- Ping Results Cards -->
+        <div class="stats-grid" id="pingResultsGrid" style="display: none; margin-bottom: 1.5rem;">
+          <div class="stat-card">
+            <div class="stat-title">حداقل تاخیر (Min)</div>
+            <div class="stat-value" id="valPingMin">-- ms</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-title">میانگین تاخیر (Avg)</div>
+            <div class="stat-value" id="valPingAvg">-- ms</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-title">حداکثر تاخیر (Max)</div>
+            <div class="stat-value" id="valPingMax">-- ms</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-title">پکت لاس (Packet Loss)</div>
+            <div class="stat-value" id="valPingLoss">0%</div>
+          </div>
+        </div>
+
+        <pre id="pingRawOutput" style="background: rgba(0,0,0,0.4); padding: 1rem; border-radius: 8px; font-family: var(--font-mono); font-size: 0.85rem; color: #a5f3fc; overflow-x: auto; display: none;"></pre>
+      </div>
+    </div>
+
+    <!-- TAB 4: TUNNELS -->
+    <div id="tabTunnels" class="tab-pane">
+      <div class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+            تونل‌های فورواردینگ سرور
+          </h2>
+          <button class="btn btn-ghost" onclick="fetchTunnels()">بروزرسانی تونل‌ها</button>
+        </div>
+
+        <div id="tunnelsListContainer">
+          <div class="empty-box">در حال بررسی وضعیت تونل‌ها...</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // State Management
+    let currentAuth = false;
+    let peersCache = [];
+
+    // Toast Notification
+    function showToast(message, type = 'info') {
+      const box = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      let icon = 'ℹ️';
+      if (type === 'success') icon = '✅';
+      if (type === 'error') icon = '❌';
+      toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+      box.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    // Tabs
+    function switchMainTab(tabId) {
+      document.querySelectorAll('.tabs-nav .tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+
+      event.currentTarget.classList.add('active');
+      if (tabId === 'peers') document.getElementById('tabPeers').classList.add('active');
+      if (tabId === 'speedtest') document.getElementById('tabSpeedtest').classList.add('active');
+      if (tabId === 'ping') document.getElementById('tabPing').classList.add('active');
+      if (tabId === 'tunnels') {
+        document.getElementById('tabTunnels').classList.add('active');
+        fetchTunnels();
+      }
+    }
+
+    function switchLoginTab(type) {
+      document.querySelectorAll('#loginModal .tab-btn').forEach(b => b.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+      if (type === 'pw') {
+        document.getElementById('loginPwTab').style.display = 'block';
+        document.getElementById('loginTkTab').style.display = 'none';
+      } else {
+        document.getElementById('loginPwTab').style.display = 'none';
+        document.getElementById('loginTkTab').style.display = 'block';
+      }
+    }
+
+    function toggleBandwidthInput() {
+      const isUdp = document.getElementById('protoUdp').checked;
+      document.getElementById('groupBandwidth').style.display = isUdp ? 'block' : 'none';
+    }
+
+    // Authentication Checks
+    async function checkAuth() {
+      try {
+        const res = await fetch('/api/auth/status');
+        const data = await res.json();
+        currentAuth = data.authenticated;
+        if (!currentAuth) {
+          document.getElementById('loginModal').style.display = 'flex';
+        } else {
+          document.getElementById('loginModal').style.display = 'none';
+          fetchStatus();
+        }
+      } catch (e) {
+        console.error("Auth check failed", e);
+      }
+    }
+
+    async function loginWithPassword() {
+      const pw = document.getElementById('inputPassword').value;
+      if (!pw) return showToast("لطفا رمز عبور را وارد کنید", "error");
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({password: pw})
+        });
+        const d = await res.json();
+        if (d.ok) {
+          showToast("ورود موفقیت‌آمیز بود", "success");
+          document.getElementById('loginModal').style.display = 'none';
+          fetchStatus();
+        } else {
+          showToast(d.error || "رمز عبور نادرست است", "error");
+        }
+      } catch (e) {
+        showToast("خطا در ارتباط با سرور", "error");
+      }
+    }
+
+    async function loginWithToken() {
+      const tk = document.getElementById('inputToken').value.trim();
+      if (!tk) return showToast("لطفا توکن موقت را وارد کنید", "error");
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({token: tk})
+        });
+        const d = await res.json();
+        if (d.ok) {
+          showToast("ورود با توکن موفقیت‌آمیز بود", "success");
+          document.getElementById('loginModal').style.display = 'none';
+          fetchStatus();
+        } else {
+          showToast(d.error || "توکن منقضی یا نامعتبر است", "error");
+        }
+      } catch (e) {
+        showToast("خطا در ارتباط با سرور", "error");
+      }
+    }
+
+    async function logout() {
+      await fetch('/api/auth/logout', {method: 'POST'});
+      location.reload();
+    }
+
+    // Status & Peers Fetcher
+    async function fetchStatus(showNotice = false) {
+      try {
+        const [statusRes, peersRes] = await Promise.all([
+          fetch('/api/status'),
+          fetch('/api/peers')
+        ]);
+
+        if (statusRes.status === 401 || peersRes.status === 401) {
+          checkAuth();
+          return;
+        }
+
+        const statusData = await statusRes.json();
+        const peersData = await peersRes.json();
+
+        // Node Info
+        const node = statusData.node || {};
+        document.getElementById('networkBadge').textContent = `شبکه: ${node.network_name || 'XRayMesh'} | v${node.easytier_version || '1.7.0'}`;
+        document.getElementById('valVirtualIp').textContent = node.ipv4 || '--';
+        document.getElementById('valHostname').textContent = `Hostname: ${node.hostname || '--'}`;
+
+        // Host System Info
+        const sys = statusData.system || {};
+        document.getElementById('valRam').textContent = `${sys.ram_percent || 0}% RAM`;
+        document.getElementById('valUptime').textContent = `Uptime: ${sys.uptime_str || '--'}`;
+
+        // Process Peers
+        renderPeers(peersData.data);
+
+        if (showNotice) showToast("داده‌ها بروزرسانی شدند", "success");
+      } catch (e) {
+        console.error("Failed to load status", e);
+      }
+    }
+
+    function renderPeers(rawPeers) {
+      const container = document.getElementById('peersListContainer');
+      const selectTarget = document.getElementById('speedtestTarget');
+      peersCache = [];
+
+      let list = [];
+      if (Array.isArray(rawPeers)) {
+        list = rawPeers;
+      } else if (rawPeers && typeof rawPeers === 'object') {
+        // EasyTier json structure might be nested or map
+        if (Array.isArray(rawPeers.peers)) list = rawPeers.peers;
+        else list = Object.values(rawPeers);
+      }
+
+      // Filter out local node if cost is Local
+      const activePeers = list.filter(p => p && p.cost !== "Local" && p.ipv4);
+      peersCache = activePeers;
+
+      document.getElementById('valPeerCount').textContent = activePeers.length;
+
+      // Update target dropdown for speedtest
+      selectTarget.innerHTML = '<option value="">-- انتخاب نود مقصد --</option>';
+      activePeers.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.ipv4;
+        opt.textContent = `${p.ipv4} (${p.hostname || 'Peer'}) - Latency: ${p.lat_ms || '0'}ms`;
+        selectTarget.appendChild(opt);
+      });
+
+      if (activePeers.length === 0) {
+        container.innerHTML = `
+          <div class="empty-box" style="grid-column: 1 / -1;">
+            <p>هیچ Peer متصلی در حال حاضر یافت نشد.</p>
+            <p style="font-size: 0.85rem; margin-top: 0.5rem;">اطمینان حاصل کنید نودهای دیگر نام شبکه و Network Secret یکسان دارند.</p>
+          </div>
+        `;
+        document.getElementById('valAvgLatency').textContent = '-- ms';
+        return;
+      }
+
+      // Calculate Average Latency
+      let totalLat = 0, latCount = 0;
+      let html = '';
+
+      activePeers.forEach(p => {
+        const lat = parseFloat(p.lat_ms) || 0;
+        if (lat > 0) { totalLat += lat; latCount++; }
+
+        let latBadgeColor = 'var(--accent-green)';
+        if (lat > 100) latBadgeColor = 'var(--accent-yellow)';
+        if (lat > 200) latBadgeColor = 'var(--accent-red)';
+
+        html += `
+          <div class="peer-card">
+            <div class="peer-card-top">
+              <div>
+                <div class="peer-ip">${p.ipv4}</div>
+                <div class="peer-meta">${p.hostname || 'EasyTier Node'}</div>
+              </div>
+              <span class="badge" style="background: rgba(255,255,255,0.05); color: ${latBadgeColor}; border: 1px solid ${latBadgeColor}44;">
+                ${p.lat_ms ? p.lat_ms + ' ms' : '< 1ms'}
+              </span>
+            </div>
+
+            <div class="peer-details">
+              <div class="peer-detail-item">
+                <span class="peer-detail-label">Tunnel Protocol</span>
+                <span class="peer-detail-value" style="color: var(--primary);">${p.tunnel_proto || 'UDP'}</span>
+              </div>
+              <div class="peer-detail-item">
+                <span class="peer-detail-label">Route Cost</span>
+                <span class="peer-detail-value">${p.cost || '1'}</span>
+              </div>
+              <div class="peer-detail-item">
+                <span class="peer-detail-label">دریافتی (RX)</span>
+                <span class="peer-detail-value">${p.rx_bytes || '0 B'}</span>
+              </div>
+              <div class="peer-detail-item">
+                <span class="peer-detail-label">ارسالی (TX)</span>
+                <span class="peer-detail-value">${p.tx_bytes || '0 B'}</span>
+              </div>
+            </div>
+
+            <div class="peer-actions">
+              <button class="btn btn-ghost" style="flex: 1; padding: 0.45rem;" onclick="quickPing('${p.ipv4}')">
+                پینگ
+              </button>
+              <button class="btn btn-primary" style="flex: 1; padding: 0.45rem;" onclick="quickSpeedtest('${p.ipv4}')">
+                تست سرعت
+              </button>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+      const avg = latCount > 0 ? (totalLat / latCount).toFixed(1) : '0';
+      document.getElementById('valAvgLatency').textContent = `${avg} ms`;
+    }
+
+    // Quick Actions from Peer Card
+    function quickPing(ip) {
+      document.getElementById('pingTargetIp').value = ip;
+      switchMainTab('ping');
+      runPing();
+    }
+
+    function quickSpeedtest(ip) {
+      document.getElementById('speedtestTarget').value = ip;
+      switchMainTab('speedtest');
+    }
+
+    // Ping Suite
+    async function runPing() {
+      const target = document.getElementById('pingTargetIp').value.trim();
+      const count = document.getElementById('pingCount').value;
+      if (!target) return showToast("لطفا آدرس IP نود هدف را وارد کنید", "error");
+
+      const btn = document.getElementById('btnRunPing');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> در حال ارسال...';
+
+      try {
+        const res = await fetch('/api/ping', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({target, count: parseInt(count)})
+        });
+        const d = await res.json();
+        if (d.ok) {
+          const stats = d.data;
+          document.getElementById('pingResultsGrid').style.display = 'grid';
+          document.getElementById('valPingMin').textContent = `${stats.min_ms} ms`;
+          document.getElementById('valPingAvg').textContent = `${stats.avg_ms} ms`;
+          document.getElementById('valPingMax').textContent = `${stats.max_ms} ms`;
+          document.getElementById('valPingLoss').textContent = `${stats.packet_loss_percent}%`;
+
+          const rawBox = document.getElementById('pingRawOutput');
+          rawBox.style.display = 'block';
+          rawBox.textContent = stats.raw;
+          showToast("پینگ با موفقیت انجام شد", "success");
+        } else {
+          showToast(d.error || "خطا در اجرای پینگ", "error");
+        }
+      } catch (e) {
+        showToast("خطا در ارتباط با سرور", "error");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "ارسال پینگ";
+      }
+    }
+
+    // In-Mesh Speedtest Suite
+    async function runSpeedtest() {
+      const target = document.getElementById('speedtestTarget').value;
+      const protocol = document.querySelector('input[name="speedProto"]:checked').value;
+      const duration = document.getElementById('speedtestDuration').value;
+      const bandwidth = document.getElementById('speedtestBandwidth').value;
+
+      if (!target) return showToast("لطفا نود مقصد را انتخاب کنید", "error");
+
+      const btn = document.getElementById('btnRunSpeedtest');
+      const loader = document.getElementById('speedGaugeLoader');
+      const resultsSection = document.getElementById('speedResultSection');
+
+      btn.disabled = true;
+      loader.style.display = 'block';
+      resultsSection.style.opacity = '0.3';
+
+      try {
+        const res = await fetch('/api/iperf/run', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            target,
+            protocol,
+            duration: parseInt(duration),
+            bandwidth
+          })
+        });
+
+        const d = await res.json();
+        if (d.ok) {
+          const data = d.data;
+          const summary = data.summary;
+
+          if (protocol === 'tcp') {
+            document.getElementById('valSpeedMain').textContent = summary.received_mbps || summary.sent_mbps || '0.00';
+            document.getElementById('valSpeedUnit').textContent = 'Mbps (TCP Throughput)';
+            document.getElementById('valSpeedTransfer').textContent = formatBytes(summary.total_bytes_received || summary.total_bytes_sent);
+            document.getElementById('valSpeedJitter').textContent = 'N/A (TCP)';
+            document.getElementById('valSpeedLoss').textContent = '0%';
+            document.getElementById('valSpeedRetrans').textContent = summary.retransmits ?? 0;
+          } else {
+            document.getElementById('valSpeedMain').textContent = summary.mbps || '0.00';
+            document.getElementById('valSpeedUnit').textContent = 'Mbps (UDP Bandwidth)';
+            document.getElementById('valSpeedTransfer').textContent = formatBytes(summary.total_bytes);
+            document.getElementById('valSpeedJitter').textContent = `${summary.jitter_ms} ms`;
+            document.getElementById('valSpeedLoss').textContent = `${summary.loss_percent}%`;
+            document.getElementById('valSpeedRetrans').textContent = `${summary.lost_packets} pkts`;
+          }
+
+          renderIntervalChart(data.intervals);
+          showToast("تست سرعت با موفقیت تکمیل شد", "success");
+        } else {
+          showToast(d.error || "تست سرعت با خطا مواجه شد", "error");
+        }
+      } catch (e) {
+        showToast("خطا در برقراری ارتباط با سرویس iperf3", "error");
+      } finally {
+        btn.disabled = false;
+        loader.style.display = 'none';
+        resultsSection.style.opacity = '1';
+      }
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes || bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function renderIntervalChart(intervals) {
+      if (!intervals || intervals.length === 0) return;
+      const container = document.getElementById('chartIntervalsContainer');
+      const svg = document.getElementById('chartIntervals');
+      container.style.display = 'block';
+
+      const maxSpeed = Math.max(...intervals.map(i => i.mbps), 1);
+      const points = intervals.map((intv, idx) => {
+        const x = (idx / (intervals.length - 1 || 1)) * 500;
+        const y = 90 - (intv.mbps / maxSpeed) * 75;
+        return `${x},${y}`;
+      });
+
+      svg.innerHTML = `
+        <polyline fill="none" stroke="rgba(0, 229, 255, 0.4)" stroke-width="2" points="${points.join(' ')}" />
+        <polygon fill="url(#chartGrad)" points="0,100 ${points.join(' ')} 500,100" opacity="0.25" />
+        <defs>
+          <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#00e5ff"/>
+            <stop offset="100%" stop-color="transparent"/>
+          </linearGradient>
+        </defs>
+      `;
+    }
+
+    // Tunnels Fetcher
+    async function fetchTunnels() {
+      const container = document.getElementById('tunnelsListContainer');
+      try {
+        const res = await fetch('/api/tunnels');
+        const d = await res.json();
+        const data = d.data || {};
+        const haproxy = data.haproxy || [];
+        const iptables = data.iptables || [];
+
+        let html = '';
+
+        if (haproxy.length === 0 && iptables.length === 0) {
+          container.innerHTML = '<div class="empty-box">هیچ تونلی هنوز تعریف نشده است. می‌توانید با دستور sudo ./xraymesh.sh haproxy یا iptables تونل بسازید.</div>';
+          return;
+        }
+
+        html += '<div class="peers-grid">';
+        haproxy.forEach(t => {
+          html += `
+            <div class="peer-card">
+              <div class="peer-card-top">
+                <div>
+                  <div class="peer-ip">${t.TUNNEL_NAME || 'Tunnel'}</div>
+                  <div class="peer-meta">نوع: HAProxy (TCP)</div>
+                </div>
+                <span class="badge" style="background: rgba(236, 72, 153, 0.15); color: var(--accent-pink);">TCP Proxy</span>
+              </div>
+              <div class="peer-details">
+                <div class="peer-detail-item">
+                  <span class="peer-detail-label">مقصد مجازی</span>
+                  <span class="peer-detail-value">${t.TARGET_IP || '--'}</span>
+                </div>
+                <div class="peer-detail-item">
+                  <span class="peer-detail-label">پورت‌ها</span>
+                  <span class="peer-detail-value" style="color: var(--primary);">${t.PORT_SPEC || '--'}</span>
+                </div>
+              </div>
+            </div>
+          `;
+        });
+
+        iptables.forEach(t => {
+          html += `
+            <div class="peer-card">
+              <div class="peer-card-top">
+                <div>
+                  <div class="peer-ip">${t.TUNNEL_NAME || 'Tunnel'}</div>
+                  <div class="peer-meta">نوع: iptables (${(t.FORWARD_PROTOCOL || 'both').toUpperCase()})</div>
+                </div>
+                <span class="badge" style="background: rgba(0, 229, 255, 0.15); color: var(--primary);">DNAT Raw</span>
+              </div>
+              <div class="peer-details">
+                <div class="peer-detail-item">
+                  <span class="peer-detail-label">مقصد مجازی</span>
+                  <span class="peer-detail-value">${t.TARGET_IP || '--'}</span>
+                </div>
+                <div class="peer-detail-item">
+                  <span class="peer-detail-label">پورت‌ها</span>
+                  <span class="peer-detail-value" style="color: var(--primary);">${t.PORT_SPEC || '--'}</span>
+                </div>
+                <div class="peer-detail-item">
+                  <span class="peer-detail-label">Source CIDR</span>
+                  <span class="peer-detail-value">${t.SOURCE_CIDR || '0.0.0.0/0'}</span>
+                </div>
+                <div class="peer-detail-item">
+                  <span class="peer-detail-label">اینترفیس</span>
+                  <span class="peer-detail-value">${t.IN_IF || 'any'}</span>
+                </div>
+              </div>
+            </div>
+          `;
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+      } catch (e) {
+        container.innerHTML = '<div class="empty-box">خطا در بارگذاری تونل‌ها</div>';
+      }
+    }
+
+    // Auto Refresh Every 8 Seconds
+    setInterval(() => {
+      if (currentAuth) fetchStatus();
+    }, 8000);
+
+    // Initial Auth Check
+    checkAuth();
+  </script>
+</body>
+</html>

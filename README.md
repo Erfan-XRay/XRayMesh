@@ -25,6 +25,9 @@ Developed by **ErfanXRay**
 - Provides service logs and connection diagnostics for failed handshakes
 - Shows physical server IPv4/IPv6 addresses separately from mesh addresses
 - Safely edits or deletes a node without requiring a complete reinstall
+- Responsive dark Web UI Dashboard with real-time mesh monitoring, peer status, and host stats
+- In-Mesh Speedtest Suite powered by iperf3 for TCP (bandwidth) and UDP (jitter and packet loss) benchmarks
+- Hybrid authentication with instant One-Click CLI login tokens and optional admin password
 - Supports `x86_64`, `aarch64`, `armv7`, and `i686`
 
 XRayMesh includes a clean, colored terminal interface to make configuration and
@@ -186,6 +189,29 @@ The manager enables IPv4 forwarding and applies DNAT + FORWARD + MASQUERADE so r
 
 Tunnel definitions are preserved when the mesh node is deleted and re-applied after the mesh is configured again. Use the source CIDR prompt to restrict who can reach a forwarded service.
 
+## Web UI Dashboard & In-Mesh Speedtest
+
+XRayMesh includes a standalone, zero-dependency Web UI Dashboard designed for real-time monitoring and network performance benchmarking:
+
+- **Live Mesh Monitoring:** Real-time visibility into EasyTier connected peers, latency badges, route costs, RX/TX traffic, and host server CPU/RAM/uptime.
+- **In-Mesh Speedtest (iperf3):**
+  - **TCP Mode:** Measures maximum end-to-end throughput (Mbps), bytes transferred, and TCP retransmits across the encrypted mesh.
+  - **UDP Mode:** Evaluates network quality, jitter (ms), and packet loss percentage (%), critical for gaming and latency-sensitive protocols such as Hysteria2.
+- **Interactive Ping Diagnostics:** Runs multi-packet ping tests to any mesh IP with min, average, max latency and loss percentage.
+- **Tunnels Overview:** Displays configured HAProxy and iptables forwarding tunnels.
+
+### Access & Authentication
+
+1. **One-Click Quick Login (Recommended):**
+   Generate a temporary, one-click login link on the server:
+   ```bash
+   sudo ./xraymesh.sh token
+   ```
+   This generates a secure URL such as `http://<SERVER_IP>:11080/?token=...` valid for 60 minutes. Opening this link in any browser logs you in instantly and sets a persistent session.
+
+2. **Admin Password Login:**
+   Set an admin password using option `5` in the Web sub-menu (`sudo ./xraymesh.sh web`) to enable regular password login.
+
 ## Commands
 
 ```text
@@ -199,6 +225,8 @@ sudo ./xraymesh.sh update     Update EasyTier
 sudo ./xraymesh.sh delete     Delete the current mesh node
 sudo ./xraymesh.sh haproxy    Manage HAProxy TCP tunnels
 sudo ./xraymesh.sh iptables   Manage iptables TCP/UDP tunnels
+sudo ./xraymesh.sh web        Manage Web Dashboard and speedtest services
+sudo ./xraymesh.sh token      Generate a one-click login URL for the Web UI
 sudo ./xraymesh.sh self-test  Validate the installation and active services
 sudo ./xraymesh.sh start      Start the node
 sudo ./xraymesh.sh stop       Stop the node

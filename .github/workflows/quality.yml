@@ -32,3 +32,8 @@ jobs:
 
       - name: Test iptables tunnel helpers
         run: bash tests/iptables_tunnel_test.sh
+
+      - name: Test Web UI helpers and backend
+        run: |
+          python3 -m py_compile web/server.py
+          bash tests/web_api_test.sh

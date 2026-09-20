@@ -1,0 +1,21 @@
+[Unit]
+Description=XRayMesh Web UI & API Daemon
+Documentation=https://github.com/Erfan-XRay/XRayMesh
+Wants=network-online.target xraymesh.service
+After=network-online.target xraymesh.service
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/xraymesh/web.env
+ExecStart=/usr/bin/python3 /opt/xraymesh/web/server.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+PrivateTmp=true
+ReadWritePaths=/etc/xraymesh /opt/xraymesh
+SyslogIdentifier=xraymesh-web
+
+[Install]
+WantedBy=multi-user.target

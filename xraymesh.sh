@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="1.7.0"
+readonly VERSION="1.8.0"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
 readonly BIN_DIR="${INSTALL_DIR}/bin"
@@ -19,6 +19,12 @@ readonly IPTABLES_SERVICE_FILE="/etc/systemd/system/xraymesh-iptables.service"
 readonly IPTABLES_TUNNEL_DIR="/etc/xraymesh/iptables-tunnels"
 readonly IPTABLES_APPLY_SCRIPT="${INSTALL_DIR}/xraymesh-iptables-apply"
 readonly IPTABLES_SYSCTL_FILE="/etc/sysctl.d/99-xraymesh-forwarding.conf"
+readonly WEB_DIR="${INSTALL_DIR}/web"
+readonly WEB_CONFIG_FILE="/etc/xraymesh/web.env"
+readonly WEB_SERVICE_FILE="/etc/systemd/system/xraymesh-web.service"
+readonly IPERF_SERVICE_FILE="/etc/systemd/system/xraymesh-iperf.service"
+readonly WEB_TOKEN_FILE="/etc/xraymesh/web-tokens.json"
+readonly DEFAULT_WEB_PORT="11080"
 readonly LOG_TAG="xraymesh"
 readonly FALLBACK_EASYTIER_VERSION="v2.6.4"
 
@@ -113,14 +119,14 @@ require_linux() {
 install_dependencies() {
   local missing=()
   local cmd
-  for cmd in curl unzip openssl ip ping figlet jq sha256sum ss; do
+  for cmd in curl unzip openssl ip ping figlet jq sha256sum ss python3 iperf3; do
     command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
   done
   ((${#missing[@]} == 0)) && return
   info "Installing dependencies..."
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
-  apt-get install -y -qq curl unzip openssl iproute2 iputils-ping ca-certificates figlet jq
+  apt-get install -y -qq curl unzip openssl iproute2 iputils-ping ca-certificates figlet jq python3 iperf3
 }
 
 arch_asset() {
@@ -1666,6 +1672,276 @@ iptables_tunnel_menu() {
   done
 }
 
+install_web_runtime() {
+  install_dependencies
+  mkdir -p "${WEB_DIR}/static" /etc/xraymesh
+
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  if [[ -f "${script_dir}/web/server.py" && -f "${script_dir}/web/static/index.html" ]]; then
+    install -m 0755 "${script_dir}/web/server.py" "${WEB_DIR}/server.py"
+    install -m 0644 "${script_dir}/web/static/index.html" "${WEB_DIR}/static/index.html"
+  elif [[ ! -f "${WEB_DIR}/server.py" ]]; then
+    info "Downloading Web Dashboard files..."
+    curl -fsSL --connect-timeout 10 \
+      "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/web/server.py" \
+      -o "${WEB_DIR}/server.py" || true
+    chmod 0755 "${WEB_DIR}/server.py" 2>/dev/null || true
+    curl -fsSL --connect-timeout 10 \
+      "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/web/static/index.html" \
+      -o "${WEB_DIR}/static/index.html" || true
+    chmod 0644 "${WEB_DIR}/static/index.html" 2>/dev/null || true
+  fi
+
+  if [[ ! -f "$WEB_CONFIG_FILE" ]]; then
+    umask 077
+    cat > "$WEB_CONFIG_FILE" <<EOF_WEB_CFG
+WEB_PORT="${DEFAULT_WEB_PORT}"
+WEB_BIND="0.0.0.0"
+WEB_PASSWORD_HASH=""
+EOF_WEB_CFG
+    chmod 600 "$WEB_CONFIG_FILE"
+  fi
+
+  write_web_services
+}
+
+write_web_services() {
+  cat > "$WEB_SERVICE_FILE" <<EOF_WEB_SVC
+[Unit]
+Description=XRayMesh Web UI & API Daemon
+Documentation=https://github.com/Erfan-XRay/XRayMesh
+Wants=network-online.target xraymesh.service
+After=network-online.target xraymesh.service
+
+[Service]
+Type=simple
+EnvironmentFile=-${WEB_CONFIG_FILE}
+ExecStart=/usr/bin/python3 ${WEB_DIR}/server.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+PrivateTmp=true
+ReadWritePaths=/etc/xraymesh ${INSTALL_DIR}
+SyslogIdentifier=xraymesh-web
+
+[Install]
+WantedBy=multi-user.target
+EOF_WEB_SVC
+
+  cat > "$IPERF_SERVICE_FILE" <<EOF_IPERF_SVC
+[Unit]
+Description=XRayMesh iperf3 Speedtest Daemon
+Documentation=https://github.com/Erfan-XRay/XRayMesh
+Wants=network-online.target xraymesh.service
+After=network-online.target xraymesh.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/iperf3 -s -p 5201
+Restart=always
+RestartSec=3
+SyslogIdentifier=xraymesh-iperf
+
+[Install]
+WantedBy=multi-user.target
+EOF_IPERF_SVC
+
+  systemctl daemon-reload
+}
+
+get_web_port() {
+  if [[ -f "$WEB_CONFIG_FILE" ]]; then
+    local port
+    port="$(grep -E '^WEB_PORT=' "$WEB_CONFIG_FILE" 2>/dev/null | cut -d= -f2 | tr -d '"'\'' ')"
+    echo "${port:-$DEFAULT_WEB_PORT}"
+  else
+    echo "$DEFAULT_WEB_PORT"
+  fi
+}
+
+get_server_ip() {
+  local ip
+  ip="$(curl -fsS4 --connect-timeout 2 https://api.ipify.org 2>/dev/null || true)"
+  if [[ -z "$ip" ]]; then
+    ip="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || true)"
+  fi
+  echo "${ip:-127.0.0.1}"
+}
+
+generate_web_token() {
+  install_web_runtime
+  local token now expiry_ts pub_ip port mesh_ip
+  token="$(openssl rand -hex 16)"
+  now="$(date +%s)"
+  expiry_ts=$(( now + 3600 ))
+  port="$(get_web_port)"
+  pub_ip="$(get_server_ip)"
+  mesh_ip=""
+  if [[ -f "$CONFIG_FILE" ]]; then
+    mesh_ip="$(grep -E '^IPV4=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2 | tr -d '"'\'' ')"
+  fi
+
+  python3 -c "import json, os, sys
+p = sys.argv[1]
+tk = sys.argv[2]
+exp = int(sys.argv[3])
+tokens = {}
+if os.path.isfile(p):
+    try:
+        with open(p, 'r') as f: tokens = json.load(f)
+    except Exception: pass
+tokens[tk] = {'expires': exp, 'one_time': True}
+with open(p, 'w') as f: json.dump(tokens, f, indent=2)
+try: os.chmod(p, 0o600)
+except Exception: pass
+" "$WEB_TOKEN_FILE" "$token" "$expiry_ts"
+
+  if ! systemctl is-active --quiet xraymesh-web.service 2>/dev/null; then
+    systemctl enable --now xraymesh-web.service >/dev/null 2>&1 || true
+    systemctl enable --now xraymesh-iperf.service >/dev/null 2>&1 || true
+  fi
+
+  header
+  section "ONE-CLICK WEB DASHBOARD LOGIN"
+  ok "A temporary login token was generated (valid for 60 minutes)."
+  printf '\n'
+  say "  Direct Browser Link (Public IP):" "$BOLD$CYAN"
+  printf '  %bhttp://%s:%s/?token=%s%b\n\n' "$BOLD$GREEN" "$pub_ip" "$port" "$token" "$RESET"
+
+  if [[ -n "$mesh_ip" ]]; then
+    say "  Internal Mesh Link (Virtual IP):" "$BOLD$PURPLE"
+    printf '  %bhttp://%s:%s/?token=%s%b\n\n' "$BLUE" "$mesh_ip" "$port" "$token" "$RESET"
+  fi
+
+  say "  Token string:" "$BOLD$YELLOW"
+  printf '  %b%s%b\n\n' "$BOLD" "$token" "$RESET"
+  info "Opening the URL in your browser logs you in instantly."
+  pause
+}
+
+set_web_password() {
+  install_web_runtime
+  header
+  section "SET ADMIN PASSWORD"
+  local pass1 pass2 hash
+  read -r -s -p "  Enter new admin password: " pass1
+  printf '\n'
+  read -r -s -p "  Confirm admin password: " pass2
+  printf '\n'
+  if [[ "$pass1" != "$pass2" ]]; then
+    fail "Passwords do not match."
+    pause
+    return 1
+  fi
+  if [[ ${#pass1} -lt 6 ]]; then
+    fail "Password must be at least 6 characters long."
+    pause
+    return 1
+  fi
+
+  hash="$(python3 -c "import secrets, hashlib, sys
+pw = sys.argv[1]
+salt = secrets.token_hex(16)
+h = hashlib.sha256((salt + pw).encode('utf-8')).hexdigest()
+print(f'sha256\${salt}\${h}')
+" "$pass1")"
+
+  if grep -q '^WEB_PASSWORD_HASH=' "$WEB_CONFIG_FILE" 2>/dev/null; then
+    sed -i "s|^WEB_PASSWORD_HASH=.*|WEB_PASSWORD_HASH=\"${hash}\"|" "$WEB_CONFIG_FILE"
+  else
+    printf 'WEB_PASSWORD_HASH=%q\n' "$hash" >> "$WEB_CONFIG_FILE"
+  fi
+  chmod 600 "$WEB_CONFIG_FILE"
+
+  systemctl restart xraymesh-web.service 2>/dev/null || true
+  ok "Admin password configured successfully."
+  pause
+}
+
+configure_web_port() {
+  install_web_runtime
+  header
+  section "CHANGE WEB PORT"
+  local current_port new_port
+  current_port="$(get_web_port)"
+  read -r -p "  Enter web port [${current_port}]: " new_port
+  new_port="${new_port:-$current_port}"
+  if ! valid_port "$new_port"; then
+    fail "Invalid port number."
+    pause
+    return 1
+  fi
+
+  if grep -q '^WEB_PORT=' "$WEB_CONFIG_FILE" 2>/dev/null; then
+    sed -i "s|^WEB_PORT=.*|WEB_PORT=\"${new_port}\"|" "$WEB_CONFIG_FILE"
+  else
+    printf 'WEB_PORT=%q\n' "$new_port" >> "$WEB_CONFIG_FILE"
+  fi
+
+  systemctl restart xraymesh-web.service 2>/dev/null || true
+  ok "Web port updated to ${new_port}."
+  pause
+}
+
+web_menu() {
+  install_web_runtime
+  while true; do
+    header
+    section "WEB DASHBOARD & SPEEDTEST"
+    local web_state iperf_state port pub_ip has_pw
+    web_state="$(systemctl is-active xraymesh-web.service 2>/dev/null || echo inactive)"
+    iperf_state="$(systemctl is-active xraymesh-iperf.service 2>/dev/null || echo inactive)"
+    port="$(get_web_port)"
+    pub_ip="$(get_server_ip)"
+    has_pw="No (Token only)"
+    if grep -qE '^WEB_PASSWORD_HASH="sha256' "$WEB_CONFIG_FILE" 2>/dev/null; then
+      has_pw="Yes (Password + Token)"
+    fi
+
+    printf '  Web Service:      %s\n' "$web_state"
+    printf '  iperf3 Service:   %s\n' "$iperf_state"
+    printf '  Web URL:          http://%s:%s\n' "$pub_ip" "$port"
+    printf '  Password Login:   %s\n\n' "$has_pw"
+
+    printf '  %b[1]%b  Start / Enable Web Dashboard & iperf3\n' "$GREEN" "$RESET"
+    printf '  %b[2]%b  Stop Web Dashboard\n' "$RED" "$RESET"
+    printf '  %b[3]%b  Restart Web Dashboard & iperf3\n' "$BLUE" "$RESET"
+    printf '  %b[4]%b  Generate One-Click Login Link (Token)\n' "$CYAN" "$RESET"
+    printf '  %b[5]%b  Set / Change Admin Password\n' "$PURPLE" "$RESET"
+    printf '  %b[6]%b  Change Web Port\n' "$YELLOW" "$RESET"
+    printf '  %b[7]%b  View Web Logs\n' "$PINK" "$RESET"
+    printf '  %b[0]%b  Back\n\n' "$GRAY" "$RESET"
+
+    read -r -p "  Select an option [0-7]: " choice
+    case "$choice" in
+      1)
+        systemctl enable --now xraymesh-web.service xraymesh-iperf.service
+        ok "Web Dashboard and iperf3 services started."
+        pause
+        ;;
+      2)
+        systemctl stop xraymesh-web.service
+        warn "Web Dashboard stopped."
+        pause
+        ;;
+      3)
+        systemctl restart xraymesh-web.service xraymesh-iperf.service
+        ok "Services restarted."
+        pause
+        ;;
+      4) run_screen generate_web_token ;;
+      5) run_screen set_web_password ;;
+      6) run_screen configure_web_port ;;
+      7) journalctl -u xraymesh-web.service -f -n 50 ;;
+      0) return ;;
+      *) warn "Invalid option"; sleep 1 ;;
+    esac
+  done
+}
+
 update_core() {
   local before after
   before="$(cat "${INSTALL_DIR}/easytier.version" 2>/dev/null || echo "not installed")"
@@ -1699,10 +1975,12 @@ uninstall_app() {
   systemctl disable --now xraymesh.service 2>/dev/null || true
   systemctl disable --now xraymesh-haproxy.service 2>/dev/null || true
   systemctl disable --now xraymesh-iptables.service 2>/dev/null || true
+  systemctl disable --now xraymesh-web.service 2>/dev/null || true
+  systemctl disable --now xraymesh-iperf.service 2>/dev/null || true
   if [[ -x "$IPTABLES_APPLY_SCRIPT" ]]; then
     "$IPTABLES_APPLY_SCRIPT" remove >/dev/null 2>&1 || true
   fi
-  rm -f "$SERVICE_FILE" "$HAPROXY_SERVICE_FILE" "$IPTABLES_SERVICE_FILE" "$IPTABLES_SYSCTL_FILE"
+  rm -f "$SERVICE_FILE" "$HAPROXY_SERVICE_FILE" "$IPTABLES_SERVICE_FILE" "$IPTABLES_SYSCTL_FILE" "$WEB_SERVICE_FILE" "$IPERF_SERVICE_FILE"
   rm -rf -- "$INSTALL_DIR" /etc/xraymesh
   systemctl daemon-reload
   ok "XRayMesh has been removed."
@@ -1715,7 +1993,7 @@ self_test_platform() {
 
 self_test_commands() {
   local command_name
-  for command_name in curl unzip openssl ip ping jq sha256sum ss; do
+  for command_name in curl unzip openssl ip ping jq sha256sum ss python3 iperf3; do
     command -v "$command_name" >/dev/null || return 1
   done
 }
@@ -1777,6 +2055,12 @@ self_test() {
     SELF_TEST_LABEL="XRayMesh DNAT chain is active"
     test_result iptables -w -t nat -S XRAYMESH_DNAT
   fi
+  if [[ -f "$WEB_SERVICE_FILE" ]]; then
+    SELF_TEST_LABEL="Web Dashboard service is active"
+    test_result systemctl is-active --quiet xraymesh-web.service
+    SELF_TEST_LABEL="iperf3 speedtest service is active"
+    test_result systemctl is-active --quiet xraymesh-iperf.service
+  fi
 
   printf '\n'
   if (( failures == 0 )); then
@@ -1806,12 +2090,13 @@ menu() {
     printf '  %b[7]%b  Connection diagnostics\n' "$YELLOW" "$RESET"
     printf '  %b[8]%b  HAProxy TCP tunnels\n' "$PINK" "$RESET"
     printf '  %b[9]%b  iptables UDP/TCP tunnels\n' "$CYAN" "$RESET"
-    printf '  %b[10]%b Run self-test\n' "$GREEN" "$RESET"
-    printf '  %b[11]%b Delete mesh configuration\n' "$YELLOW" "$RESET"
-    printf '  %b[12]%b Uninstall XRayMesh completely\n' "$RED" "$RESET"
+    printf '  %b[10]%b Web UI Dashboard & Speedtest\n' "$GREEN" "$RESET"
+    printf '  %b[11]%b Run self-test\n' "$BLUE" "$RESET"
+    printf '  %b[12]%b Delete mesh configuration\n' "$YELLOW" "$RESET"
+    printf '  %b[13]%b Uninstall XRayMesh completely\n' "$RED" "$RESET"
     printf '  %b[0]%b  Exit\n\n' "$GRAY" "$RESET"
     printf '%b  Tip: Ctrl+C exits here; inside a screen it returns to this menu.%b\n\n' "$DIM$GRAY" "$RESET"
-    read -r -p "  Select an option [0-12]: " choice || { choice=""; continue; }
+    read -r -p "  Select an option [0-13]: " choice || { choice=""; continue; }
     case "$choice" in
       1) IN_MAIN_MENU=0; run_screen setup_node; IN_MAIN_MENU=1 ;;
       2) IN_MAIN_MENU=0; run_screen live_status; IN_MAIN_MENU=1 ;;
@@ -1822,9 +2107,10 @@ menu() {
       7) IN_MAIN_MENU=0; run_screen diagnostics; IN_MAIN_MENU=1 ;;
       8) IN_MAIN_MENU=0; run_screen haproxy_tunnel_menu; IN_MAIN_MENU=1 ;;
       9) IN_MAIN_MENU=0; run_screen iptables_tunnel_menu; IN_MAIN_MENU=1 ;;
-      10) IN_MAIN_MENU=0; run_screen self_test; IN_MAIN_MENU=1 ;;
-      11) IN_MAIN_MENU=0; run_screen delete_mesh; IN_MAIN_MENU=1 ;;
-      12)
+      10) IN_MAIN_MENU=0; run_screen web_menu; IN_MAIN_MENU=1 ;;
+      11) IN_MAIN_MENU=0; run_screen self_test; IN_MAIN_MENU=1 ;;
+      12) IN_MAIN_MENU=0; run_screen delete_mesh; IN_MAIN_MENU=1 ;;
+      13)
         IN_MAIN_MENU=0
         run_screen uninstall_app
         IN_MAIN_MENU=1
@@ -1848,11 +2134,16 @@ case "${1:-menu}" in
   delete) require_root; require_linux; delete_mesh ;;
   haproxy) require_root; require_linux; haproxy_tunnel_menu ;;
   iptables) require_root; require_linux; iptables_tunnel_menu ;;
+  web|dashboard-web) require_root; require_linux; web_menu ;;
+  token|web-token) require_root; require_linux; generate_web_token ;;
+  web-start) require_root; require_linux; systemctl start xraymesh-web.service xraymesh-iperf.service ;;
+  web-stop) require_root; require_linux; systemctl stop xraymesh-web.service xraymesh-iperf.service ;;
+  web-restart) require_root; require_linux; systemctl restart xraymesh-web.service xraymesh-iperf.service ;;
   self-test|doctor) require_linux; self_test ;;
   start|stop|restart) require_root; systemctl "$1" xraymesh.service ;;
   version|-v|--version) echo "${APP} ${VERSION} - © ${OWNER}" ;;
   *)
-    echo "Usage: $0 [menu|install|status|peers|routes|logs|update|delete|haproxy|iptables|self-test|start|stop|restart|version]"
+    echo "Usage: $0 [menu|install|status|peers|routes|logs|update|delete|haproxy|iptables|web|token|self-test|start|stop|restart|version]"
     exit 2
     ;;
 esac
