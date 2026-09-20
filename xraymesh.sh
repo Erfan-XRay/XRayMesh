@@ -2402,7 +2402,7 @@ update_web_assets() {
     ts="$(date +%s)"
     tmp_srv="$(mktemp)"
     tmp_idx="$(mktemp)"
-    if curl -fsSL -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' --connect-timeout 5 --max-time 15 \
+    if curl -fsSL -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' --connect-timeout 10 --max-time 45 --retry 2 \
       "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/${branch}/web/server.py?t=${ts}" \
       -o "$tmp_srv" 2>/dev/null && [[ -s "$tmp_srv" ]]; then
       install -m 0755 "$tmp_srv" "${WEB_DIR}/server.py"
@@ -2410,13 +2410,17 @@ update_web_assets() {
     fi
     rm -f "$tmp_srv"
 
-    if curl -fsSL -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' --connect-timeout 5 --max-time 15 \
+    if curl -fsSL -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' --connect-timeout 10 --max-time 60 --retry 2 \
       "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/${branch}/web/static/index.html?t=${ts}" \
       -o "$tmp_idx" 2>/dev/null && [[ -s "$tmp_idx" ]]; then
       install -m 0644 "$tmp_idx" "${WEB_DIR}/static/index.html"
       updated=1
     fi
     rm -f "$tmp_idx"
+  fi
+
+  if (( updated )); then
+    ok "Web UI assets updated successfully."
   fi
 
   if [[ -f "$WEB_SERVICE_FILE" ]]; then

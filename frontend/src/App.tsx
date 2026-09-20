@@ -410,30 +410,34 @@ export default function App() {
       {isAuthenticated && (
         <>
           {/* Header */}
-          <Header
-            node={status.node}
-            isRefreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            onLogout={handleLogout}
-            lang={lang}
-            onSelectLang={setLang}
-            paletteId={paletteId}
-            onSelectPalette={setPaletteId}
-            availablePalettes={availablePalettes}
-            t={t}
-            isRtl={isRtl}
-          />
+          <div className="relative z-50">
+            <Header
+              node={status.node}
+              isRefreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              onLogout={handleLogout}
+              lang={lang}
+              onSelectLang={setLang}
+              paletteId={paletteId}
+              onSelectPalette={setPaletteId}
+              availablePalettes={availablePalettes}
+              t={t}
+              isRtl={isRtl}
+            />
+          </div>
 
           {/* Overview Cards */}
-          <OverviewCards
-            node={status.node}
-            system={status.system}
-            peerCount={peers.length}
-            avgLatency={avgLatency}
-            onCopy={handleCopy}
-            copiedKey={copiedKey}
-            t={t}
-          />
+          <div className="relative z-10">
+            <OverviewCards
+              node={status.node}
+              system={status.system}
+              peerCount={peers.length}
+              avgLatency={avgLatency}
+              onCopy={handleCopy}
+              copiedKey={copiedKey}
+              t={t}
+            />
+          </div>
 
           {/* Tab Navigation */}
           <div className="flex flex-wrap gap-1.5 mb-6 p-1 rounded-xl bg-card/50 border border-card-border backdrop-blur-sm">
