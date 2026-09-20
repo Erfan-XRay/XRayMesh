@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { NodeConfig, MeshProtocol, MeshInviteData, Language } from '../../types';
 import {
   fetchNodeConfig,
@@ -76,8 +76,28 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
   // Invite & Join
   const [inviteData, setInviteData] = useState<MeshInviteData | null>(null);
   const [loadingInvite, setLoadingInvite] = useState(false);
+  const [overrideEndpoint, setOverrideEndpoint] = useState('');
   const [joinInput, setJoinInput] = useState('');
   const [joining, setJoining] = useState(false);
+
+  const computedInvite = useMemo(() => {
+    if (!inviteData) return null;
+    const baseObj = { ...inviteData.details };
+    let ep = overrideEndpoint.trim() || baseObj.endpoint || '';
+    if (ep && !ep.includes(':') && port) {
+      ep = `${ep}:${port}`;
+    }
+    const finalObj = { ...baseObj, endpoint: ep };
+    try {
+      const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(finalObj))));
+      return {
+        invite: `xrmesh://${b64}`,
+        details: finalObj,
+      };
+    } catch {
+      return inviteData;
+    }
+  }, [inviteData, overrideEndpoint, port]);
 
   // Delete Node State
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -607,18 +627,38 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
               <Share2 className="w-4 h-4 text-accent-green" />
               {t('node_invite_title')}
             </h3>
-            <p className="text-xs text-text-muted mb-4">{t('node_invite_desc')}</p>
+            <p className="text-xs text-text-muted mb-3">{t('node_invite_desc')}</p>
 
-            {inviteData ? (
+            {inviteData && (
+              <div className="mb-3">
+                <label className="block text-[11px] text-text-muted mb-1 font-medium">
+                  {t('node_invite_public_endpoint_label')}
+                </label>
+                <input
+                  type="text"
+                  value={overrideEndpoint}
+                  onChange={(e) => setOverrideEndpoint(e.target.value)}
+                  placeholder={inviteData.details.endpoint || t('node_invite_endpoint_placeholder')}
+                  className="w-full px-3 py-1.5 bg-slate-950/90 border border-white/10 rounded-lg font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-accent-green"
+                />
+                {!overrideEndpoint && (!inviteData.details.endpoint || inviteData.details.endpoint.startsWith(':')) && (
+                  <p className="text-[10px] text-amber-400 mt-1 font-medium leading-normal">
+                    {t('node_invite_no_ip_warning')}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {computedInvite ? (
               <div className="p-3.5 rounded-xl bg-slate-950/80 border border-white/10 mb-4">
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <span className="text-[11px] font-mono text-accent-green font-semibold">
-                    {inviteData.details.net} ({inviteData.details.proto.toUpperCase()})
+                    {computedInvite.details.net} ({computedInvite.details.proto.toUpperCase()})
                   </span>
-                  <span className="text-[10px] text-text-muted font-mono">{inviteData.details.endpoint}</span>
+                  <span className="text-[10px] text-text-muted font-mono">{computedInvite.details.endpoint}</span>
                 </div>
                 <div className="p-2 rounded bg-black/40 border border-white/5 font-mono text-[11px] text-text-main break-all line-clamp-3 select-all">
-                  {inviteData.invite}
+                  {computedInvite.invite}
                 </div>
               </div>
             ) : (
@@ -629,11 +669,11 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
           </div>
 
           <button
-            onClick={() => inviteData && onCopy(inviteData.invite)}
-            disabled={!inviteData}
+            onClick={() => computedInvite && onCopy(computedInvite.invite)}
+            disabled={!computedInvite}
             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-accent-green/15 text-emerald-400 hover:bg-accent-green/25 font-semibold text-xs border border-accent-green/30 transition-all disabled:opacity-50"
           >
-            {copiedKey === inviteData?.invite ? (
+            {copiedKey === computedInvite?.invite ? (
               <>
                 <CheckCircle2 className="w-4 h-4" />
                 <span>{t('btn_copied')}</span>

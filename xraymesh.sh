@@ -297,13 +297,13 @@ else
   args+=(--default-protocol "udp")
 fi
 
-# Configure listeners based on protocol
+# Configure listeners based on protocol (always use explicit URI schemes)
 case "$proto_lower" in
-  udp)
-    args+=(--listeners "udp://0.0.0.0:${PORT}")
-    ;;
   tcp)
     args+=(--listeners "tcp://0.0.0.0:${PORT}")
+    ;;
+  udp)
+    args+=(--listeners "udp://0.0.0.0:${PORT}" --listeners "tcp://0.0.0.0:${PORT}")
     ;;
   ws)
     args+=(--listeners "ws://0.0.0.0:${PORT}/")
@@ -321,7 +321,7 @@ case "$proto_lower" in
     args+=(--listeners "wg://0.0.0.0:${PORT}")
     ;;
   dual|*)
-    args+=(--listeners "$PORT")
+    args+=(--listeners "tcp://0.0.0.0:${PORT}" --listeners "udp://0.0.0.0:${PORT}")
     ;;
 esac
 
@@ -355,9 +355,6 @@ if [[ -n "${PEERS:-}" ]]; then
     else
       [[ "$peer" =~ :[0-9]+$ ]] || peer="${peer}:${PORT}"
       case "$proto_lower" in
-        udp)
-          peer_args+=("udp://${peer}")
-          ;;
         tcp)
           peer_args+=("tcp://${peer}")
           ;;
@@ -376,13 +373,33 @@ if [[ -n "${PEERS:-}" ]]; then
         wg)
           peer_args+=("wg://${peer}")
           ;;
-        dual|*)
+        udp)
           peer_args+=("udp://${peer}" "tcp://${peer}")
+          ;;
+        dual|*)
+          peer_args+=("tcp://${peer}" "udp://${peer}")
           ;;
       esac
     fi
   done
-  ((${#peer_args[@]})) && args+=(--peers "${peer_args[@]}")
+  if ((${#peer_args[@]})); then
+    for p in "${peer_args[@]}"; do
+      args+=(--peers "$p")
+    done
+  fi
+fi
+
+# Ensure kernel IP forwarding is active
+sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+
+# Auto-allow Mesh Port in iptables and ufw if installed
+if command -v iptables >/dev/null 2>&1; then
+  iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null || true
+  iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || true
+fi
+if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+  ufw allow "$PORT"/tcp >/dev/null 2>&1 || true
+  ufw allow "$PORT"/udp >/dev/null 2>&1 || true
 fi
 
 exec /opt/xraymesh/bin/easytier-core "${args[@]}"
@@ -530,6 +547,21 @@ setup_node() {
   fi
 
   write_config "$name" "$secret" "$hostname" "$ipv4" "$protocol" "$port" "$peers" "$encryption" "$ipv6" "$mtu" "$enable_kcp" "$wg_portal" "$wg_portal_port" "$wg_client_cidr"
+  
+  # Ensure kernel forwarding and port availability
+  sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+  if [[ ! -f /etc/sysctl.d/99-xraymesh.conf ]]; then
+    echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/99-xraymesh.conf 2>/dev/null || true
+  fi
+  if command -v iptables >/dev/null 2>&1; then
+    iptables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null || true
+    iptables -C INPUT -p udp --dport "$port" -j ACCEPT 2>/dev/null || iptables -I INPUT -p udp --dport "$port" -j ACCEPT 2>/dev/null || true
+  fi
+  if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+    ufw allow "$port"/tcp >/dev/null 2>&1 || true
+    ufw allow "$port"/udp >/dev/null 2>&1 || true
+  fi
+
   write_service
   systemctl enable xraymesh.service xraymesh-iperf.service >/dev/null 2>&1 || true
   if systemctl is-active --quiet xraymesh.service; then

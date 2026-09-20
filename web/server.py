@@ -496,31 +496,73 @@ def run_xraymesh_cmd(args, timeout=45):
 
 _public_ip_cache = {"ip": "", "time": 0.0}
 
+def is_public_ipv4(ip_str):
+    """Check if an IPv4 address is publicly routable (not private/loopback/carrier-grade)."""
+    if not ip_str or not re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", ip_str):
+        return False
+    parts = [int(p) for p in ip_str.split(".")]
+    if any(p < 0 or p > 255 for p in parts):
+        return False
+    if parts[0] in (0, 10, 127):
+        return False
+    if parts[0] == 172 and 16 <= parts[1] <= 31:
+        return False
+    if parts[0] == 192 and parts[1] == 168:
+        return False
+    if parts[0] == 169 and parts[1] == 254:
+        return False
+    if parts[0] == 100 and 64 <= parts[1] <= 127:  # Carrier-grade NAT
+        return False
+    return True
+
 def get_server_public_ip():
-    """Detect public IPv4 of the server (cached for 60s)."""
+    """Detect public IPv4 of the server with multi-provider fallback (cached for 60s)."""
     now = time.time()
     if _public_ip_cache["ip"] and (now - _public_ip_cache["time"]) < 60:
         return _public_ip_cache["ip"]
-    try:
-        req = urllib.request.Request("https://api.ipify.org", headers={"User-Agent": "curl/7.88.1"})
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            ip = resp.read().decode("utf-8").strip()
-            if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", ip):
+
+    providers = [
+        "https://api.ipify.org",
+        "https://icanhazip.com",
+        "https://ifconfig.me/ip",
+        "https://checkip.amazonaws.com"
+    ]
+    for url in providers:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "curl/7.88.1"})
+            with urllib.request.urlopen(req, timeout=2.5) as resp:
+                ip = resp.read().decode("utf-8").strip()
+                if is_public_ipv4(ip):
+                    _public_ip_cache["ip"] = ip
+                    _public_ip_cache["time"] = now
+                    return ip
+        except Exception:
+            continue
+
+    # Fallback to curl CLI
+    for url in ("https://api.ipify.org", "https://icanhazip.com"):
+        try:
+            r = subprocess.run(["curl", "-4", "-s", "--connect-timeout", "2", url], stdout=subprocess.PIPE, text=True, timeout=3)
+            ip = r.stdout.strip()
+            if is_public_ipv4(ip):
                 _public_ip_cache["ip"] = ip
                 _public_ip_cache["time"] = now
                 return ip
-    except Exception:
-        pass
+        except Exception:
+            pass
+
+    # Route lookup fallback (only accept if truly public)
     try:
         r = subprocess.run(["ip", "route", "get", "1.1.1.1"], stdout=subprocess.PIPE, text=True, timeout=2)
         m = re.search(r"src\s+([0-9.]+)", r.stdout)
-        if m:
+        if m and is_public_ipv4(m.group(1)):
             ip = m.group(1)
             _public_ip_cache["ip"] = ip
             _public_ip_cache["time"] = now
             return ip
     except Exception:
         pass
+
     return ""
 
 
@@ -1271,7 +1313,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
 
             cfg = load_env_file(CONFIG_FILE)
             cur_ip = cfg.get("IPV4", "")
-            if not cur_ip:
+            if not cur_ip or cur_ip == "10.144.144.1":
                 cur_ip = f"10.144.144.{secrets.randbelow(200) + 2}"
 
             cfg["NETWORK_NAME"] = net
