@@ -997,9 +997,9 @@ save_haproxy_tunnel() {
   mkdir -p "$HAPROXY_TUNNEL_DIR"
   umask 077
   {
-    printf 'TUNNEL_NAME=%q\n' "$name"
-    printf 'TARGET_IP=%q\n' "$target"
-    printf 'PORT_SPEC=%q\n' "$ports"
+    printf 'TUNNEL_NAME="%s"\n' "$name"
+    printf 'TARGET_IP="%s"\n' "$target"
+    printf 'PORT_SPEC="%s"\n' "$ports"
   } > "$file"
 }
 
@@ -1185,6 +1185,30 @@ delete_haproxy_tunnel_noninteractive() {
   ok "HAProxy tunnel '${name}' deleted."
 }
 
+edit_haproxy_tunnel_noninteractive() {
+  require_root
+  install_haproxy_runtime
+  local name="${1:-}" target="${2:-}" ports="${3:-}"
+  validate_tunnel_name "$name" || { fail "Enter a valid tunnel name with up to 32 characters."; return 1; }
+  [[ -f "${HAPROXY_TUNNEL_DIR}/${name}.env" ]] || { fail "HAProxy tunnel '${name}' not found."; return 1; }
+  valid_ip "$target" || { fail "Target must be a valid 10.x.x.x mesh IP."; return 1; }
+  expand_port_spec "$ports" >/dev/null || { fail "Invalid port list or range."; return 1; }
+  validate_haproxy_ports "$name" "$ports" || return 1
+
+  local backup
+  backup="$(mktemp)"
+  cp "${HAPROXY_TUNNEL_DIR}/${name}.env" "$backup"
+  save_haproxy_tunnel "$name" "$target" "$ports"
+  if apply_haproxy_config; then
+    rm -f "$backup"
+    ok "HAProxy tunnel '${name}' updated."
+  else
+    mv "$backup" "${HAPROXY_TUNNEL_DIR}/${name}.env"
+    generate_haproxy_config
+    return 1
+  fi
+}
+
 install_iptables_runtime() {
   if command -v iptables >/dev/null 2>&1; then return; fi
   info "Installing iptables..."
@@ -1306,17 +1330,18 @@ EOF_SYSCTL
 }
 
 save_iptables_tunnel() {
-  local name="$1" target="$2" ports="$3" protocol="$4" in_if="$5" source_cidr="$6"
+  local name="$1" target="$2" ports="$3" protocol="${4:-udp}"
+  local in_if="${5:-any}" source_cidr="${6:-0.0.0.0/0}"
   local file="${IPTABLES_TUNNEL_DIR}/${name}.env"
   mkdir -p "$IPTABLES_TUNNEL_DIR"
   umask 077
   {
-    printf 'TUNNEL_NAME=%q\n' "$name"
-    printf 'TARGET_IP=%q\n' "$target"
-    printf 'PORT_SPEC=%q\n' "$ports"
-    printf 'FORWARD_PROTOCOL=%q\n' "$protocol"
-    printf 'IN_IF=%q\n' "$in_if"
-    printf 'SOURCE_CIDR=%q\n' "$source_cidr"
+    printf 'TUNNEL_NAME="%s"\n' "$name"
+    printf 'TARGET_IP="%s"\n' "$target"
+    printf 'PORT_SPEC="%s"\n' "$ports"
+    printf 'FORWARD_PROTOCOL="%s"\n' "$protocol"
+    printf 'IN_IF="%s"\n' "$in_if"
+    printf 'SOURCE_CIDR="%s"\n' "$source_cidr"
   } > "$file"
 }
 
@@ -1756,6 +1781,33 @@ delete_iptables_tunnel_noninteractive() {
   ok "iptables tunnel '${name}' deleted."
 }
 
+edit_iptables_tunnel_noninteractive() {
+  require_root
+  install_iptables_runtime
+  local name="${1:-}" target="${2:-}" ports="${3:-}" protocol="${4:-udp}" in_if="${5:-any}" source_cidr="${6:-0.0.0.0/0}"
+  validate_tunnel_name "$name" || { fail "Enter a valid tunnel name with up to 32 characters."; return 1; }
+  [[ -f "${IPTABLES_TUNNEL_DIR}/${name}.env" ]] || { fail "iptables tunnel '${name}' not found."; return 1; }
+  valid_ip "$target" || { fail "Target must be a valid 10.x.x.x mesh IP."; return 1; }
+  [[ "$protocol" =~ ^(tcp|udp|both)$ ]] || { fail "Protocol must be tcp, udp, or both."; return 1; }
+  validate_iptables_interface "$in_if" || { fail "Interface '${in_if}' does not exist."; return 1; }
+  valid_ipv4_cidr "$source_cidr" || { fail "Invalid source IPv4/CIDR '${source_cidr}'."; return 1; }
+  expand_port_spec "$ports" >/dev/null || { fail "Invalid port specification."; return 1; }
+  validate_iptables_ports "$name" "$protocol" "$ports" "$in_if" || return 1
+
+  local backup
+  backup="$(mktemp)"
+  cp "${IPTABLES_TUNNEL_DIR}/${name}.env" "$backup"
+  save_iptables_tunnel "$name" "$target" "$ports" "$protocol" "$in_if" "$source_cidr"
+  if apply_iptables_config; then
+    rm -f "$backup"
+    ok "iptables tunnel '${name}' updated."
+  else
+    mv "$backup" "${IPTABLES_TUNNEL_DIR}/${name}.env"
+    generate_iptables_apply_script
+    return 1
+  fi
+}
+
 gost_arch_asset() {
   case "$(uname -m)" in
     x86_64|amd64) echo "linux_amd64" ;;
@@ -1906,10 +1958,10 @@ save_gost_tunnel() {
   mkdir -p "$GOST_TUNNEL_DIR"
   umask 077
   {
-    printf 'TUNNEL_NAME=%q\n' "$name"
-    printf 'TARGET_IP=%q\n' "$target"
-    printf 'PORT_SPEC=%q\n' "$ports"
-    printf 'PROTOCOL=%q\n' "$protocol"
+    printf 'TUNNEL_NAME="%s"\n' "$name"
+    printf 'TARGET_IP="%s"\n' "$target"
+    printf 'PORT_SPEC="%s"\n' "$ports"
+    printf 'PROTOCOL="%s"\n' "$protocol"
   } > "$file"
 }
 
@@ -2225,6 +2277,31 @@ delete_gost_tunnel_noninteractive() {
   rm -f "$file"
   apply_gost_config
   ok "GOST tunnel '${name}' deleted."
+}
+
+edit_gost_tunnel_noninteractive() {
+  require_root
+  install_gost_runtime
+  local name="${1:-}" target="${2:-}" ports="${3:-}" protocol="${4:-both}"
+  protocol="${protocol,,}"
+  validate_tunnel_name "$name" || { fail "Enter a valid tunnel name with up to 32 characters."; return 1; }
+  [[ -f "${GOST_TUNNEL_DIR}/${name}.env" ]] || { fail "GOST tunnel '${name}' not found."; return 1; }
+  valid_ip "$target" || { fail "Target must be a valid 10.x.x.x mesh IP."; return 1; }
+  expand_port_spec "$ports" >/dev/null || { fail "Invalid port list or range."; return 1; }
+  validate_gost_ports "$name" "$ports" "$protocol" || return 1
+
+  local backup
+  backup="$(mktemp)"
+  cp "${GOST_TUNNEL_DIR}/${name}.env" "$backup"
+  save_gost_tunnel "$name" "$target" "$ports" "$protocol"
+  if apply_gost_config; then
+    rm -f "$backup"
+    ok "GOST tunnel '${name}' updated."
+  else
+    mv "$backup" "${GOST_TUNNEL_DIR}/${name}.env"
+    generate_gost_config
+    return 1
+  fi
 }
 
 ensure_xraymesh_cli() {
@@ -2784,12 +2861,15 @@ main() {
   delete) require_root; require_linux; delete_mesh ;;
   haproxy) require_root; require_linux; haproxy_tunnel_menu ;;
   haproxy-create) shift; require_linux; create_haproxy_tunnel_noninteractive "$@" ;;
+  haproxy-edit) shift; require_linux; edit_haproxy_tunnel_noninteractive "$@" ;;
   haproxy-delete) shift; require_linux; delete_haproxy_tunnel_noninteractive "$@" ;;
   iptables) require_root; require_linux; iptables_tunnel_menu ;;
   iptables-create) shift; require_linux; create_iptables_tunnel_noninteractive "$@" ;;
+  iptables-edit) shift; require_linux; edit_iptables_tunnel_noninteractive "$@" ;;
   iptables-delete) shift; require_linux; delete_iptables_tunnel_noninteractive "$@" ;;
   gost) require_root; require_linux; gost_tunnel_menu ;;
   gost-create) shift; require_linux; create_gost_tunnel_noninteractive "$@" ;;
+  gost-edit) shift; require_linux; edit_gost_tunnel_noninteractive "$@" ;;
   gost-delete) shift; require_linux; delete_gost_tunnel_noninteractive "$@" ;;
   gost-start) require_root; require_linux; systemctl start xraymesh-gost.service ;;
   gost-stop) require_root; require_linux; systemctl stop xraymesh-gost.service ;;

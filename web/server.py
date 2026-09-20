@@ -61,6 +61,7 @@ def load_env_file(filepath):
                 k, v = line.split("=", 1)
                 k = k.strip()
                 v = v.strip().strip("'\"")
+                v = re.sub(r'\\([, \t\'\"])', r'\1', v)
                 res[k] = v
     except Exception:
         pass
@@ -796,6 +797,22 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": msg or "Failed to create HAProxy tunnel."}, status=400)
             return
 
+        elif path == "/api/tunnels/haproxy/edit":
+            name = data.get("name", "").strip()
+            target = data.get("target", "").strip()
+            ports = data.get("ports", "").strip()
+
+            if not name or not target or not ports:
+                self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
+                return
+
+            ok, msg = run_xraymesh_cmd(["haproxy-edit", name, target, ports])
+            if ok:
+                self.send_json({"ok": True, "message": msg or "HAProxy tunnel updated successfully."})
+            else:
+                self.send_json({"ok": False, "error": msg or "Failed to update HAProxy tunnel."}, status=400)
+            return
+
         elif path == "/api/tunnels/haproxy/delete":
             name = data.get("name", "").strip()
             if not name:
@@ -828,6 +845,25 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": msg or "Failed to create iptables tunnel."}, status=400)
             return
 
+        elif path == "/api/tunnels/iptables/edit":
+            name = data.get("name", "").strip()
+            target = data.get("target", "").strip()
+            ports = data.get("ports", "").strip()
+            protocol = data.get("protocol", "udp").strip().lower()
+            in_if = data.get("interface", "any").strip()
+            source_cidr = data.get("source_cidr", "0.0.0.0/0").strip()
+
+            if not name or not target or not ports:
+                self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
+                return
+
+            ok, msg = run_xraymesh_cmd(["iptables-edit", name, target, ports, protocol, in_if, source_cidr])
+            if ok:
+                self.send_json({"ok": True, "message": msg or "iptables tunnel updated successfully."})
+            else:
+                self.send_json({"ok": False, "error": msg or "Failed to update iptables tunnel."}, status=400)
+            return
+
         elif path == "/api/tunnels/iptables/delete":
             name = data.get("name", "").strip()
             if not name:
@@ -856,6 +892,23 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"ok": True, "message": msg or "GOST tunnel created successfully."})
             else:
                 self.send_json({"ok": False, "error": msg or "Failed to create GOST tunnel."}, status=400)
+            return
+
+        elif path == "/api/tunnels/gost/edit":
+            name = data.get("name", "").strip()
+            target = data.get("target", "").strip()
+            ports = data.get("ports", "").strip()
+            protocol = data.get("protocol", "both").strip().lower()
+
+            if not name or not target or not ports:
+                self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
+                return
+
+            ok, msg = run_xraymesh_cmd(["gost-edit", name, target, ports, protocol])
+            if ok:
+                self.send_json({"ok": True, "message": msg or "GOST tunnel updated successfully."})
+            else:
+                self.send_json({"ok": False, "error": msg or "Failed to update GOST tunnel."}, status=400)
             return
 
         elif path == "/api/tunnels/gost/delete":
