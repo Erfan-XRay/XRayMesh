@@ -459,7 +459,7 @@ set -Eeuo pipefail
 config_file="/etc/xraymesh/config.env"
 mesh_ip=""
 if [[ -f "$config_file" ]]; then
-  mesh_ip="$(grep -E '^IPV4=' "$config_file" 2>/dev/null | cut -d= -f2 | tr -d '"'\'' ')"
+  mesh_ip="$( (grep -E '^IPV4=' "$config_file" 2>/dev/null || true) | cut -d= -f2- | tr -d '"'\'' ' )"
 fi
 
 # Wait for mesh virtual IP to be assigned to an interface (up to 20 seconds)
@@ -1791,7 +1791,7 @@ install_gost_runtime() {
   fi
 
   if [[ -n "$checksums_url" ]] && curl -fsSL --connect-timeout 8 --max-time 15 "$checksums_url" -o "${tmp}/checksums.txt" 2>/dev/null; then
-    expected_digest="$(grep -E "[[:space:]]${asset_name}\$" "${tmp}/checksums.txt" 2>/dev/null | awk '{print $1}')"
+    expected_digest="$( (grep -E "[[:space:]]${asset_name}\$" "${tmp}/checksums.txt" 2>/dev/null || true) | awk '{print $1}' )"
     if [[ -n "$expected_digest" ]]; then
       actual_digest="$(sha256sum "${tmp}/gost.tar.gz" | awk '{print $1}')"
       if [[ "${actual_digest,,}" != "${expected_digest,,}" ]]; then
@@ -2490,34 +2490,36 @@ EOF_WEB_SVC
 }
 
 get_web_port() {
+  local port=""
   if [[ -f "$WEB_CONFIG_FILE" ]]; then
-    local port
-    port="$(grep -E '^WEB_PORT=' "$WEB_CONFIG_FILE" 2>/dev/null | cut -d= -f2 | tr -d '"'\'' ')"
-    echo "${port:-$DEFAULT_WEB_PORT}"
-  else
-    echo "$DEFAULT_WEB_PORT"
+    port="$( (grep -E '^WEB_PORT=' "$WEB_CONFIG_FILE" 2>/dev/null || true) | cut -d= -f2- | tr -d '"'\'' ' )"
   fi
+  echo "${port:-$DEFAULT_WEB_PORT}"
 }
 
 get_web_domain() {
+  local domain=""
   if [[ -f "$WEB_CONFIG_FILE" ]]; then
-    grep -E '^WEB_DOMAIN=' "$WEB_CONFIG_FILE" 2>/dev/null | cut -d= -f2 | tr -d '"'\'' '
+    domain="$( (grep -E '^WEB_DOMAIN=' "$WEB_CONFIG_FILE" 2>/dev/null || true) | cut -d= -f2- | tr -d '"'\'' ' )"
   fi
+  echo "$domain"
 }
 
 get_web_proto() {
-  if [[ -f "$WEB_CONFIG_FILE" ]] && grep -q '^WEB_SSL_CERT=' "$WEB_CONFIG_FILE" 2>/dev/null; then
-    echo "https"
-  else
-    echo "http"
+  if [[ -f "$WEB_CONFIG_FILE" ]]; then
+    if grep -q '^WEB_SSL_CERT=' "$WEB_CONFIG_FILE" 2>/dev/null; then
+      echo "https"
+      return 0
+    fi
   fi
+  echo "http"
 }
 
 get_server_ip() {
   local ip
   ip="$(curl -fsS4 --connect-timeout 2 https://api.ipify.org 2>/dev/null || true)"
   if [[ -z "$ip" ]]; then
-    ip="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || true)"
+    ip="$( (ip -4 route get 1.1.1.1 2>/dev/null || true) | awk '{print $7; exit}' )"
   fi
   echo "${ip:-127.0.0.1}"
 }
@@ -2776,7 +2778,7 @@ generate_web_token() {
   domain="$(get_web_domain)"
   mesh_ip=""
   if [[ -f "$CONFIG_FILE" ]]; then
-    mesh_ip="$(grep -E '^IPV4=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2 | tr -d '"'\'' ')"
+    mesh_ip="$( (grep -E '^IPV4=' "$CONFIG_FILE" 2>/dev/null || true) | cut -d= -f2- | tr -d '"'\'' ' )"
   fi
 
   python3 -c "import json, os, sys
@@ -3069,10 +3071,10 @@ menu() {
     mesh_state="$(systemctl is-active xraymesh.service 2>/dev/null || echo inactive)"
     web_state="$(systemctl is-active xraymesh-web.service 2>/dev/null || echo inactive)"
     iperf_state="$(systemctl is-active xraymesh-iperf.service 2>/dev/null || echo inactive)"
-    port="$(get_web_port)"
-    pub_ip="$(get_server_ip)"
-    proto="$(get_web_proto)"
-    domain="$(get_web_domain)"
+    port="$(get_web_port 2>/dev/null || echo "$DEFAULT_WEB_PORT")"
+    pub_ip="$(get_server_ip 2>/dev/null || echo "127.0.0.1")"
+    proto="$(get_web_proto 2>/dev/null || echo "http")"
+    domain="$(get_web_domain 2>/dev/null || true)"
 
     # shellcheck disable=SC1090
     [[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE"
@@ -3179,10 +3181,10 @@ main() {
       local mesh_state web_state port pub_ip proto domain v_ip host_name
       mesh_state="$(systemctl is-active xraymesh.service 2>/dev/null || echo inactive)"
       web_state="$(systemctl is-active xraymesh-web.service 2>/dev/null || echo inactive)"
-      port="$(get_web_port)"
-      pub_ip="$(get_server_ip)"
-      proto="$(get_web_proto)"
-      domain="$(get_web_domain)"
+      port="$(get_web_port 2>/dev/null || echo "$DEFAULT_WEB_PORT")"
+      pub_ip="$(get_server_ip 2>/dev/null || echo "127.0.0.1")"
+      proto="$(get_web_proto 2>/dev/null || echo "http")"
+      domain="$(get_web_domain 2>/dev/null || true)"
       # shellcheck disable=SC1090
       source "$CONFIG_FILE"
       v_ip="${IPV4:-unknown}"
