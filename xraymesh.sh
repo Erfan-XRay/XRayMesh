@@ -1290,34 +1290,6 @@ validate_haproxy_ports() {
   done
 }
 
-select_mesh_target() {
-  local -a nodes=()
-  local line choice index
-  while IFS= read -r line; do [[ -n "$line" ]] && nodes+=("$line"); done < <(discover_mesh_nodes)
-
-  printf '\n'
-  if ((${#nodes[@]})); then
-    say "  Available EasyTier nodes" "$BOLD$CYAN"
-    for index in "${!nodes[@]}"; do
-      IFS='|' read -r node_ip node_host <<< "${nodes[$index]}"
-      printf '  %b[%d]%b  %-15s  %s\n' "$CYAN" "$((index + 1))" "$RESET" "$node_ip" "${node_host:-unknown}"
-    done
-  else
-    warn "No EasyTier peers were discovered automatically."
-  fi
-  printf '  %b[M]%b  Enter a virtual IP manually\n\n' "$PURPLE" "$RESET"
-  read -r -p "  Select destination node: " choice
-  if [[ "${choice,,}" == "m" ]]; then
-    read -r -p "  Destination virtual IP: " SELECTED_TARGET
-  elif [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#nodes[@]} )); then
-    SELECTED_TARGET="${nodes[$((choice - 1))]%%|*}"
-  else
-    fail "Invalid node selection."
-    return 1
-  fi
-  valid_ip "$SELECTED_TARGET" || { fail "Destination must be a valid 10.x.x.x mesh IP."; return 1; }
-}
-
 save_haproxy_tunnel() {
   local name="$1" target="$2" ports="$3" file="${HAPROXY_TUNNEL_DIR}/${1}.env"
   mkdir -p "$HAPROXY_TUNNEL_DIR"
@@ -1329,152 +1301,6 @@ save_haproxy_tunnel() {
   } > "$file"
 }
 
-create_haproxy_tunnel() {
-  header
-  section "CREATE HAPROXY TUNNEL"
-  info "HAProxy tunnels support TCP traffic. Generic UDP forwarding is not supported."
-  install_haproxy_runtime
-
-  local name ports
-  while :; do
-    read -r -p "  Tunnel name (letters, numbers, _ or -): " name
-    validate_tunnel_name "$name" || { warn "Enter a valid name with up to 32 characters."; continue; }
-    [[ ! -f "${HAPROXY_TUNNEL_DIR}/${name}.env" ]] || { warn "A tunnel with this name already exists."; continue; }
-    break
-  done
-  select_mesh_target || return 1
-  while :; do
-    read -r -p "  TCP ports (e.g. 80,443,8000-8010): " ports
-    expand_port_spec "$ports" >/dev/null && validate_haproxy_ports "$name" "$ports" && break
-    warn "Invalid ports. Use comma-separated ports/ranges; maximum 256 expanded ports."
-  done
-
-  save_haproxy_tunnel "$name" "$SELECTED_TARGET" "$ports"
-  if apply_haproxy_config; then
-    ok "Tunnel '${name}' forwards TCP ports ${ports} to ${SELECTED_TARGET}."
-  else
-    rm -f "${HAPROXY_TUNNEL_DIR}/${name}.env"
-    generate_haproxy_config
-    return 1
-  fi
-  pause
-}
-
-list_haproxy_tunnels() {
-  local definition count=0
-  printf '\n'
-  printf '  %-4s %-20s %-16s %s\n' "ID" "NAME" "TARGET" "TCP PORTS"
-  printf '  %-4s %-20s %-16s %s\n' "--" "--------------------" "---------------" "----------------"
-  HAPROXY_FILES=()
-  for definition in "$HAPROXY_TUNNEL_DIR"/*.env; do
-    [[ -f "$definition" ]] || continue
-    unset TUNNEL_NAME TARGET_IP PORT_SPEC
-    # shellcheck disable=SC1090
-    source "$definition"
-    HAPROXY_FILES+=("$definition")
-    ((count+=1))
-    printf '  %-4s %-20s %-16s %s\n' "$count" "$TUNNEL_NAME" "$TARGET_IP" "$PORT_SPEC"
-  done
-  ((count)) || warn "No HAProxy tunnels are configured."
-}
-
-edit_haproxy_tunnel() {
-  header
-  section "EDIT HAPROXY TUNNEL"
-  list_haproxy_tunnels
-  ((${#HAPROXY_FILES[@]})) || { pause; return; }
-  local choice definition old_name name ports backup
-  read -r -p "  Select tunnel ID: " choice
-  if [[ ! "$choice" =~ ^[0-9]+$ ]] ||
-     (( choice < 1 || choice > ${#HAPROXY_FILES[@]} )); then
-    fail "Invalid tunnel selection."
-    return 1
-  fi
-  definition="${HAPROXY_FILES[$((choice - 1))]}"
-  # shellcheck disable=SC1090
-  source "$definition"
-  old_name="$TUNNEL_NAME"
-  name="$(prompt_default "Tunnel name" "$TUNNEL_NAME")"
-  validate_tunnel_name "$name" || { fail "Invalid tunnel name."; return 1; }
-  if [[ "$name" != "$old_name" && -f "${HAPROXY_TUNNEL_DIR}/${name}.env" ]]; then
-    fail "A tunnel named '${name}' already exists."
-    return 1
-  fi
-  select_mesh_target || return 1
-  while :; do
-    ports="$(prompt_default "TCP ports" "$PORT_SPEC")"
-    expand_port_spec "$ports" >/dev/null && validate_haproxy_ports "$old_name" "$ports" && break
-    warn "Invalid port list or range."
-  done
-  backup="$(mktemp)"
-  cp "$definition" "$backup"
-  [[ "$name" == "$old_name" ]] || rm -f "$definition"
-  save_haproxy_tunnel "$name" "$SELECTED_TARGET" "$ports"
-  if ! apply_haproxy_config; then
-    rm -f "${HAPROXY_TUNNEL_DIR}/${name}.env"
-    cp "$backup" "$definition"
-    rm -f "$backup"
-    generate_haproxy_config
-    fail "The previous tunnel configuration was restored."
-    return 1
-  fi
-  rm -f "$backup"
-  ok "Tunnel '${name}' updated."
-  pause
-}
-
-delete_haproxy_tunnel() {
-  header
-  section "DELETE HAPROXY TUNNEL"
-  list_haproxy_tunnels
-  ((${#HAPROXY_FILES[@]})) || { pause; return; }
-  local choice definition
-  read -r -p "  Select tunnel ID: " choice
-  if [[ ! "$choice" =~ ^[0-9]+$ ]] ||
-     (( choice < 1 || choice > ${#HAPROXY_FILES[@]} )); then
-    fail "Invalid tunnel selection."
-    return 1
-  fi
-  definition="${HAPROXY_FILES[$((choice - 1))]}"
-  # shellcheck disable=SC1090
-  source "$definition"
-  read -r -p "  Type DELETE to remove '${TUNNEL_NAME}': " confirm
-  [[ "$confirm" == "DELETE" ]] || { info "Delete operation cancelled."; return; }
-  rm -f "$definition"
-  if compgen -G "${HAPROXY_TUNNEL_DIR}/*.env" >/dev/null; then
-    apply_haproxy_config
-  else
-    systemctl disable --now xraymesh-haproxy.service 2>/dev/null || true
-    rm -f "$HAPROXY_CONFIG" "$HAPROXY_SERVICE_FILE"
-    systemctl daemon-reload
-  fi
-  ok "HAProxy tunnel '${TUNNEL_NAME}' deleted."
-  pause
-}
-
-haproxy_tunnel_menu() {
-  while true; do
-    header
-    section "HAPROXY TCP TUNNELS"
-    printf '  Service: %s\n' "$(systemctl is-active xraymesh-haproxy.service 2>/dev/null || echo inactive)"
-    list_haproxy_tunnels
-    printf '\n'
-    printf '  %b[1]%b  Create tunnel\n' "$CYAN" "$RESET"
-    printf '  %b[2]%b  Edit tunnel\n' "$PURPLE" "$RESET"
-    printf '  %b[3]%b  Delete tunnel\n' "$RED" "$RESET"
-    printf '  %b[4]%b  View HAProxy logs\n' "$BLUE" "$RESET"
-    printf '  %b[0]%b  Back\n\n' "$GRAY" "$RESET"
-    read -r -p "  Select an option [0-4]: " choice
-    case "$choice" in
-      1) run_screen create_haproxy_tunnel ;;
-      2) run_screen edit_haproxy_tunnel ;;
-      3) run_screen delete_haproxy_tunnel ;;
-      4) journalctl -u xraymesh-haproxy.service -f -n 80 -o short-iso ;;
-      0) return ;;
-      *) warn "Invalid option"; sleep 1 ;;
-    esac
-  done
-}
 
 create_haproxy_tunnel_noninteractive() {
   require_root
@@ -1849,228 +1675,6 @@ disable_iptables_tunnels() {
   systemctl daemon-reload
 }
 
-create_iptables_tunnel() {
-  header
-  section "CREATE IPTABLES TUNNEL"
-  info "This forwards raw TCP/UDP through the EasyTier mesh using DNAT + FORWARD + MASQUERADE."
-  info "MASQUERADE is enabled so replies return through this server instead of escaping through the destination's default route."
-  install_iptables_runtime
-
-  local name ports in_if source_cidr default_if
-  while :; do
-    read -r -p "  Tunnel name (letters, numbers, _ or -): " name
-    validate_tunnel_name "$name" || { warn "Enter a valid name with up to 32 characters."; continue; }
-    [[ ! -f "${IPTABLES_TUNNEL_DIR}/${name}.env" ]] || { warn "A tunnel with this name already exists."; continue; }
-    break
-  done
-
-  select_mesh_target || return 1
-  ip route get "$SELECTED_TARGET" >/dev/null 2>&1 || { fail "No route to mesh target ${SELECTED_TARGET}."; return 1; }
-  select_iptables_protocol udp || return 1
-
-  default_if="$(default_public_interface)"
-  [[ -n "$default_if" ]] || default_if="any"
-  while :; do
-    in_if="$(prompt_default "Inbound interface (or 'any')" "$default_if")"
-    validate_iptables_interface "$in_if" && break
-    warn "Interface '${in_if}' does not exist."
-  done
-
-  while :; do
-    source_cidr="$(prompt_default "Allowed source IPv4/CIDR" "0.0.0.0/0")"
-    valid_ipv4_cidr "$source_cidr" && break
-    warn "Enter a valid IPv4 address or CIDR, e.g. 0.0.0.0/0 or 203.0.113.0/24."
-  done
-
-  while :; do
-    read -r -p "  Ports (e.g. 443 or 80,443,8000-8010): " ports
-    if expand_port_spec "$ports" >/dev/null &&
-       validate_iptables_ports "$name" "$SELECTED_IPTABLES_PROTOCOL" "$ports" "$in_if"; then
-      break
-    fi
-    warn "Invalid/conflicting ports. Use comma-separated ports/ranges; maximum 256 expanded ports."
-  done
-
-  save_iptables_tunnel "$name" "$SELECTED_TARGET" "$ports" "$SELECTED_IPTABLES_PROTOCOL" "$in_if" "$source_cidr"
-  if apply_iptables_config; then
-    ok "Tunnel '${name}' forwards ${SELECTED_IPTABLES_PROTOCOL^^} ports ${ports} to ${SELECTED_TARGET}."
-  else
-    rm -f "${IPTABLES_TUNNEL_DIR}/${name}.env"
-    generate_iptables_apply_script
-    return 1
-  fi
-  pause
-}
-
-list_iptables_tunnels() {
-  local definition count=0
-  local TUNNEL_NAME TARGET_IP PORT_SPEC FORWARD_PROTOCOL IN_IF SOURCE_CIDR
-  printf '\n'
-  printf '  %-4s %-18s %-16s %-7s %-12s %-18s %s\n' "ID" "NAME" "TARGET" "PROTO" "INTERFACE" "SOURCE" "PORTS"
-  printf '  %-4s %-18s %-16s %-7s %-12s %-18s %s\n' "--" "------------------" "---------------" "-------" "------------" "------------------" "----------------"
-  IPTABLES_FILES=()
-  for definition in "$IPTABLES_TUNNEL_DIR"/*.env; do
-    [[ -f "$definition" ]] || continue
-    TUNNEL_NAME=""; TARGET_IP=""; PORT_SPEC=""; FORWARD_PROTOCOL=""; IN_IF=""; SOURCE_CIDR=""
-    # shellcheck disable=SC1090
-    source "$definition"
-    IPTABLES_FILES+=("$definition")
-    ((count+=1))
-    printf '  %-4s %-18s %-16s %-7s %-12s %-18s %s\n' \
-      "$count" "$TUNNEL_NAME" "$TARGET_IP" "${FORWARD_PROTOCOL^^}" "$IN_IF" "$SOURCE_CIDR" "$PORT_SPEC"
-  done
-  ((count)) || warn "No iptables tunnels are configured."
-}
-
-edit_iptables_tunnel() {
-  header
-  section "EDIT IPTABLES TUNNEL"
-  list_iptables_tunnels
-  ((${#IPTABLES_FILES[@]})) || { pause; return; }
-
-  local choice definition old_name name ports in_if source_cidr backup
-  local TUNNEL_NAME TARGET_IP PORT_SPEC FORWARD_PROTOCOL IN_IF SOURCE_CIDR
-  read -r -p "  Select tunnel ID: " choice
-  if [[ ! "$choice" =~ ^[0-9]+$ ]] || (( choice < 1 || choice > ${#IPTABLES_FILES[@]} )); then
-    fail "Invalid tunnel selection."
-    return 1
-  fi
-
-  definition="${IPTABLES_FILES[$((choice - 1))]}"
-  # shellcheck disable=SC1090
-  source "$definition"
-  old_name="$TUNNEL_NAME"
-
-  name="$(prompt_default "Tunnel name" "$TUNNEL_NAME")"
-  validate_tunnel_name "$name" || { fail "Invalid tunnel name."; return 1; }
-  if [[ "$name" != "$old_name" && -f "${IPTABLES_TUNNEL_DIR}/${name}.env" ]]; then
-    fail "A tunnel named '${name}' already exists."
-    return 1
-  fi
-
-  select_mesh_target || return 1
-  ip route get "$SELECTED_TARGET" >/dev/null 2>&1 || { fail "No route to mesh target ${SELECTED_TARGET}."; return 1; }
-  select_iptables_protocol "$FORWARD_PROTOCOL" || return 1
-
-  while :; do
-    in_if="$(prompt_default "Inbound interface (or 'any')" "$IN_IF")"
-    validate_iptables_interface "$in_if" && break
-    warn "Interface '${in_if}' does not exist."
-  done
-
-  while :; do
-    source_cidr="$(prompt_default "Allowed source IPv4/CIDR" "$SOURCE_CIDR")"
-    valid_ipv4_cidr "$source_cidr" && break
-    warn "Invalid source IPv4/CIDR."
-  done
-
-  while :; do
-    ports="$(prompt_default "Ports" "$PORT_SPEC")"
-    if expand_port_spec "$ports" >/dev/null &&
-       validate_iptables_ports "$old_name" "$SELECTED_IPTABLES_PROTOCOL" "$ports" "$in_if"; then
-      break
-    fi
-    warn "Invalid/conflicting port list or range."
-  done
-
-  backup="$(mktemp)"
-  cp "$definition" "$backup"
-  [[ "$name" == "$old_name" ]] || rm -f "$definition"
-  save_iptables_tunnel "$name" "$SELECTED_TARGET" "$ports" "$SELECTED_IPTABLES_PROTOCOL" "$in_if" "$source_cidr"
-
-  if ! apply_iptables_config; then
-    rm -f "${IPTABLES_TUNNEL_DIR}/${name}.env"
-    cp "$backup" "$definition"
-    rm -f "$backup"
-    generate_iptables_apply_script
-    fail "The previous iptables tunnel configuration was restored."
-    return 1
-  fi
-
-  rm -f "$backup"
-  ok "iptables tunnel '${name}' updated."
-  pause
-}
-
-delete_iptables_tunnel() {
-  header
-  section "DELETE IPTABLES TUNNEL"
-  list_iptables_tunnels
-  ((${#IPTABLES_FILES[@]})) || { pause; return; }
-
-  local choice definition confirm
-  local TUNNEL_NAME TARGET_IP PORT_SPEC FORWARD_PROTOCOL IN_IF SOURCE_CIDR
-  read -r -p "  Select tunnel ID: " choice
-  if [[ ! "$choice" =~ ^[0-9]+$ ]] || (( choice < 1 || choice > ${#IPTABLES_FILES[@]} )); then
-    fail "Invalid tunnel selection."
-    return 1
-  fi
-
-  definition="${IPTABLES_FILES[$((choice - 1))]}"
-  # shellcheck disable=SC1090
-  source "$definition"
-  read -r -p "  Type DELETE to remove '${TUNNEL_NAME}': " confirm
-  [[ "$confirm" == "DELETE" ]] || { info "Delete operation cancelled."; return; }
-
-  rm -f "$definition"
-  if compgen -G "${IPTABLES_TUNNEL_DIR}/*.env" >/dev/null; then
-    apply_iptables_config
-  else
-    disable_iptables_tunnels
-  fi
-  ok "iptables tunnel '${TUNNEL_NAME}' deleted."
-  pause
-}
-
-show_iptables_rules() {
-  header
-  section "ACTIVE IPTABLES RULES"
-  install_iptables_runtime
-  printf '\n  NAT / DNAT\n'
-  iptables -w -t nat -L XRAYMESH_DNAT -n -v --line-numbers 2>/dev/null || warn "XRAYMESH_DNAT is not active."
-  printf '\n  FILTER / FORWARD\n'
-  iptables -w -t filter -L XRAYMESH_FWD -n -v --line-numbers 2>/dev/null || warn "XRAYMESH_FWD is not active."
-  printf '\n  NAT / MASQUERADE\n'
-  iptables -w -t nat -L XRAYMESH_SNAT -n -v --line-numbers 2>/dev/null || warn "XRAYMESH_SNAT is not active."
-  printf '\n'
-  pause
-}
-
-iptables_tunnel_menu() {
-  while true; do
-    header
-    section "IPTABLES UDP/TCP TUNNELS"
-    printf '  Service: %s\n' "$(systemctl is-active xraymesh-iptables.service 2>/dev/null || echo inactive)"
-    printf '  IPv4 forwarding: %s\n' "$(sysctl -n net.ipv4.ip_forward 2>/dev/null || echo unknown)"
-    list_iptables_tunnels
-    printf '\n'
-    printf '  %b[1]%b  Create tunnel\n' "$CYAN" "$RESET"
-    printf '  %b[2]%b  Edit tunnel\n' "$PURPLE" "$RESET"
-    printf '  %b[3]%b  Delete tunnel\n' "$RED" "$RESET"
-    printf '  %b[4]%b  Reapply managed rules\n' "$BLUE" "$RESET"
-    printf '  %b[5]%b  View active rules/counters\n' "$GREEN" "$RESET"
-    printf '  %b[0]%b  Back\n\n' "$GRAY" "$RESET"
-    read -r -p "  Select an option [0-5]: " choice
-    case "$choice" in
-      1) run_screen create_iptables_tunnel ;;
-      2) run_screen edit_iptables_tunnel ;;
-      3) run_screen delete_iptables_tunnel ;;
-      4)
-        if compgen -G "${IPTABLES_TUNNEL_DIR}/*.env" >/dev/null; then
-          run_screen apply_iptables_config
-          pause
-        else
-          warn "No iptables tunnels are configured."
-          sleep 1
-        fi
-        ;;
-      5) run_screen show_iptables_rules ;;
-      0) return ;;
-      *) warn "Invalid option"; sleep 1 ;;
-    esac
-  done
-}
-
 create_iptables_tunnel_noninteractive() {
   require_root
   install_iptables_runtime
@@ -2400,181 +2004,6 @@ apply_gost_config() {
   fi
 }
 
-create_gost_tunnel() {
-  header
-  section "CREATE GOST TUNNEL"
-  info "GOST tunnels forward user-space TCP and UDP ports to target mesh nodes."
-  install_gost_runtime || return 1
-
-  local name ports protocol
-  while :; do
-    read -r -p "  Tunnel name (letters, numbers, _ or -): " name
-    validate_tunnel_name "$name" || { warn "Enter a valid name with up to 32 characters."; continue; }
-    [[ ! -f "${GOST_TUNNEL_DIR}/${name}.env" ]] || { warn "A tunnel with this name already exists."; continue; }
-    break
-  done
-
-  select_mesh_target || return 1
-
-  printf '\n  Select Protocol:\n'
-  printf '    %b[1]%b Both TCP + UDP (Recommended)\n' "$GREEN" "$RESET"
-  printf '    %b[2]%b TCP Only\n' "$CYAN" "$RESET"
-  printf '    %b[3]%b UDP Only\n' "$YELLOW" "$RESET"
-  local proto_choice="1"
-  read -r -p "  Enter choice [1-3, default 1]: " proto_choice
-  case "${proto_choice:-1}" in
-    2) protocol="tcp" ;;
-    3) protocol="udp" ;;
-    *) protocol="both" ;;
-  esac
-
-  while :; do
-    read -r -p "  Ports to forward (e.g. 80,443,8000-8010): " ports
-    expand_port_spec "$ports" >/dev/null && validate_gost_ports "$name" "$ports" "$protocol" && break
-    warn "Invalid ports or port conflict detected. Maximum 256 expanded ports."
-  done
-
-  save_gost_tunnel "$name" "$SELECTED_TARGET" "$ports" "$protocol"
-  if apply_gost_config; then
-    ok "GOST tunnel '${name}' forwards ${protocol^^} ports ${ports} to ${SELECTED_TARGET}."
-  else
-    rm -f "${GOST_TUNNEL_DIR}/${name}.env"
-    generate_gost_config
-    return 1
-  fi
-  pause
-}
-
-list_gost_tunnels() {
-  local count=0
-  if compgen -G "${GOST_TUNNEL_DIR}/*.env" >/dev/null; then
-    count="$(find "$GOST_TUNNEL_DIR" -type f -name '*.env' | wc -l)"
-  fi
-  local state
-  state="$(systemctl is-active xraymesh-gost.service 2>/dev/null || echo inactive)"
-  printf '  Configured GOST Tunnels: %b%s%b (Service: %s)\n\n' "$CYAN" "$count" "$RESET" "$state"
-  if (( count == 0 )); then
-    info "No GOST tunnels configured yet."
-    return
-  fi
-  printf '  %-20s %-16s %-10s %s\n' "TUNNEL NAME" "TARGET IP" "PROTOCOL" "PORTS"
-  printf '  %-20s %-16s %-10s %s\n' "-----------" "---------" "--------" "-----"
-  local f name target ports proto
-  for f in "${GOST_TUNNEL_DIR}"/*.env; do
-    [[ -f "$f" ]] || continue
-    name="$(basename "$f" .env)"
-    target="$(grep -E '^TARGET_IP=' "$f" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
-    ports="$(grep -E '^PORT_SPEC=' "$f" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
-    proto="$(grep -E '^PROTOCOL=' "$f" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
-    printf '  %-20s %-16s %-10s %s\n' "$name" "$target" "${proto^^:-BOTH}" "$ports"
-  done
-  printf '\n'
-}
-
-edit_gost_tunnel() {
-  header
-  section "EDIT GOST TUNNEL"
-  list_gost_tunnels
-  local count=0
-  if compgen -G "${GOST_TUNNEL_DIR}/*.env" >/dev/null; then
-    count="$(find "$GOST_TUNNEL_DIR" -type f -name '*.env' | wc -l)"
-  fi
-  (( count > 0 )) || { pause; return; }
-
-  local name file
-  read -r -p "  Enter tunnel name to edit: " name
-  file="${GOST_TUNNEL_DIR}/${name}.env"
-  [[ -f "$file" ]] || { fail "GOST tunnel '${name}' does not exist."; pause; return 1; }
-
-  local old_target old_ports old_proto
-  old_target="$(grep -E '^TARGET_IP=' "$file" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
-  old_ports="$(grep -E '^PORT_SPEC=' "$file" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
-  old_proto="$(grep -E '^PROTOCOL=' "$file" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
-
-  info "Editing tunnel '${name}' (current target: ${old_target}, protocol: ${old_proto^^:-BOTH})."
-  select_mesh_target || return 1
-
-  printf '\n  Select Protocol:\n'
-  printf '    %b[1]%b Both TCP + UDP (Recommended)\n' "$GREEN" "$RESET"
-  printf '    %b[2]%b TCP Only\n' "$CYAN" "$RESET"
-  printf '    %b[3]%b UDP Only\n' "$YELLOW" "$RESET"
-  local proto_choice="" protocol="${old_proto:-both}"
-  read -r -p "  Enter choice [1-3, default ${old_proto:-both}]: " proto_choice
-  case "${proto_choice}" in
-    1) protocol="both" ;;
-    2) protocol="tcp" ;;
-    3) protocol="udp" ;;
-    *) protocol="${old_proto:-both}" ;;
-  esac
-
-  local ports
-  while :; do
-    read -r -p "  Ports [${old_ports}]: " ports
-    ports="${ports:-$old_ports}"
-    expand_port_spec "$ports" >/dev/null && validate_gost_ports "$name" "$ports" "$protocol" && break
-    warn "Invalid ports or conflict detected."
-  done
-
-  save_gost_tunnel "$name" "$SELECTED_TARGET" "$ports" "$protocol"
-  if apply_gost_config; then
-    ok "GOST tunnel '${name}' updated successfully."
-  else
-    fail "Failed to apply updated GOST configuration."
-  fi
-  pause
-}
-
-delete_gost_tunnel() {
-  header
-  section "DELETE GOST TUNNEL"
-  list_gost_tunnels
-  local count=0
-  if compgen -G "${GOST_TUNNEL_DIR}/*.env" >/dev/null; then
-    count="$(find "$GOST_TUNNEL_DIR" -type f -name '*.env' | wc -l)"
-  fi
-  (( count > 0 )) || { pause; return; }
-
-  local name file
-  read -r -p "  Enter tunnel name to delete: " name
-  file="${GOST_TUNNEL_DIR}/${name}.env"
-  [[ -f "$file" ]] || { fail "GOST tunnel '${name}' does not exist."; pause; return 1; }
-
-  rm -f "$file"
-  apply_gost_config
-  ok "GOST tunnel '${name}' deleted."
-  pause
-}
-
-gost_tunnel_menu() {
-  while true; do
-    header
-    section "GOST TUNNELS (TCP / UDP)"
-    list_gost_tunnels
-
-    printf '  %b[1]%b  Create New GOST Tunnel\n' "$GREEN" "$RESET"
-    printf '  %b[2]%b  Edit Existing GOST Tunnel\n' "$CYAN" "$RESET"
-    printf '  %b[3]%b  Delete GOST Tunnel\n' "$RED" "$RESET"
-    printf '  %b[4]%b  Restart GOST Service\n' "$BLUE" "$RESET"
-    printf '  %b[5]%b  View GOST Logs\n' "$YELLOW" "$RESET"
-    printf '  %b[0]%b  Back\n\n' "$GRAY" "$RESET"
-
-    read -r -p "  Select an option [0-5]: " choice
-    case "$choice" in
-      1) run_screen create_gost_tunnel ;;
-      2) run_screen edit_gost_tunnel ;;
-      3) run_screen delete_gost_tunnel ;;
-      4)
-        systemctl restart xraymesh-gost.service 2>/dev/null || true
-        ok "GOST service restarted."
-        pause
-        ;;
-      5) journalctl -u xraymesh-gost.service -f -n 50 ;;
-      0) return ;;
-      *) warn "Invalid option"; sleep 1 ;;
-    esac
-  done
-}
-
 create_gost_tunnel_noninteractive() {
   require_root
   install_gost_runtime
@@ -2849,181 +2278,6 @@ save_realm_tunnel() {
     printf 'PORT_SPEC="%s"\n' "$ports"
     printf 'PROTOCOL="%s"\n' "$protocol"
   } > "$file"
-}
-
-list_realm_tunnels() {
-  local count=0
-  if compgen -G "${REALM_TUNNEL_DIR}/*.env" >/dev/null; then
-    count="$(find "$REALM_TUNNEL_DIR" -type f -name '*.env' | wc -l)"
-  fi
-  local state
-  state="$(systemctl is-active xraymesh-realm.service 2>/dev/null || echo inactive)"
-  printf '  Configured Realm Tunnels: %b%s%b (Service: %s)\n\n' "$CYAN" "$count" "$RESET" "$state"
-  if (( count == 0 )); then
-    info "No Realm tunnels configured yet."
-    return
-  fi
-  printf '  %-20s %-16s %-10s %s\n' "TUNNEL NAME" "TARGET IP" "PROTOCOL" "PORTS"
-  printf '  %-20s %-16s %-10s %s\n' "-----------" "---------" "--------" "-----"
-  local f name target ports proto
-  for f in "${REALM_TUNNEL_DIR}"/*.env; do
-    [[ -f "$f" ]] || continue
-    name="$(basename "$f" .env)"
-    target="$(grep -E '^TARGET_IP=' "$f" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
-    ports="$(grep -E '^PORT_SPEC=' "$f" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
-    proto="$(grep -E '^PROTOCOL=' "$f" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
-    printf '  %-20s %-16s %-10s %s\n' "$name" "$target" "${proto^^:-BOTH}" "$ports"
-  done
-  printf '\n'
-}
-
-create_realm_tunnel() {
-  header
-  section "CREATE REALM TUNNEL (RUST)"
-  info "Realm provides ultra-low latency TCP & UDP forwarding with zero garbage collection overhead."
-  install_realm_runtime || return 1
-
-  local name ports protocol
-  while :; do
-    read -r -p "  Tunnel name (letters, numbers, _ or -): " name
-    validate_tunnel_name "$name" || { warn "Enter a valid name with up to 32 characters."; continue; }
-    [[ ! -f "${REALM_TUNNEL_DIR}/${name}.env" ]] || { warn "A tunnel with this name already exists."; continue; }
-    break
-  done
-
-  select_mesh_target || return 1
-
-  printf '\n  Select Protocol:\n'
-  printf '    %b[1]%b Both TCP + UDP (Recommended)\n' "$GREEN" "$RESET"
-  printf '    %b[2]%b TCP Only\n' "$CYAN" "$RESET"
-  printf '    %b[3]%b UDP Only\n' "$YELLOW" "$RESET"
-  local proto_choice="1"
-  read -r -p "  Enter choice [1-3, default 1]: " proto_choice
-  case "${proto_choice:-1}" in
-    2) protocol="tcp" ;;
-    3) protocol="udp" ;;
-    *) protocol="both" ;;
-  esac
-
-  while :; do
-    read -r -p "  Ports to forward (e.g. 80,443,8000-8010): " ports
-    expand_port_spec "$ports" >/dev/null && validate_realm_ports "$name" "$ports" "$protocol" && break
-    warn "Invalid ports or port conflict detected. Maximum 256 expanded ports."
-  done
-
-  save_realm_tunnel "$name" "$SELECTED_TARGET" "$ports" "$protocol"
-  if apply_realm_config; then
-    ok "Realm tunnel '${name}' forwards ${protocol^^} ports ${ports} to ${SELECTED_TARGET}."
-  else
-    rm -f "${REALM_TUNNEL_DIR}/${name}.env"
-    generate_realm_config
-    return 1
-  fi
-  pause
-}
-
-edit_realm_tunnel() {
-  header
-  section "EDIT REALM TUNNEL (RUST)"
-  list_realm_tunnels
-  local count=0
-  if compgen -G "${REALM_TUNNEL_DIR}/*.env" >/dev/null; then
-    count="$(find "$REALM_TUNNEL_DIR" -type f -name '*.env' | wc -l)"
-  fi
-  (( count > 0 )) || { pause; return; }
-
-  local name file
-  read -r -p "  Enter tunnel name to edit: " name
-  file="${REALM_TUNNEL_DIR}/${name}.env"
-  [[ -f "$file" ]] || { fail "Realm tunnel '${name}' does not exist."; pause; return 1; }
-
-  local old_target old_ports old_proto
-  old_target="$(grep -E '^TARGET_IP=' "$file" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
-  old_ports="$(grep -E '^PORT_SPEC=' "$file" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
-  old_proto="$(grep -E '^PROTOCOL=' "$file" 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ')"
-
-  info "Editing tunnel '${name}' (current target: ${old_target}, protocol: ${old_proto^^:-BOTH})."
-  select_mesh_target || return 1
-
-  printf '\n  Select Protocol:\n'
-  printf '    %b[1]%b Both TCP + UDP (Recommended)\n' "$GREEN" "$RESET"
-  printf '    %b[2]%b TCP Only\n' "$CYAN" "$RESET"
-  printf '    %b[3]%b UDP Only\n' "$YELLOW" "$RESET"
-  local proto_choice="" protocol="${old_proto:-both}"
-  read -r -p "  Enter choice [1-3, default ${old_proto:-both}]: " proto_choice
-  case "${proto_choice}" in
-    1) protocol="both" ;;
-    2) protocol="tcp" ;;
-    3) protocol="udp" ;;
-    *) protocol="${old_proto:-both}" ;;
-  esac
-
-  local ports
-  while :; do
-    read -r -p "  Ports [${old_ports}]: " ports
-    ports="${ports:-$old_ports}"
-    expand_port_spec "$ports" >/dev/null && validate_realm_ports "$name" "$ports" "$protocol" && break
-    warn "Invalid ports or conflict detected."
-  done
-
-  save_realm_tunnel "$name" "$SELECTED_TARGET" "$ports" "$protocol"
-  if apply_realm_config; then
-    ok "Realm tunnel '${name}' updated successfully."
-  else
-    fail "Failed to apply updated Realm configuration."
-  fi
-  pause
-}
-
-delete_realm_tunnel() {
-  header
-  section "DELETE REALM TUNNEL (RUST)"
-  list_realm_tunnels
-  local count=0
-  if compgen -G "${REALM_TUNNEL_DIR}/*.env" >/dev/null; then
-    count="$(find "$REALM_TUNNEL_DIR" -type f -name '*.env' | wc -l)"
-  fi
-  (( count > 0 )) || { pause; return; }
-
-  local name file
-  read -r -p "  Enter tunnel name to delete: " name
-  file="${REALM_TUNNEL_DIR}/${name}.env"
-  [[ -f "$file" ]] || { fail "Realm tunnel '${name}' does not exist."; pause; return 1; }
-
-  rm -f "$file"
-  apply_realm_config
-  ok "Realm tunnel '${name}' deleted."
-  pause
-}
-
-realm_tunnel_menu() {
-  while true; do
-    header
-    section "REALM TUNNELS (RUST - TCP / UDP)"
-    list_realm_tunnels
-
-    printf '  %b[1]%b  Create New Realm Tunnel\n' "$GREEN" "$RESET"
-    printf '  %b[2]%b  Edit Existing Realm Tunnel\n' "$CYAN" "$RESET"
-    printf '  %b[3]%b  Delete Realm Tunnel\n' "$RED" "$RESET"
-    printf '  %b[4]%b  Restart Realm Service\n' "$BLUE" "$RESET"
-    printf '  %b[5]%b  View Realm Logs\n' "$YELLOW" "$RESET"
-    printf '  %b[0]%b  Back\n\n' "$GRAY" "$RESET"
-
-    read -r -p "  Select an option [0-5]: " choice
-    case "$choice" in
-      1) run_screen create_realm_tunnel ;;
-      2) run_screen edit_realm_tunnel ;;
-      3) run_screen delete_realm_tunnel ;;
-      4)
-        systemctl restart xraymesh-realm.service 2>/dev/null || true
-        ok "Realm service restarted."
-        pause
-        ;;
-      5) journalctl -u xraymesh-realm.service -f -n 50 ;;
-      0) return ;;
-      *) warn "Invalid option"; sleep 1 ;;
-    esac
-  done
 }
 
 create_realm_tunnel_noninteractive() {
@@ -3413,13 +2667,13 @@ configure_web_ui_interactive() {
   say "  +----------------------------------------------------------+" "$GREEN"
   say "  |  WEB DASHBOARD & REMOTE MANAGEMENT (XRayMesh v2.0)       |" "$BOLD$GREEN"
   say "  +----------------------------------------------------------+" "$GREEN"
-  info "XRayMesh v2.0 includes the full multi-node Web Dashboard by default."
+  info "XRayMesh v2.0 is Web-First: all tunnels, routing & cluster sync are managed here."
   printf '\n'
 
   local current_port
   current_port="$(get_web_port)"
   local custom_port
-  read -r -p "  Change Web Dashboard port? [current: ${current_port}] (Press Enter to keep): " custom_port
+  read -r -p "  Web Dashboard port [default: ${current_port}]: " custom_port
   if [[ -n "$custom_port" ]]; then
     if valid_port "$custom_port"; then
       if grep -q '^WEB_PORT=' "$WEB_CONFIG_FILE" 2>/dev/null; then
@@ -3435,16 +2689,36 @@ configure_web_ui_interactive() {
 
   printf '\n'
   local want_ssl="n"
-  read -r -p "  Do you want to configure a custom domain with free auto-renewing SSL (HTTPS)? [y/N]: " want_ssl
+  read -r -p "  Do you have a domain pointing to this server and want free SSL (HTTPS)? [y/N]: " want_ssl
   if [[ "$want_ssl" =~ ^[Yy]$ ]]; then
     configure_web_ssl || warn "SSL configuration skipped or failed. Web Dashboard will run over HTTP."
   fi
+
+  printf '\n'
+  local admin_pw=""
+  read -r -p "  Set Web Admin Password [Press Enter to auto-generate]: " admin_pw
+  if [[ -z "$admin_pw" ]]; then
+    admin_pw="$(openssl rand -base64 9 | tr -dc 'a-zA-Z0-9' | head -c 10)"
+  fi
+  local hash
+  hash="$(python3 -c "import secrets, hashlib, sys
+pw = sys.argv[1]
+salt = secrets.token_hex(16)
+h = hashlib.sha256((salt + pw).encode('utf-8')).hexdigest()
+print(f'sha256\${salt}\${h}')
+" "$admin_pw")"
+  if grep -q '^WEB_PASSWORD_HASH=' "$WEB_CONFIG_FILE" 2>/dev/null; then
+    sed -i "s|^WEB_PASSWORD_HASH=.*|WEB_PASSWORD_HASH=\"${hash}\"|" "$WEB_CONFIG_FILE"
+  else
+    printf 'WEB_PASSWORD_HASH=%q\n' "$hash" >> "$WEB_CONFIG_FILE"
+  fi
+  chmod 600 "$WEB_CONFIG_FILE" 2>/dev/null || true
 
   systemctl enable --now xraymesh-web.service >/dev/null 2>&1 || true
   systemctl enable --now xraymesh-iperf.service >/dev/null 2>&1 || true
 
   # Generate 1-hour access link
-  local token now expiry_ts pub_ip port proto domain
+  local token now expiry_ts pub_ip port proto domain web_url
   token="$(openssl rand -hex 16)"
   now="$(date +%s)"
   expiry_ts=$(( now + 3600 ))
@@ -3468,18 +2742,25 @@ try: os.chmod(p, 0o600)
 except Exception: pass
 " "$WEB_TOKEN_FILE" "$token" "$expiry_ts"
 
-  printf '\n'
-  say "  +----------------------------------------------------------+" "$BOLD$GREEN"
-  say "  |  WEB DASHBOARD READY                                     |" "$BOLD$GREEN"
-  say "  +----------------------------------------------------------+" "$BOLD$GREEN"
   if [[ "$proto" == "https" && -n "$domain" ]]; then
-    say "  Web Dashboard HTTPS Link:" "$BOLD$CYAN"
-    printf '  %bhttps://%s:%s/?token=%s%b\n\n' "$BOLD$GREEN" "$domain" "$port" "$token" "$RESET"
+    web_url="https://${domain}:${port}"
   else
-    say "  Web Dashboard Direct Link:" "$BOLD$CYAN"
-    printf '  %bhttp://%s:%s/?token=%s%b\n\n' "$BOLD$GREEN" "$pub_ip" "$port" "$token" "$RESET"
+    web_url="http://${pub_ip}:${port}"
   fi
-  info "Use this one-click link to log in immediately and set an admin password."
+
+  printf '\n'
+  say "  ============================================================" "$BOLD$GREEN"
+  say "    🎉 XRayMesh v2.0 Setup Completed Successfully!" "$BOLD$GREEN"
+  say "  ============================================================" "$BOLD$GREEN"
+  printf '    Web Dashboard URL:   %b%s%b\n' "$BOLD$CYAN" "$web_url" "$RESET"
+  printf '    Admin Password:      %b%s%b\n' "$BOLD$YELLOW" "$admin_pw" "$RESET"
+  printf '    One-Click Login:     %b%s/?token=%s%b\n' "$BOLD$GREEN" "$web_url" "$token" "$RESET"
+  say "  ------------------------------------------------------------" "$DIM$BLUE"
+  say "  Tip: All tunnels (HAProxy, Realm, Gost, iptables), SafeSync," "$DIM$GRAY"
+  say "       and cluster updates are managed 100% in the Web Dashboard." "$DIM$GRAY"
+  say "       To access the CLI management tool at any time, run: xraymesh" "$DIM$GRAY"
+  say "  ============================================================" "$BOLD$GREEN"
+  printf '\n'
   pause
 }
 
@@ -3603,105 +2884,6 @@ configure_web_port() {
   systemctl restart xraymesh-web.service 2>/dev/null || true
   ok "Web port updated to ${new_port}."
   pause
-}
-
-web_menu() {
-  install_web_runtime
-  while true; do
-    header
-    section "WEB DASHBOARD & SPEEDTEST"
-    local web_state iperf_state port pub_ip has_pw proto domain ssl_info
-    web_state="$(systemctl is-active xraymesh-web.service 2>/dev/null || echo inactive)"
-    iperf_state="$(systemctl is-active xraymesh-iperf.service 2>/dev/null || echo inactive)"
-    port="$(get_web_port)"
-    pub_ip="$(get_server_ip)"
-    proto="$(get_web_proto)"
-    domain="$(get_web_domain)"
-
-    if [[ "$proto" == "https" && -n "$domain" ]]; then
-      ssl_info="Active (https://${domain}:${port})"
-    else
-      ssl_info="Inactive (HTTP only)"
-    fi
-
-    has_pw="No (Token only)"
-    if grep -qE '^WEB_PASSWORD_HASH="sha256' "$WEB_CONFIG_FILE" 2>/dev/null; then
-      has_pw="Yes (Password + Token)"
-    fi
-
-    printf '  Web Service:      %s\n' "$web_state"
-    printf '  Web SSL (HTTPS):  %s\n' "$ssl_info"
-    printf '  In-Mesh iperf3:   %s (Mesh-Only Port 5201)\n' "$iperf_state"
-    if [[ "$proto" == "https" && -n "$domain" ]]; then
-      printf '  Web URL:          https://%s:%s\n' "$domain" "$port"
-    else
-      printf '  Web URL:          http://%s:%s\n' "$pub_ip" "$port"
-    fi
-    printf '  Password Login:   %s\n\n' "$has_pw"
-
-    printf '  %b[1]%b  Start / Enable Web Dashboard\n' "$GREEN" "$RESET"
-    printf '  %b[2]%b  Stop / Deactivate Web Dashboard\n' "$RED" "$RESET"
-    printf '  %b[3]%b  Restart Web Dashboard\n' "$BLUE" "$RESET"
-    printf '  %b[4]%b  Generate One-Click Login Link (Token)\n' "$CYAN" "$RESET"
-    printf '  %b[5]%b  Set / Change Admin Password\n' "$PURPLE" "$RESET"
-    printf '  %b[6]%b  Change Web Port\n' "$YELLOW" "$RESET"
-    printf '  %b[7]%b  Configure Custom Domain & Free SSL (HTTPS)\n' "$GREEN" "$RESET"
-    printf '  %b[8]%b  Remove SSL (Revert to HTTP)\n' "$RED" "$RESET"
-    printf '  %b[9]%b  Toggle In-Mesh iperf3 Speedtest Daemon\n' "$CYAN" "$RESET"
-    printf '  %b[10]%b View Web Logs\n' "$PINK" "$RESET"
-    printf '  %b[11]%b Update Web Dashboard to Latest Version\n' "$GREEN" "$RESET"
-    printf '  %b[0]%b  Back\n\n' "$GRAY" "$RESET"
-
-    read -r -p "  Select an option [0-11]: " choice
-    case "$choice" in
-      1)
-        systemctl enable --now xraymesh-web.service
-        ok "Web Dashboard service started."
-        pause
-        ;;
-      2)
-        if systemctl status xraymesh-web.service 2>/dev/null | grep -q "deactivating"; then
-          systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null || true
-        fi
-        systemctl disable --now xraymesh-web.service 2>/dev/null || systemctl stop xraymesh-web.service 2>/dev/null || true
-        warn "Web Dashboard service stopped & deactivated."
-        pause
-        ;;
-      3)
-        if systemctl status xraymesh-web.service 2>/dev/null | grep -q "deactivating"; then
-          systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null || true
-        fi
-        systemctl restart xraymesh-web.service 2>/dev/null || (systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null && systemctl start xraymesh-web.service 2>/dev/null) || true
-        ok "Web Dashboard service restarted."
-        pause
-        ;;
-      4) run_screen generate_web_token ;;
-      5) run_screen set_web_password ;;
-      6) run_screen configure_web_port ;;
-      7) run_screen configure_web_ssl; pause ;;
-      8) run_screen remove_web_ssl ;;
-      9)
-        if systemctl is-active --quiet xraymesh-iperf.service 2>/dev/null; then
-          systemctl disable --now xraymesh-iperf.service >/dev/null 2>&1 || true
-          warn "In-Mesh iperf3 daemon stopped & disabled."
-        else
-          write_iperf_service
-          systemctl enable --now xraymesh-iperf.service >/dev/null 2>&1 || true
-          ok "In-Mesh iperf3 daemon enabled & started (bound to Mesh Virtual IP)."
-        fi
-        pause
-        ;;
-      10) journalctl -u xraymesh-web.service -f -n 50 ;;
-      11)
-        info "Updating Web Dashboard assets..."
-        update_web_assets
-        ok "Web Dashboard updated to latest version."
-        pause
-        ;;
-      0) return ;;
-      *) warn "Invalid option"; sleep 1 ;;
-    esac
-  done
 }
 
 update_core() {
@@ -3859,87 +3041,119 @@ self_test() {
   (( failures == 0 ))
 }
 
-tunnels_menu() {
-  while true; do
-    header
-    section "TUNNELS MANAGEMENT"
-    info "Forward local ports across the mesh overlay using high-performance engines."
-
-    local r_count=0 h_count=0 i_count=0 g_count=0
-    compgen -G "${REALM_TUNNEL_DIR}/*.env" >/dev/null && r_count="$(find "$REALM_TUNNEL_DIR" -type f -name '*.env' | wc -l)"
-    compgen -G "${HAPROXY_TUNNEL_DIR}/*.env" >/dev/null && h_count="$(find "$HAPROXY_TUNNEL_DIR" -type f -name '*.env' | wc -l)"
-    compgen -G "${IPTABLES_TUNNEL_DIR}/*.env" >/dev/null && i_count="$(find "$IPTABLES_TUNNEL_DIR" -type f -name '*.env' | wc -l)"
-    compgen -G "${GOST_TUNNEL_DIR}/*.env" >/dev/null && g_count="$(find "$GOST_TUNNEL_DIR" -type f -name '*.env' | wc -l)"
-
-    printf '  %b[1]%b  Realm Tunnels        %b(Rust / Ultra-low RAM & CPU)%b     [%s configured]\n' "$GREEN" "$RESET" "$DIM$GRAY" "$RESET" "$r_count"
-    printf '  %b[2]%b  HAProxy Tunnels      %b(TCP Layer 7 & Load Balancing)%b  [%s configured]\n' "$CYAN" "$RESET" "$DIM$GRAY" "$RESET" "$h_count"
-    printf '  %b[3]%b  iptables Tunnels     %b(Kernel-level NAT & Raw Speed)%b  [%s configured]\n' "$BLUE" "$RESET" "$DIM$GRAY" "$RESET" "$i_count"
-    printf '  %b[4]%b  GOST Tunnels         %b(Multi-Protocol TCP & UDP)%b      [%s configured]\n' "$YELLOW" "$RESET" "$DIM$GRAY" "$RESET" "$g_count"
-    printf '  %b[5]%b  View all configured tunnels\n' "$PURPLE" "$RESET"
-    printf '  %b[0]%b  Back to Main Menu\n\n' "$GRAY" "$RESET"
-
-    read -r -p "  Select tunnel engine [0-5]: " t_choice || break
-    case "$t_choice" in
-      1) run_screen realm_tunnel_menu ;;
-      2) run_screen haproxy_tunnel_menu ;;
-      3) run_screen iptables_tunnel_menu ;;
-      4) run_screen gost_tunnel_menu ;;
-      5) run_screen view_all_tunnels ;;
-      0) return ;;
-      *) warn "Invalid option"; sleep 1 ;;
-    esac
-  done
-}
-
-view_all_tunnels() {
-  header
-  section "ALL CONFIGURED TUNNELS"
-  list_realm_tunnels
-  list_haproxy_tunnels
-  list_iptables_tunnels
-  list_gost_tunnels
-  pause
-}
-
 menu() {
   require_root
   require_linux
   install_dependencies
+
+  # If not installed, start initial setup immediately
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    header
+    say "  Welcome to XRayMesh v${VERSION}" "$BOLD$GREEN"
+    say "  No mesh configuration found. Starting first-time setup..." "$CYAN"
+    printf '\n'
+    setup_node
+    return
+  fi
+
   if [[ -d "$WEB_DIR" || -f "$WEB_SERVICE_FILE" ]]; then
     update_web_assets >/dev/null 2>&1 || true
   fi
+
   IN_MAIN_MENU=1
   while true; do
-    # Keep the menu alive if Ctrl+C interrupts dashboard rendering.
-    dashboard || true
-    section "MAIN MENU"
-    printf '  %b[1]%b  Configure or edit node\n' "$CYAN" "$RESET"
-    printf '  %b[2]%b  Live status and connected peers\n' "$CYAN" "$RESET"
-    printf '  %b[3]%b  Tunnel Management (Realm / HAProxy / iptables / GOST)\n' "$GREEN" "$RESET"
-    printf '  %b[4]%b  Web UI Dashboard & Speedtest\n' "$PURPLE" "$RESET"
-    printf '  %b[5]%b  View network routes\n' "$BLUE" "$RESET"
-    printf '  %b[6]%b  View live logs\n' "$BLUE" "$RESET"
-    printf '  %b[7]%b  Control mesh service\n' "$PURPLE" "$RESET"
-    printf '  %b[8]%b  Install or update EasyTier\n' "$YELLOW" "$RESET"
-    printf '  %b[9]%b  Connection diagnostics\n' "$YELLOW" "$RESET"
-    printf '  %b[10]%b Run self-test\n' "$BLUE" "$RESET"
-    printf '  %b[11]%b Delete mesh configuration\n' "$YELLOW" "$RESET"
-    printf '  %b[12]%b Uninstall XRayMesh completely\n' "$RED" "$RESET"
+    header
+    section "XRAYMESH v2.0 - CONTROL PANEL"
+
+    local mesh_state web_state iperf_state port pub_ip proto domain ssl_info v_ip host_name web_url
+    mesh_state="$(systemctl is-active xraymesh.service 2>/dev/null || echo inactive)"
+    web_state="$(systemctl is-active xraymesh-web.service 2>/dev/null || echo inactive)"
+    iperf_state="$(systemctl is-active xraymesh-iperf.service 2>/dev/null || echo inactive)"
+    port="$(get_web_port)"
+    pub_ip="$(get_server_ip)"
+    proto="$(get_web_proto)"
+    domain="$(get_web_domain)"
+
+    # shellcheck disable=SC1090
+    [[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE"
+    v_ip="${IPV4:-unknown}"
+    host_name="${HOSTNAME:-$(hostname -s)}"
+
+    if [[ "$proto" == "https" && -n "$domain" ]]; then
+      ssl_info="Enabled (HTTPS)"
+      web_url="https://${domain}:${port}"
+    else
+      ssl_info="Disabled (HTTP)"
+      web_url="http://${pub_ip}:${port}"
+    fi
+
+    printf '  Mesh Node:        %b%s%b (%s) | %b%s%b\n' \
+      "$BOLD$CYAN" "$host_name" "$RESET" "$v_ip" \
+      "$([ "$mesh_state" == "active" ] && echo "$GREEN" || echo "$RED")" "$mesh_state" "$RESET"
+    printf '  Web Dashboard:    %b%s%b | %b%s%b\n' \
+      "$BOLD$CYAN" "$web_url" "$RESET" \
+      "$([ "$web_state" == "active" ] && echo "$GREEN" || echo "$RED")" "$web_state" "$RESET"
+    printf '  SSL / HTTPS:      %s\n' "$ssl_info"
+    printf '  Speedtest Server: %s (in-mesh port 5201)\n' "$iperf_state"
+    printf '\n'
+
+    section "ACTIONS & MANAGEMENT"
+    printf '  %b[1]%b  Show Web Dashboard URL & One-Click Login Link\n' "$GREEN" "$RESET"
+    printf '  %b[2]%b  Reset / Change Admin Password\n' "$PURPLE" "$RESET"
+    printf '  %b[3]%b  Change Web Dashboard Port\n' "$YELLOW" "$RESET"
+    printf '  %b[4]%b  Configure Custom Domain & Free SSL (Let'\''s Encrypt HTTPS)\n' "$GREEN" "$RESET"
+    printf '  %b[5]%b  Remove SSL (Revert to HTTP)\n' "$RED" "$RESET"
+    printf '  %b[6]%b  Restart All Services (Mesh, Web, Tunnels)\n' "$BLUE" "$RESET"
+    printf '  %b[7]%b  Stop All Services\n' "$RED" "$RESET"
+    printf '  %b[8]%b  Start All Services\n' "$GREEN" "$RESET"
+    printf '  %b[9]%b  View Live Logs\n' "$CYAN" "$RESET"
+    printf '  %b[10]%b Reconfigure Mesh Node (IP, Secret, Protocol)\n' "$YELLOW" "$RESET"
+    printf '  %b[11]%b Update XRayMesh to Latest Version\n' "$GREEN" "$RESET"
+    printf '  %b[12]%b Completely Uninstall XRayMesh\n' "$RED" "$RESET"
     printf '  %b[0]%b  Exit\n\n' "$GRAY" "$RESET"
-    printf '%b  Tip: Ctrl+C exits here; inside a screen it returns to this menu.%b\n\n' "$DIM$GRAY" "$RESET"
+    printf '%b  Tip: All tunnels (HAProxy, Realm, Gost, iptables), SafeSync, and diagnostics\n' "$DIM$GRAY"
+    printf '       are managed 100%% from the modern Web Dashboard.%b\n\n' "$RESET"
+
     read -r -p "  Select an option [0-12]: " choice || { choice=""; continue; }
     case "$choice" in
-      1) IN_MAIN_MENU=0; run_screen setup_node; IN_MAIN_MENU=1 ;;
-      2) IN_MAIN_MENU=0; run_screen live_status; IN_MAIN_MENU=1 ;;
-      3) IN_MAIN_MENU=0; run_screen tunnels_menu; IN_MAIN_MENU=1 ;;
-      4) IN_MAIN_MENU=0; run_screen web_menu; IN_MAIN_MENU=1 ;;
-      5) IN_MAIN_MENU=0; run_screen show_routes; IN_MAIN_MENU=1 ;;
-      6) IN_MAIN_MENU=0; run_screen show_logs; IN_MAIN_MENU=1 ;;
-      7) IN_MAIN_MENU=0; run_screen control_service; IN_MAIN_MENU=1 ;;
-      8) IN_MAIN_MENU=0; run_screen update_core; IN_MAIN_MENU=1 ;;
-      9) IN_MAIN_MENU=0; run_screen diagnostics; IN_MAIN_MENU=1 ;;
-      10) IN_MAIN_MENU=0; run_screen self_test; IN_MAIN_MENU=1 ;;
-      11) IN_MAIN_MENU=0; run_screen delete_mesh; IN_MAIN_MENU=1 ;;
+      1) run_screen generate_web_token ;;
+      2) run_screen set_web_password ;;
+      3) run_screen configure_web_port ;;
+      4) run_screen configure_web_ssl; pause ;;
+      5) run_screen remove_web_ssl ;;
+      6)
+        info "Restarting all XRayMesh services..."
+        apply_node_config >/dev/null 2>&1 || true
+        systemctl restart xraymesh-web.service 2>/dev/null || true
+        systemctl restart xraymesh-iperf.service 2>/dev/null || true
+        ok "Services restarted."
+        pause
+        ;;
+      7)
+        info "Stopping all XRayMesh services..."
+        systemctl stop xraymesh.service xraymesh-web.service xraymesh-haproxy.service xraymesh-iptables.service xraymesh-gost.service xraymesh-realm.service xraymesh-iperf.service 2>/dev/null || true
+        warn "All services stopped."
+        pause
+        ;;
+      8)
+        info "Starting all XRayMesh services..."
+        apply_node_config >/dev/null 2>&1 || true
+        systemctl start xraymesh-web.service 2>/dev/null || true
+        systemctl start xraymesh-iperf.service 2>/dev/null || true
+        ok "Services started."
+        pause
+        ;;
+      9)
+        printf '\n  [1] Mesh Logs  [2] Web Logs  [3] Tunnel Logs\n'
+        read -r -p "  Choice [1-3]: " l_choice
+        case "$l_choice" in
+          1) journalctl -u xraymesh.service -f -n 50 ;;
+          2) journalctl -u xraymesh-web.service -f -n 50 ;;
+          3) journalctl -u xraymesh-haproxy.service -u xraymesh-gost.service -u xraymesh-realm.service -u xraymesh-iptables.service -f -n 50 ;;
+        esac
+        ;;
+      10) IN_MAIN_MENU=0; run_screen setup_node; IN_MAIN_MENU=1 ;;
+      11) IN_MAIN_MENU=0; run_screen update_core; IN_MAIN_MENU=1 ;;
       12)
         IN_MAIN_MENU=0
         run_screen uninstall_app
@@ -3956,14 +3170,40 @@ main() {
   if (( EUID == 0 )); then
     ensure_xraymesh_cli >/dev/null 2>&1 || true
   fi
+
   case "${1:-menu}" in
   menu) menu ;;
   install|setup) require_linux; setup_node ;;
-  status) dashboard ;;
+  status)
+    if [[ -f "$CONFIG_FILE" ]]; then
+      local mesh_state web_state port pub_ip proto domain v_ip host_name
+      mesh_state="$(systemctl is-active xraymesh.service 2>/dev/null || echo inactive)"
+      web_state="$(systemctl is-active xraymesh-web.service 2>/dev/null || echo inactive)"
+      port="$(get_web_port)"
+      pub_ip="$(get_server_ip)"
+      proto="$(get_web_proto)"
+      domain="$(get_web_domain)"
+      # shellcheck disable=SC1090
+      source "$CONFIG_FILE"
+      v_ip="${IPV4:-unknown}"
+      host_name="${HOSTNAME:-$(hostname -s)}"
+      local url="http://${pub_ip}:${port}"
+      [[ "$proto" == "https" && -n "$domain" ]] && url="https://${domain}:${port}"
+      printf '\n'
+      say "  XRayMesh Status Summary" "$BOLD$CYAN"
+      printf '  Node:      %s (%s)\n' "$host_name" "$v_ip"
+      printf '  Mesh:      %s\n' "$mesh_state"
+      printf '  Web UI:    %s (%s)\n' "$web_state" "$url"
+      printf '\n'
+    else
+      warn "XRayMesh is not configured yet. Run 'xraymesh setup' to install."
+    fi
+    ;;
   peers) "${BIN_DIR}/easytier-cli" peer ;;
   routes) "${BIN_DIR}/easytier-cli" route ;;
-  logs) journalctl -u xraymesh.service -f -n 100 ;;
+  logs) journalctl -u xraymesh.service -u xraymesh-web.service -f -n 50 ;;
   update) require_linux; update_core ;;
+  uninstall) require_root; require_linux; uninstall_app ;;
   delete|delete-node|node-delete)
     require_root; require_linux
     if [[ "$1" == "delete" && -t 0 ]]; then
@@ -3972,31 +3212,27 @@ main() {
       delete_mesh_noninteractive
     fi
     ;;
-  tunnels) require_root; require_linux; tunnels_menu ;;
-  realm) require_root; require_linux; realm_tunnel_menu ;;
   realm-create) shift; require_linux; create_realm_tunnel_noninteractive "$@" ;;
   realm-edit) shift; require_linux; edit_realm_tunnel_noninteractive "$@" ;;
   realm-delete) shift; require_linux; delete_realm_tunnel_noninteractive "$@" ;;
   realm-start) require_root; require_linux; systemctl start xraymesh-realm.service ;;
   realm-stop) require_root; require_linux; systemctl stop xraymesh-realm.service ;;
   realm-restart) require_root; require_linux; systemctl restart xraymesh-realm.service ;;
-  haproxy) require_root; require_linux; haproxy_tunnel_menu ;;
   haproxy-create) shift; require_linux; create_haproxy_tunnel_noninteractive "$@" ;;
   haproxy-edit) shift; require_linux; edit_haproxy_tunnel_noninteractive "$@" ;;
   haproxy-delete) shift; require_linux; delete_haproxy_tunnel_noninteractive "$@" ;;
-  iptables) require_root; require_linux; iptables_tunnel_menu ;;
   iptables-create) shift; require_linux; create_iptables_tunnel_noninteractive "$@" ;;
   iptables-edit) shift; require_linux; edit_iptables_tunnel_noninteractive "$@" ;;
   iptables-delete) shift; require_linux; delete_iptables_tunnel_noninteractive "$@" ;;
-  gost) require_root; require_linux; gost_tunnel_menu ;;
   gost-create) shift; require_linux; create_gost_tunnel_noninteractive "$@" ;;
   gost-edit) shift; require_linux; edit_gost_tunnel_noninteractive "$@" ;;
   gost-delete) shift; require_linux; delete_gost_tunnel_noninteractive "$@" ;;
   gost-start) require_root; require_linux; systemctl start xraymesh-gost.service ;;
   gost-stop) require_root; require_linux; systemctl stop xraymesh-gost.service ;;
   gost-restart) require_root; require_linux; systemctl restart xraymesh-gost.service ;;
-  web|dashboard-web) require_root; require_linux; web_menu ;;
-  token|web-token) require_root; require_linux; generate_web_token ;;
+  web|link|token|login-link) require_root; require_linux; generate_web_token ;;
+  password|reset-password) require_root; require_linux; set_web_password ;;
+  port|change-port) require_root; require_linux; configure_web_port ;;
   web-start) require_root; require_linux; systemctl start xraymesh-web.service ;;
   web-stop)
     require_root; require_linux
@@ -4018,17 +3254,27 @@ main() {
   write-runner) require_root; require_linux; write_runner; write_iperf_service; systemctl daemon-reload ;;
   node-restart|node-apply) require_root; require_linux; apply_node_config ;;
   web-update|update-all-assets|node-update) require_root; require_linux; update_web_assets ;;
-  web-ssl) require_root; require_linux; configure_web_ssl ;;
-  web-ssl-remove) require_root; require_linux; remove_web_ssl ;;
+  ssl|web-ssl) require_root; require_linux; configure_web_ssl ;;
+  remove-ssl|web-ssl-remove) require_root; require_linux; remove_web_ssl ;;
   self-test|doctor) require_linux; self_test ;;
-  start|restart) require_root; require_linux; apply_node_config ;;
-  stop) require_root; require_linux; systemctl stop xraymesh.service xraymesh-iperf.service 2>/dev/null || true ;;
+  start|restart)
+    require_root; require_linux
+    apply_node_config
+    systemctl restart xraymesh-web.service 2>/dev/null || true
+    systemctl restart xraymesh-iperf.service 2>/dev/null || true
+    ok "All services started."
+    ;;
+  stop)
+    require_root; require_linux
+    systemctl stop xraymesh.service xraymesh-web.service xraymesh-haproxy.service xraymesh-iptables.service xraymesh-gost.service xraymesh-realm.service xraymesh-iperf.service 2>/dev/null || true
+    warn "All services stopped."
+    ;;
   version|-v|--version) echo "${APP} ${VERSION} - © ${OWNER}" ;;
   *)
-    echo "Usage: $0 [menu|install|status|peers|routes|logs|update|delete|delete-node|tunnels|realm|haproxy|iptables|gost|web|token|web-update|web-ssl|web-ssl-remove|write-runner|node-restart|self-test|start|stop|restart|version]"
+    echo "Usage: $0 [menu|install|status|web|password|port|ssl|remove-ssl|peers|routes|logs|start|stop|restart|update|uninstall|version]"
     exit 2
     ;;
-esac
+  esac
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
