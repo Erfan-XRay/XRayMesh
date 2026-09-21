@@ -178,6 +178,10 @@ export const translations = {
     cluster_status_prepared: "Prepared & Verified",
     cluster_status_committed: "Applied & Restarted",
     cluster_status_reconnected: "Online on New Settings",
+    cluster_celebrate_title: "Cluster Synchronized Successfully! 🎉",
+    cluster_celebrate_desc: "All connected mesh nodes have successfully applied the configuration and re-established secure links.",
+    cluster_celebrate_closing: "Closing automatically in a moment...",
+    cluster_btn_close_now: "Close Now",
 
     // Peers Tab
     peers_panel_title: "Connected Mesh Peers",
@@ -478,6 +482,10 @@ export const translations = {
     cluster_status_prepared: "آماده‌سازی و اعتبارسنجی شد",
     cluster_status_committed: "اعمال شد و در حال ریستارت",
     cluster_status_reconnected: "آنلاین با تنظیمات جدید",
+    cluster_celebrate_title: "همگام‌سازی شبکه با موفقیت انجام شد! 🎉",
+    cluster_celebrate_desc: "تنظیمات جدید با موفقیت روی تمام سرورهای متصل اعمال شد و ارتباطات مش با موفقیت آنلاین گردید.",
+    cluster_celebrate_closing: "پنجره تا لحظاتی دیگر به‌صورت خودکار بسته می‌شود...",
+    cluster_btn_close_now: "بستن پنجره",
 
     // Peers Tab
     peers_panel_title: "سرورها و پیرهای متصل به مش",
