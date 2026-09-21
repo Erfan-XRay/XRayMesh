@@ -715,8 +715,6 @@ setup_node() {
     info "Re-enabling the existing Realm TCP/UDP tunnels."
     apply_realm_config || warn "The mesh is online, but Realm tunnels need attention."
   fi
-
-  configure_web_ui_interactive
 }
 
 delete_mesh_noninteractive() {
@@ -2467,8 +2465,8 @@ write_web_services() {
 [Unit]
 Description=XRayMesh Web UI & API Daemon
 Documentation=https://github.com/Erfan-XRay/XRayMesh
-Wants=network-online.target xraymesh.service
-After=network-online.target xraymesh.service
+Wants=network-online.target
+After=network-online.target
 
 [Service]
 Type=simple
@@ -2492,17 +2490,19 @@ EOF_WEB_SVC
 get_web_port() {
   local port=""
   if [[ -f "$WEB_CONFIG_FILE" ]]; then
-    port="$( (grep -E '^WEB_PORT=' "$WEB_CONFIG_FILE" 2>/dev/null || true) | cut -d= -f2- | tr -d '"'\'' ' )"
+    port="$(awk -F= '/^WEB_PORT=/ {gsub(/[" '\''\r\n]/, "", $2); print $2}' "$WEB_CONFIG_FILE" 2>/dev/null || true)"
   fi
   echo "${port:-$DEFAULT_WEB_PORT}"
+  return 0
 }
 
 get_web_domain() {
   local domain=""
   if [[ -f "$WEB_CONFIG_FILE" ]]; then
-    domain="$( (grep -E '^WEB_DOMAIN=' "$WEB_CONFIG_FILE" 2>/dev/null || true) | cut -d= -f2- | tr -d '"'\'' ' )"
+    domain="$(awk -F= '/^WEB_DOMAIN=/ {gsub(/[" '\''\r\n]/, "", $2); print $2}' "$WEB_CONFIG_FILE" 2>/dev/null || true)"
   fi
-  echo "$domain"
+  echo "${domain:-}"
+  return 0
 }
 
 get_web_proto() {
@@ -2513,15 +2513,17 @@ get_web_proto() {
     fi
   fi
   echo "http"
+  return 0
 }
 
 get_server_ip() {
-  local ip
+  local ip=""
   ip="$(curl -fsS4 --connect-timeout 2 https://api.ipify.org 2>/dev/null || true)"
   if [[ -z "$ip" ]]; then
-    ip="$( (ip -4 route get 1.1.1.1 2>/dev/null || true) | awk '{print $7; exit}' )"
+    ip="$( (ip -4 route get 1.1.1.1 2>/dev/null || true) | awk '{print $7; exit}' 2>/dev/null || true)"
   fi
   echo "${ip:-127.0.0.1}"
+  return 0
 }
 
 is_port_80_busy() {
@@ -3043,22 +3045,39 @@ self_test() {
   (( failures == 0 ))
 }
 
-menu() {
+bootstrap_web_first() {
   require_root
   require_linux
-  install_dependencies
   set +e
   set +u
   set +o pipefail
   trap - ERR
 
-  # If not installed, start initial setup immediately
-  if [[ ! -f "$CONFIG_FILE" ]]; then
-    header
-    say "  Welcome to XRayMesh v${VERSION}" "$BOLD$GREEN"
-    say "  No mesh configuration found. Starting first-time setup..." "$CYAN"
-    printf '\n'
-    setup_node
+  header
+  say "  ============================================================" "$BOLD$GREEN"
+  say "    🎉 XRayMesh v${VERSION} - Fast Web Setup" "$BOLD$GREEN"
+  say "  ============================================================" "$BOLD$GREEN"
+  info "Installing system dependencies, EasyTier core, and Web Dashboard..."
+  printf '\n'
+
+  install_dependencies
+  install_core
+  ensure_xraymesh_cli >/dev/null 2>&1 || true
+
+  configure_web_ui_interactive
+}
+
+menu() {
+  require_root
+  require_linux
+  set +e
+  set +u
+  set +o pipefail
+  trap - ERR
+
+  # If Web UI is not installed / configured, start Web-First setup immediately
+  if [[ ! -f "$WEB_CONFIG_FILE" || ! -f "$WEB_SERVICE_FILE" ]]; then
+    bootstrap_web_first
     return
   fi
 
@@ -3072,18 +3091,26 @@ menu() {
     section "XRAYMESH v2.0 - CONTROL PANEL"
 
     local mesh_state web_state iperf_state port pub_ip proto domain ssl_info v_ip host_name web_url
-    mesh_state="$(systemctl is-active xraymesh.service 2>/dev/null || echo inactive)"
-    web_state="$(systemctl is-active xraymesh-web.service 2>/dev/null || echo inactive)"
-    iperf_state="$(systemctl is-active xraymesh-iperf.service 2>/dev/null || echo inactive)"
+    mesh_state="$(systemctl is-active xraymesh.service 2>/dev/null || true)"
+    [[ -z "$mesh_state" ]] && mesh_state="inactive"
+    web_state="$(systemctl is-active xraymesh-web.service 2>/dev/null || true)"
+    [[ -z "$web_state" ]] && web_state="inactive"
+    iperf_state="$(systemctl is-active xraymesh-iperf.service 2>/dev/null || true)"
+    [[ -z "$iperf_state" ]] && iperf_state="inactive"
     port="$(get_web_port 2>/dev/null || echo "$DEFAULT_WEB_PORT")"
     pub_ip="$(get_server_ip 2>/dev/null || echo "127.0.0.1")"
     proto="$(get_web_proto 2>/dev/null || echo "http")"
     domain="$(get_web_domain 2>/dev/null || true)"
 
-    # shellcheck disable=SC1090
-    [[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE"
-    v_ip="${IPV4:-unknown}"
-    host_name="${HOSTNAME:-$(hostname -s)}"
+    if [[ -f "$CONFIG_FILE" ]]; then
+      # shellcheck disable=SC1090
+      source "$CONFIG_FILE" 2>/dev/null || true
+      v_ip="${IPV4:-unknown}"
+      host_name="${HOSTNAME:-$(hostname -s 2>/dev/null || echo node)}"
+    else
+      v_ip="Not Configured"
+      host_name="$(hostname -s 2>/dev/null || echo node)"
+    fi
 
     if [[ "$proto" == "https" && -n "$domain" ]]; then
       ssl_info="Enabled (HTTPS)"
@@ -3093,9 +3120,13 @@ menu() {
       web_url="http://${pub_ip}:${port}"
     fi
 
-    printf '  Mesh Node:        %b%s%b (%s) | %b%s%b\n' \
-      "$BOLD$CYAN" "$host_name" "$RESET" "$v_ip" \
-      "$([ "$mesh_state" == "active" ] && echo "$GREEN" || echo "$RED")" "$mesh_state" "$RESET"
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+      printf '  Mesh Node:        %bNot Configured%b (Open Web Dashboard to initialize)\n' "$YELLOW" "$RESET"
+    else
+      printf '  Mesh Node:        %b%s%b (%s) | %b%s%b\n' \
+        "$BOLD$CYAN" "$host_name" "$RESET" "$v_ip" \
+        "$([ "$mesh_state" == "active" ] && echo "$GREEN" || echo "$RED")" "$mesh_state" "$RESET"
+    fi
     printf '  Web Dashboard:    %b%s%b | %b%s%b\n' \
       "$BOLD$CYAN" "$web_url" "$RESET" \
       "$([ "$web_state" == "active" ] && echo "$GREEN" || echo "$RED")" "$web_state" "$RESET"
@@ -3113,7 +3144,7 @@ menu() {
     printf '  %b[7]%b  Stop All Services\n' "$RED" "$RESET"
     printf '  %b[8]%b  Start All Services\n' "$GREEN" "$RESET"
     printf '  %b[9]%b  View Live Logs\n' "$CYAN" "$RESET"
-    printf '  %b[10]%b Reconfigure Mesh Node (IP, Secret, Protocol)\n' "$YELLOW" "$RESET"
+    printf '  %b[10]%b Configure Mesh Node (Web UI / Advanced CLI)\n' "$YELLOW" "$RESET"
     printf '  %b[11]%b Update XRayMesh to Latest Version\n' "$GREEN" "$RESET"
     printf '  %b[12]%b Completely Uninstall XRayMesh\n' "$RED" "$RESET"
     printf '  %b[0]%b  Exit\n\n' "$GRAY" "$RESET"
@@ -3158,7 +3189,23 @@ menu() {
           3) journalctl -u xraymesh-haproxy.service -u xraymesh-gost.service -u xraymesh-realm.service -u xraymesh-iptables.service -f -n 50 ;;
         esac
         ;;
-      10) IN_MAIN_MENU=0; run_screen setup_node; IN_MAIN_MENU=1 ;;
+      10)
+        IN_MAIN_MENU=0
+        if [[ ! -f "$CONFIG_FILE" ]]; then
+          header
+          say "  Configure Mesh Node" "$BOLD$CYAN"
+          info "We strongly recommend configuring your Mesh Node via the modern Web Dashboard:"
+          printf '  %b%s%b\n\n' "$BOLD$GREEN" "$web_url" "$RESET"
+          local run_cli="n"
+          read -r -p "  Do you want to run the advanced terminal node wizard anyway? [y/N]: " run_cli
+          if [[ "$run_cli" =~ ^[Yy]$ ]]; then
+            run_screen setup_node
+          fi
+        else
+          run_screen setup_node
+        fi
+        IN_MAIN_MENU=1
+        ;;
       11) IN_MAIN_MENU=0; run_screen update_core; IN_MAIN_MENU=1 ;;
       12)
         IN_MAIN_MENU=0
@@ -3173,13 +3220,19 @@ menu() {
 }
 
 main() {
+  set +e
+  set +u
+  set +o pipefail
+  trap - ERR
+
   if (( EUID == 0 )); then
     ensure_xraymesh_cli >/dev/null 2>&1 || true
   fi
 
   case "${1:-menu}" in
   menu) menu ;;
-  install|setup) require_linux; setup_node ;;
+  install|setup) require_linux; bootstrap_web_first ;;
+  setup-node) require_linux; setup_node ;;
   status)
     if [[ -f "$CONFIG_FILE" ]]; then
       local mesh_state web_state port pub_ip proto domain v_ip host_name

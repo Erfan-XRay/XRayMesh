@@ -304,7 +304,12 @@ export const translations = {
     modal_tunnel_presets: "Presets",
     modal_tunnel_proto: "Forward Protocol",
     modal_tunnel_interface: "Inbound Interface",
+    modal_tunnel_loading_ifaces: "Loading interfaces...",
     modal_tunnel_source_cidr: "Allowed Source CIDR",
+
+    // Onboarding Banner
+    onboarding_banner_title: "Welcome to XRayMesh! Initialize Your First Mesh Node",
+    onboarding_banner_desc: "Your Web Panel is active. Complete the quick 3-step setup below to generate your encryption keys and launch your private mesh network.",
 
     // Origin Server & Distributed Tunnels
     tunnels_origin_server: "Origin Server (Hosted On)",
@@ -635,7 +640,12 @@ export const translations = {
     modal_tunnel_presets: "نمونه‌های آماده",
     modal_tunnel_proto: "پروتکل فوروارد",
     modal_tunnel_interface: "کارت شبکه ورودی",
+    modal_tunnel_loading_ifaces: "در حال دریافت اینترفیس‌ها...",
     modal_tunnel_source_cidr: "محدوده مجاز مبدا (CIDR)",
+
+    // Onboarding Banner
+    onboarding_banner_title: "به پنل مدیریت XRayMesh خوش آمدید! راه‌اندازی اولین نود مش",
+    onboarding_banner_desc: "پنل وب با موفقیت راه‌اندازی شد. لطفاً از طریق ویزارد ۳ مرحله‌ای زیر، اولین نود مش سرور خود را بسازید و روشن کنید.",
 
     // Origin Server & Distributed Tunnels
     tunnels_origin_server: "سرور مبدأ (میزبان تونل)",

@@ -84,9 +84,10 @@ export async function fetchTunnels(): Promise<TunnelsData> {
   return d.data || { haproxy: [], iptables: [], gost: [] };
 }
 
-export async function fetchInterfaces(): Promise<string[]> {
+export async function fetchInterfaces(node?: string): Promise<string[]> {
   try {
-    const res = await fetch('/api/interfaces');
+    const url = node && node !== 'local' ? `/api/interfaces?node=${encodeURIComponent(node)}` : '/api/interfaces';
+    const res = await fetch(url);
     const d = await res.json();
     return d.data || ['any'];
   } catch {

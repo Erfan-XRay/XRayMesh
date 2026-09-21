@@ -1152,10 +1152,12 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
         if path == "/api/auth/status":
             web_cfg = load_env_file(WEB_ENV_FILE)
             has_pw = bool(web_cfg.get("WEB_PASSWORD_HASH"))
+            node_cfg = load_env_file(CONFIG_FILE)
+            is_node_configured = os.path.isfile(CONFIG_FILE) and bool(node_cfg.get("IPV4"))
             self.send_json({
                 "authenticated": auth_ok,
                 "password_configured": has_pw,
-                "node_configured": os.path.isfile(CONFIG_FILE)
+                "node_configured": is_node_configured
             })
             return
 
@@ -1205,13 +1207,16 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                     pass
 
             web_cfg = load_env_file(WEB_ENV_FILE)
+            default_host = os.uname().nodename if hasattr(os, "uname") else "node"
+            is_node_configured = os.path.isfile(CONFIG_FILE) and bool(config.get("IPV4"))
             self.send_json({
                 "node": {
+                    "configured": is_node_configured,
                     "network_name": config.get("NETWORK_NAME", ""),
-                    "hostname": config.get("HOSTNAME", ""),
+                    "hostname": config.get("HOSTNAME", default_host),
                     "ipv4": config.get("IPV4", ""),
                     "protocol": config.get("PROTOCOL", "dual"),
-                    "port": config.get("PORT", ""),
+                    "port": config.get("PORT", "11010"),
                     "encryption": config.get("ENCRYPTION", "yes"),
                     "service_active": svc_active,
                     "easytier_version": et_ver,
@@ -1325,6 +1330,30 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             return
 
         elif path == "/api/interfaces":
+            query_node = (query.get("node", [None])[0] or "").strip()
+            cfg = load_env_file(CONFIG_FILE)
+            local_ip = cfg.get("IPV4", "127.0.0.1")
+
+            if query_node and query_node not in ("local", "127.0.0.1", local_ip):
+                secret = cfg.get("NETWORK_SECRET", "").strip()
+                ok, res = send_cluster_http(query_node, PORT, "/api/cluster/interfaces", secret, {}, timeout=3.0)
+                if ok and isinstance(res, dict) and res.get("ok"):
+                    remote_ifaces = res.get("interfaces", ["any"])
+                    self.send_json({
+                        "ok": True,
+                        "data": remote_ifaces,
+                        "node": query_node
+                    })
+                    return
+                else:
+                    self.send_json({
+                        "ok": True,
+                        "data": ["any"],
+                        "node": query_node,
+                        "warning": "Could not reach remote node for interface list, fallback to any."
+                    })
+                    return
+
             ifaces = get_network_interfaces()
             self.send_json({
                 "ok": True,
@@ -1362,6 +1391,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 hostname_val = os.uname().nodename
 
             web_cfg = load_env_file(WEB_ENV_FILE)
+            is_node_configured = os.path.isfile(CONFIG_FILE) and bool(config.get("IPV4"))
             self.send_json({
                 "ok": True,
                 "data": {
@@ -1377,7 +1407,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                     "mtu": int(config.get("MTU", "1380")),
                     "enable_kcp": config.get("ENABLE_KCP", "no") == "yes",
                     "public_ip": get_server_public_ip(),
-                    "node_configured": os.path.isfile(CONFIG_FILE),
+                    "node_configured": is_node_configured,
                     "service_active": svc_active,
                     "last_rollback": LAST_ROLLBACK,
                     "xraymesh_version": CURRENT_VERSION,
@@ -1478,7 +1508,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
         if path in (
             "/api/cluster/prepare", "/api/cluster/commit", "/api/cluster/confirm", "/api/cluster/rollback",
             "/api/cluster/tunnels", "/api/cluster/tunnel/create", "/api/cluster/tunnel/edit", "/api/cluster/tunnel/delete",
-            "/api/cluster/node/update"
+            "/api/cluster/node/update", "/api/cluster/interfaces"
         ):
             valid, err_msg = verify_cluster_hmac(self.headers, body)
             if not valid:
@@ -1639,6 +1669,17 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                     "ok": True,
                     "message": f"Update initiated on node '{cur_cfg.get('HOSTNAME', 'node')}'.",
                     "node": cur_cfg.get("HOSTNAME", "node")
+                })
+                return
+
+            elif path == "/api/cluster/interfaces":
+                cur_cfg = load_env_file(CONFIG_FILE)
+                ifaces = get_network_interfaces()
+                self.send_json({
+                    "ok": True,
+                    "node_ip": cur_cfg.get("IPV4", ""),
+                    "node_name": cur_cfg.get("HOSTNAME", "node"),
+                    "interfaces": ifaces
                 })
                 return
 

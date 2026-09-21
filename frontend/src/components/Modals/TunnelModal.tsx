@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Peer, HaproxyTunnel, IptablesTunnel, GostTunnel, RealmTunnel } from '../../types';
+import { fetchInterfaces } from '../../services/api';
 import { X, Loader2 } from 'lucide-react';
 
 export type TunnelModalType = 'haproxy' | 'iptables' | 'gost' | 'realm';
@@ -36,6 +37,33 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
   const [sourceCidr, setSourceCidr] = useState('0.0.0.0/0');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [nodeInterfaces, setNodeInterfaces] = useState<string[]>(interfaces || ['any']);
+  const [loadingInterfaces, setLoadingInterfaces] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || type !== 'iptables') return;
+
+    let isMounted = true;
+    setLoadingInterfaces(true);
+    fetchInterfaces(originNode || undefined)
+      .then((ifaces) => {
+        if (isMounted) {
+          setNodeInterfaces(ifaces);
+          setIface((prev) => (ifaces.includes(prev) ? prev : 'any'));
+        }
+      })
+      .catch(() => {
+        if (isMounted) setNodeInterfaces(['any']);
+      })
+      .finally(() => {
+        if (isMounted) setLoadingInterfaces(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [originNode, isOpen, type]);
 
   useEffect(() => {
     if (initialData && isEdit) {
@@ -312,13 +340,22 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
           {type === 'iptables' && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block font-medium text-text-muted mb-1.5">{t('modal_tunnel_interface')}</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block font-medium text-text-muted">{t('modal_tunnel_interface')}</label>
+                  {loadingInterfaces && (
+                    <span className="flex items-center gap-1 text-[10px] text-primary animate-pulse font-mono">
+                      <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                      {t('modal_tunnel_loading_ifaces')}
+                    </span>
+                  )}
+                </div>
                 <select
                   value={iface}
                   onChange={(e) => setIface(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-white/15 rounded-xl font-mono text-text-main focus:outline-none focus:border-primary"
+                  disabled={loadingInterfaces}
+                  className="w-full px-3 py-2 bg-slate-950 border border-white/15 rounded-xl font-mono text-text-main focus:outline-none focus:border-primary disabled:opacity-60"
                 >
-                  {interfaces.map((i) => (
+                  {nodeInterfaces.map((i) => (
                     <option key={i} value={i}>
                       {i === 'any' ? 'any (All interfaces)' : i}
                     </option>

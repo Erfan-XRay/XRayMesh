@@ -1,4 +1,5 @@
 export interface NodeInfo {
+  configured?: boolean;
   network_name?: string;
   hostname?: string;
   ipv4?: string;
