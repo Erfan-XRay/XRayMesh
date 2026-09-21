@@ -212,6 +212,95 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
     }
   };
 
+  // Step 2 Comprehensive Input Validation State & Handlers
+  const [step2Attempted, setStep2Attempted] = useState(false);
+  const [step2Touched, setStep2Touched] = useState<{ [key: string]: boolean }>({});
+
+  const markTouched = (field: string) => {
+    setStep2Touched((prev) => ({ ...prev, [field]: true }));
+  };
+
+  const step2Errors = useMemo(() => {
+    const errs: { [key: string]: string } = {};
+
+    // 1. Hostname (Server Name)
+    const h = hostname.trim();
+    if (!h) {
+      errs.hostname = t('wizard_val_hostname_empty');
+    } else if (!/^[a-zA-Z0-9_.-]+$/.test(h)) {
+      errs.hostname = t('wizard_val_hostname_invalid');
+    }
+
+    // 2. Virtual IPv4
+    const ip = ipv4.trim();
+    const ipv4Regex = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+    if (!ip) {
+      errs.ipv4 = t('wizard_val_vip_empty');
+    } else if (!ipv4Regex.test(ip)) {
+      errs.ipv4 = t('wizard_val_vip_invalid');
+    }
+
+    // 3. Port
+    const p = Number(port);
+    if (!port && port !== 0) {
+      errs.port = t('wizard_val_port_empty');
+    } else if (isNaN(p) || p < 1 || p > 65535) {
+      errs.port = t('wizard_val_port_invalid');
+    }
+
+    // 4. Network Name
+    const net = networkName.trim();
+    if (!net) {
+      errs.networkName = t('wizard_val_net_empty');
+    }
+
+    // 5. Network Secret
+    const sec = networkSecret.trim();
+    if (!sec) {
+      errs.networkSecret = t('wizard_val_secret_empty');
+    } else if (sec.length < 4) {
+      errs.networkSecret = t('wizard_val_secret_short');
+    }
+
+    // 6. MTU
+    const m = Number(mtu);
+    if (isNaN(m) || m < 576 || m > 9000) {
+      errs.mtu = t('wizard_val_mtu_invalid');
+    }
+
+    return errs;
+  }, [hostname, ipv4, port, networkName, networkSecret, mtu, t]);
+
+  const isFieldInvalid = (f: string) => {
+    return Boolean((step2Attempted || step2Touched[f] || (f === 'hostname' && hostnameTouched)) && step2Errors[f]);
+  };
+
+  const isFieldValid = (f: string, val: any) => {
+    return Boolean(!step2Errors[f] && val !== undefined && val !== null && String(val).trim() !== '');
+  };
+
+  const handleStep2Next = () => {
+    setStep2Attempted(true);
+    setHostnameTouched(true);
+    setStep2Touched({
+      hostname: true,
+      ipv4: true,
+      port: true,
+      networkName: true,
+      networkSecret: true,
+      mtu: true,
+    });
+
+    const errKeys = Object.keys(step2Errors);
+    if (errKeys.length > 0) {
+      const firstError = Object.values(step2Errors)[0];
+      onNotify(firstError || t('wizard_val_fix_errors'), 'error');
+      return;
+    }
+
+    setWizardStep(3);
+  };
+
   // Delete Node State
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingNode, setDeletingNode] = useState(false);
@@ -1068,18 +1157,32 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
               </div>
 
               {/* Mandatory Server Name (Hostname) Box */}
-              <div className={`p-4 rounded-2xl border transition-all ${
-                !hostname.trim() && hostnameTouched
-                  ? 'bg-rose-500/10 border-rose-500/50'
+              <div className={`p-4 rounded-2xl border transition-all duration-300 ${
+                isFieldInvalid('hostname')
+                  ? 'bg-rose-500/[0.08] border-rose-500/60 shadow-lg shadow-rose-500/10'
+                  : isFieldValid('hostname', hostname)
+                  ? 'bg-emerald-500/[0.04] border-emerald-500/30'
                   : 'bg-primary/5 border-primary/30'
               }`}>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-bold text-text-main flex items-center gap-2">
-                    <Server className="w-4 h-4 text-primary" />
+                    <Server className={`w-4 h-4 transition-colors ${isFieldInvalid('hostname') ? 'text-rose-400' : 'text-primary'}`} />
                     <span>{t('node_hostname')}</span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                      {t('wizard_hostname_required_badge')} *
-                    </span>
+                    {isFieldInvalid('hostname') ? (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        {t('wizard_required_tag')} *
+                      </span>
+                    ) : isFieldValid('hostname', hostname) ? (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                        <Check className="w-3 h-3" />
+                        {t('wizard_valid_tag')}
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                        {t('wizard_hostname_required_badge')} *
+                      </span>
+                    )}
                   </label>
                 </div>
                 <input
@@ -1089,17 +1192,20 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     setHostname(e.target.value);
                     if (!hostnameTouched) setHostnameTouched(true);
                   }}
+                  onBlur={() => markTouched('hostname')}
                   placeholder="e.g. germany-node-1, ir-relay, node-alpha"
-                  className={`w-full px-3.5 py-2.5 bg-slate-950 border rounded-xl font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none transition-all ${
-                    !hostname.trim() && hostnameTouched
-                      ? 'border-rose-500 focus:border-rose-400'
+                  className={`w-full px-3.5 py-2.5 bg-slate-950 border rounded-xl font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none transition-all duration-200 ${
+                    isFieldInvalid('hostname')
+                      ? 'border-rose-500 bg-rose-500/[0.04] focus:border-rose-400 focus:ring-1 focus:ring-rose-500/30'
+                      : isFieldValid('hostname', hostname)
+                      ? 'border-emerald-500/40 focus:border-primary'
                       : 'border-white/10 focus:border-primary'
                   }`}
                 />
-                {!hostname.trim() ? (
-                  <p className="text-[11px] text-amber-400 mt-2 flex items-center gap-1.5 font-medium">
+                {isFieldInvalid('hostname') ? (
+                  <p className="text-[11px] text-rose-400 mt-2 flex items-center gap-1.5 font-medium animate-pulse">
                     <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
-                    <span>{t('wizard_hostname_required_hint')}</span>
+                    <span>{step2Errors.hostname || t('wizard_hostname_required_hint')}</span>
                   </p>
                 ) : (
                   <p className="text-[11px] text-text-muted mt-1.5">
@@ -1111,51 +1217,166 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
               {/* IP & Network Details */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                 {/* Virtual IP */}
-                <div>
-                  <label className="block font-medium text-text-muted mb-1.5">{t('node_vip')}</label>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="font-medium text-text-muted flex items-center gap-1.5">
+                      <span>{t('node_vip')}</span>
+                    </label>
+                    {isFieldInvalid('ipv4') ? (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse flex items-center gap-0.5">
+                        <AlertCircle className="w-2.5 h-2.5" />
+                        {t('wizard_required_tag')} *
+                      </span>
+                    ) : isFieldValid('ipv4', ipv4) ? (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-0.5">
+                        <Check className="w-2.5 h-2.5" />
+                        {t('wizard_valid_tag')}
+                      </span>
+                    ) : (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono text-text-subtle">
+                        {t('wizard_required_tag')} *
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={ipv4}
                     onChange={(e) => setIpv4(e.target.value)}
+                    onBlur={() => markTouched('ipv4')}
                     placeholder="10.144.144.1"
-                    className="w-full px-3.5 py-2 bg-slate-950 border border-white/10 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                    className={`w-full px-3.5 py-2 bg-slate-950 border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none transition-all duration-200 ${
+                      isFieldInvalid('ipv4')
+                        ? 'border-rose-500 bg-rose-500/[0.04] focus:border-rose-400 focus:ring-1 focus:ring-rose-500/30'
+                        : isFieldValid('ipv4', ipv4)
+                        ? 'border-emerald-500/40 focus:border-primary'
+                        : 'border-white/10 focus:border-primary'
+                    }`}
                   />
-                  <span className="text-[10px] text-text-muted mt-1 block">
-                    Unique private IP inside the encrypted mesh overlay.
-                  </span>
+                  {isFieldInvalid('ipv4') ? (
+                    <p className="text-[11px] text-rose-400 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                      <span>{step2Errors.ipv4}</span>
+                    </p>
+                  ) : (
+                    <span className="text-[10px] text-text-muted block">
+                      Unique private IP inside the encrypted mesh overlay.
+                    </span>
+                  )}
                 </div>
 
                 {/* Listen Port */}
-                <div>
-                  <label className="block font-medium text-text-muted mb-1.5">{t('node_port')}</label>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="font-medium text-text-muted flex items-center gap-1.5">
+                      <span>{t('node_port')}</span>
+                    </label>
+                    {isFieldInvalid('port') ? (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse flex items-center gap-0.5">
+                        <AlertCircle className="w-2.5 h-2.5" />
+                        {t('wizard_required_tag')} *
+                      </span>
+                    ) : isFieldValid('port', port) ? (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-0.5">
+                        <Check className="w-2.5 h-2.5" />
+                        {t('wizard_valid_tag')}
+                      </span>
+                    ) : (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono text-text-subtle">
+                        {t('wizard_required_tag')} *
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="number"
                     value={port}
                     onChange={(e) => setPort(Number(e.target.value))}
+                    onBlur={() => markTouched('port')}
                     placeholder="11010"
-                    className="w-full px-3.5 py-2 bg-slate-950 border border-white/10 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                    className={`w-full px-3.5 py-2 bg-slate-950 border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none transition-all duration-200 ${
+                      isFieldInvalid('port')
+                        ? 'border-rose-500 bg-rose-500/[0.04] focus:border-rose-400 focus:ring-1 focus:ring-rose-500/30'
+                        : isFieldValid('port', port)
+                        ? 'border-emerald-500/40 focus:border-primary'
+                        : 'border-white/10 focus:border-primary'
+                    }`}
                   />
-                  <span className="text-[10px] text-text-muted mt-1 block">
-                    WAN listen port for mesh peer connections.
-                  </span>
+                  {isFieldInvalid('port') ? (
+                    <p className="text-[11px] text-rose-400 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                      <span>{step2Errors.port}</span>
+                    </p>
+                  ) : (
+                    <span className="text-[10px] text-text-muted block">
+                      WAN listen port for mesh peer connections.
+                    </span>
+                  )}
                 </div>
 
                 {/* Network Name */}
-                <div>
-                  <label className="block font-medium text-text-muted mb-1.5">{t('node_net_name')}</label>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="font-medium text-text-muted flex items-center gap-1.5">
+                      <span>{t('node_net_name')}</span>
+                    </label>
+                    {isFieldInvalid('networkName') ? (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse flex items-center gap-0.5">
+                        <AlertCircle className="w-2.5 h-2.5" />
+                        {t('wizard_required_tag')} *
+                      </span>
+                    ) : isFieldValid('networkName', networkName) ? (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-0.5">
+                        <Check className="w-2.5 h-2.5" />
+                        {t('wizard_valid_tag')}
+                      </span>
+                    ) : (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono text-text-subtle">
+                        {t('wizard_required_tag')} *
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={networkName}
                     onChange={(e) => setNetworkName(e.target.value)}
+                    onBlur={() => markTouched('networkName')}
                     placeholder="e.g. xraymesh"
-                    className="w-full px-3.5 py-2 bg-slate-950 border border-white/10 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                    className={`w-full px-3.5 py-2 bg-slate-950 border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none transition-all duration-200 ${
+                      isFieldInvalid('networkName')
+                        ? 'border-rose-500 bg-rose-500/[0.04] focus:border-rose-400 focus:ring-1 focus:ring-rose-500/30'
+                        : isFieldValid('networkName', networkName)
+                        ? 'border-emerald-500/40 focus:border-primary'
+                        : 'border-white/10 focus:border-primary'
+                    }`}
                   />
+                  {isFieldInvalid('networkName') && (
+                    <p className="text-[11px] text-rose-400 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                      <span>{step2Errors.networkName}</span>
+                    </p>
+                  )}
                 </div>
 
                 {/* Network Secret */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="font-medium text-text-muted">{t('node_net_secret')}</label>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <label className="font-medium text-text-muted">{t('node_net_secret')}</label>
+                      {isFieldInvalid('networkSecret') ? (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse flex items-center gap-0.5">
+                          <AlertCircle className="w-2.5 h-2.5" />
+                          {t('wizard_required_tag')} *
+                        </span>
+                      ) : isFieldValid('networkSecret', networkSecret) ? (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-0.5">
+                          <Check className="w-2.5 h-2.5" />
+                          {t('wizard_valid_tag')}
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono text-text-subtle">
+                          {t('wizard_required_tag')} *
+                        </span>
+                      )}
+                    </div>
                     <button
                       type="button"
                       onClick={generateRandomSecret}
@@ -1169,8 +1390,15 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       type={showSecret ? 'text' : 'password'}
                       value={networkSecret}
                       onChange={(e) => setNetworkSecret(e.target.value)}
+                      onBlur={() => markTouched('networkSecret')}
                       placeholder="Shared secret across all nodes..."
-                      className="w-full pl-3.5 pr-10 py-2 bg-slate-950 border border-white/10 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                      className={`w-full pl-3.5 pr-10 py-2 bg-slate-950 border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none transition-all duration-200 ${
+                        isFieldInvalid('networkSecret')
+                          ? 'border-rose-500 bg-rose-500/[0.04] focus:border-rose-400 focus:ring-1 focus:ring-rose-500/30'
+                          : isFieldValid('networkSecret', networkSecret)
+                          ? 'border-emerald-500/40 focus:border-primary'
+                          : 'border-white/10 focus:border-primary'
+                      }`}
                     />
                     <button
                       type="button"
@@ -1180,6 +1408,12 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                  {isFieldInvalid('networkSecret') && (
+                    <p className="text-[11px] text-rose-400 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                      <span>{step2Errors.networkSecret}</span>
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1196,7 +1430,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                         key={p.id}
                         type="button"
                         onClick={() => setProtocol(p.id)}
-                        className={`p-3 rounded-xl border text-left transition-all ${
+                        className={`p-3 rounded-xl border text-left transition-all duration-200 ${
                           isSelected
                             ? 'bg-primary/10 border-primary text-primary font-bold shadow-sm'
                             : 'bg-slate-900/40 border-white/10 text-text-muted hover:border-white/20'
@@ -1263,15 +1497,25 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     <span className="font-medium text-text-main">{t('node_ipv6_label')}</span>
                   </label>
 
-                  <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-900/40 border border-white/5">
-                    <Sliders className="w-3.5 h-3.5 text-text-muted flex-shrink-0" />
-                    <span className="text-[11px] text-text-muted flex-shrink-0">MTU:</span>
-                    <input
-                      type="number"
-                      value={mtu}
-                      onChange={(e) => setMtu(Number(e.target.value))}
-                      className="w-full px-2 py-1 bg-slate-950 border border-white/10 rounded font-mono text-xs text-text-main focus:outline-none focus:border-primary"
-                    />
+                  <div className={`flex flex-col p-2.5 rounded-xl bg-slate-900/40 border transition-all duration-200 ${
+                    isFieldInvalid('mtu') ? 'border-rose-500/60 bg-rose-500/[0.04]' : 'border-white/5'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <Sliders className="w-3.5 h-3.5 text-text-muted flex-shrink-0" />
+                      <span className="text-[11px] text-text-muted flex-shrink-0">MTU:</span>
+                      <input
+                        type="number"
+                        value={mtu}
+                        onChange={(e) => setMtu(Number(e.target.value))}
+                        onBlur={() => markTouched('mtu')}
+                        className={`w-full px-2 py-1 bg-slate-950 border rounded font-mono text-xs text-text-main focus:outline-none transition-all ${
+                          isFieldInvalid('mtu') ? 'border-rose-500 focus:border-rose-400' : 'border-white/10 focus:border-primary'
+                        }`}
+                      />
+                    </div>
+                    {isFieldInvalid('mtu') && (
+                      <span className="text-[10px] text-rose-400 mt-1 font-medium">{step2Errors.mtu}</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1288,12 +1532,8 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                 </button>
                 <button
                   type="button"
-                  disabled={!hostname.trim()}
-                  onClick={() => {
-                    setHostnameTouched(true);
-                    if (hostname.trim()) setWizardStep(3);
-                  }}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-black font-semibold text-xs hover:bg-primary-hover transition-all shadow-md disabled:opacity-40"
+                  onClick={handleStep2Next}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-black font-semibold text-xs hover:bg-primary-hover transition-all shadow-md active:scale-95 cursor-pointer"
                 >
                   <span>{t('wizard_btn_next')}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
