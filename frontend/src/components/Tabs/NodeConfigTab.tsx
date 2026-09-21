@@ -151,9 +151,6 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
   const [ipv6, setIpv6] = useState(false);
   const [mtu, setMtu] = useState(1380);
   const [enableKcp, setEnableKcp] = useState(false);
-  const [wgPortal, setWgPortal] = useState(false);
-  const [wgPortalPort, setWgPortalPort] = useState(22022);
-  const [wgClientCidr, setWgClientCidr] = useState('10.99.11.0/24');
   const [peers, setPeers] = useState<string[]>([]);
   const [newPeer, setNewPeer] = useState('');
   const [addingPeer, setAddingPeer] = useState(false);
@@ -219,9 +216,6 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
       setIpv6(Boolean(cfg.ipv6));
       setMtu(cfg.mtu || 1380);
       setEnableKcp(Boolean(cfg.enable_kcp));
-      setWgPortal(Boolean(cfg.wg_portal));
-      setWgPortalPort(cfg.wg_portal_port || 22022);
-      setWgClientCidr(cfg.wg_client_cidr || '10.99.11.0/24');
       setPeers(cfg.peers || []);
 
       // If node is unconfigured, start in Wizard mode by default
@@ -329,9 +323,6 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
         ipv6,
         mtu: Number(mtu),
         enable_kcp: enableKcp,
-        wg_portal: wgPortal,
-        wg_portal_port: Number(wgPortalPort),
-        wg_client_cidr: wgClientCidr.trim(),
         peers,
       });
 
@@ -551,13 +542,6 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
       desc: t('proto_faketcp_desc'),
       badge: 'FakeTCP',
       badgeColor: 'text-rose-400 bg-rose-500/10 border-rose-500/30',
-    },
-    {
-      id: 'wg',
-      label: t('proto_wg'),
-      desc: t('proto_wg_desc'),
-      badge: 'WireGuard',
-      badgeColor: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30',
     },
   ];
 
@@ -1516,9 +1500,9 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
             </div>
 
             {/* Accelerators & Toggles */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-white/5 text-xs">
+            <div className="pt-4 border-t border-white/5 text-xs">
               {/* KCP Loss-Resistance Proxy */}
-              <div className="p-3.5 rounded-xl bg-slate-900/50 border border-white/10 flex items-start justify-between gap-3">
+              <div className="p-3.5 rounded-xl bg-slate-900/50 border border-white/10 flex items-start justify-between gap-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <Zap className="w-3.5 h-3.5 text-amber-400" />
@@ -1535,51 +1519,6 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                   />
                   <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary" />
                 </label>
-              </div>
-
-              {/* WireGuard VPN Portal */}
-              <div className="p-3.5 rounded-xl bg-slate-900/50 border border-white/10 flex flex-col justify-between gap-2">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Shield className="w-3.5 h-3.5 text-cyan-400" />
-                      <span className="font-bold text-text-main">{t('node_wg_portal_label')}</span>
-                    </div>
-                    <p className="text-[11px] text-text-muted leading-relaxed">{t('node_wg_portal_desc')}</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                    <input
-                      type="checkbox"
-                      checked={wgPortal}
-                      onChange={(e) => setWgPortal(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary" />
-                  </label>
-                </div>
-
-                {wgPortal && (
-                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5 mt-1 animate-modal-in">
-                    <div>
-                      <label className="text-[10px] text-text-muted block mb-1">{t('node_wg_port')}</label>
-                      <input
-                        type="number"
-                        value={wgPortalPort}
-                        onChange={(e) => setWgPortalPort(Number(e.target.value))}
-                        className="w-full px-2.5 py-1.5 bg-slate-950 border border-white/10 rounded-lg font-mono text-xs text-text-main"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-text-muted block mb-1">{t('node_wg_cidr')}</label>
-                      <input
-                        type="text"
-                        value={wgClientCidr}
-                        onChange={(e) => setWgClientCidr(e.target.value)}
-                        className="w-full px-2.5 py-1.5 bg-slate-950 border border-white/10 rounded-lg font-mono text-xs text-text-main"
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
 

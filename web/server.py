@@ -630,7 +630,7 @@ def save_node_config_env(cfg):
     keys = [
         "NETWORK_NAME", "NETWORK_SECRET", "HOSTNAME", "IPV4",
         "PROTOCOL", "PORT", "PEERS", "ENCRYPTION", "IPV6",
-        "MTU", "ENABLE_KCP", "WG_PORTAL", "WG_PORTAL_PORT", "WG_CLIENT_CIDR"
+        "MTU", "ENABLE_KCP"
     ]
     for k in keys:
         v = str(cfg.get(k, ""))
@@ -831,9 +831,6 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                     "ipv6": config.get("IPV6", "no") == "yes",
                     "mtu": int(config.get("MTU", "1380")),
                     "enable_kcp": config.get("ENABLE_KCP", "no") == "yes",
-                    "wg_portal": config.get("WG_PORTAL", "no") == "yes",
-                    "wg_portal_port": int(config.get("WG_PORTAL_PORT", "22022")),
-                    "wg_client_cidr": config.get("WG_CLIENT_CIDR", "10.99.11.0/24"),
                     "public_ip": get_server_public_ip(),
                     "node_configured": os.path.isfile(CONFIG_FILE),
                     "service_active": svc_active
@@ -1273,9 +1270,6 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             ipv6 = "yes" if data.get("ipv6", False) else "no"
             mtu = int(data.get("mtu", 1380))
             enable_kcp = "yes" if data.get("enable_kcp", False) else "no"
-            wg_portal = "yes" if data.get("wg_portal", False) else "no"
-            wg_portal_port = int(data.get("wg_portal_port", 22022))
-            wg_client_cidr = data.get("wg_client_cidr", "10.99.11.0/24").strip()
 
             if not net_name or not secret or not ipv4 or not port or not hostname:
                 self.send_json({"ok": False, "error": "Missing required fields: network_name, network_secret, ipv4, port, hostname"}, status=400)
@@ -1300,10 +1294,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 "ENCRYPTION": encryption,
                 "IPV6": ipv6,
                 "MTU": str(mtu),
-                "ENABLE_KCP": enable_kcp,
-                "WG_PORTAL": wg_portal,
-                "WG_PORTAL_PORT": str(wg_portal_port),
-                "WG_CLIENT_CIDR": wg_client_cidr
+                "ENABLE_KCP": enable_kcp
             }
 
             save_node_config_env(cfg_dict)

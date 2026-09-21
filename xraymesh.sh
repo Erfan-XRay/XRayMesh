@@ -221,7 +221,7 @@ prompt_default() {
 write_config() {
   local name="$1" secret="$2" hostname="$3" ipv4="$4" protocol="$5" port="$6" peers="$7"
   local encryption="$8" ipv6="$9" mtu="${10}"
-  local enable_kcp="${11:-no}" wg_portal="${12:-no}" wg_portal_port="${13:-22022}" wg_client_cidr="${14:-10.99.11.0/24}"
+  local enable_kcp="${11:-no}"
 
   # Pre-sanitize stored peers list
   local clean_peers=()
@@ -259,9 +259,6 @@ write_config() {
     printf 'IPV6=%q\n' "$ipv6"
     printf 'MTU=%q\n' "$mtu"
     printf 'ENABLE_KCP=%q\n' "$enable_kcp"
-    printf 'WG_PORTAL=%q\n' "$wg_portal"
-    printf 'WG_PORTAL_PORT=%q\n' "$wg_portal_port"
-    printf 'WG_CLIENT_CIDR=%q\n' "$wg_client_cidr"
   } > "$CONFIG_FILE"
   chmod 600 "$CONFIG_FILE"
 }
@@ -342,11 +339,6 @@ case "$proto_lower" in
   faketcp)
     args+=(--listeners "faketcp://0.0.0.0:${PORT}")
     ;;
-  wg)
-    # EasyTier wg:// is designed for client VPN ingress (vpn-portal), not inter-node mesh peering.
-    # Provide robust dual TCP+UDP mesh peering so node-to-node connectivity never fails.
-    args+=(--listeners "tcp://0.0.0.0:${PORT}" --listeners "udp://0.0.0.0:${PORT}")
-    ;;
   dual|*)
     args+=(--listeners "tcp://0.0.0.0:${PORT}" --listeners "udp://0.0.0.0:${PORT}")
     ;;
@@ -355,11 +347,6 @@ esac
 # KCP Loss-Resistance Proxy
 if [[ "${ENABLE_KCP:-no}" == "yes" ]]; then
   args+=(--enable-kcp-proxy)
-fi
-
-# WireGuard Client Ingress (VPN Portal)
-if [[ "${WG_PORTAL:-no}" == "yes" && -n "${WG_PORTAL_PORT:-}" && -n "${WG_CLIENT_CIDR:-}" ]]; then
-  args+=(--vpn-portal "wg://0.0.0.0:${WG_PORTAL_PORT}/${WG_CLIENT_CIDR}")
 fi
 
 [[ "${IPV6:-yes}" == "no" ]] && args+=(--disable-ipv6)
@@ -430,9 +417,6 @@ if [[ -n "${PEERS:-}" ]]; then
           ;;
         faketcp)
           peer_args+=("faketcp://${target}")
-          ;;
-        wg)
-          peer_args+=("tcp://${target}" "udp://${target}")
           ;;
         udp)
           peer_args+=("udp://${target}" "tcp://${target}")
@@ -600,7 +584,7 @@ setup_node() {
   local default_name="xraymesh" default_secret="" default_hostname default_ipv4="10.144.144.1"
   local default_protocol="dual" default_port="11010" default_peers=""
   local default_encryption="yes" default_ipv6="no" default_mtu="1380"
-  local default_enable_kcp="no" default_wg_portal="no" default_wg_port="22022" default_wg_cidr="10.99.11.0/24"
+  local default_enable_kcp="no"
   default_hostname="$(hostname -s)"
 
   if [[ -f "$CONFIG_FILE" ]]; then
@@ -624,9 +608,6 @@ setup_node() {
     default_ipv6="${IPV6:-$default_ipv6}"
     default_mtu="${MTU:-$default_mtu}"
     default_enable_kcp="${ENABLE_KCP:-$default_enable_kcp}"
-    default_wg_portal="${WG_PORTAL:-$default_wg_portal}"
-    default_wg_port="${WG_PORTAL_PORT:-$default_wg_port}"
-    default_wg_cidr="${WG_CLIENT_CIDR:-$default_wg_cidr}"
     info "Editing the existing node. Press Enter to keep each current value."
   fi
 
@@ -655,8 +636,8 @@ setup_node() {
     valid_ip "$ipv4" && break
     warn "Enter a valid address from the 10.x.x.x range."
   done
-  protocol="$(prompt_default "Preferred protocol (dual/udp/tcp/ws/wss/quic/faketcp/wg)" "$default_protocol")"
-  [[ "$protocol" =~ ^(dual|udp|tcp|ws|wss|quic|faketcp|wg)$ ]] || protocol="dual"
+  protocol="$(prompt_default "Preferred protocol (dual/udp/tcp/ws/wss/quic/faketcp)" "$default_protocol")"
+  [[ "$protocol" =~ ^(dual|udp|tcp|ws|wss|quic|faketcp)$ ]] || protocol="dual"
 
   while :; do
     port="$(prompt_default "Mesh port" "$default_port")"
@@ -669,15 +650,8 @@ setup_node() {
   mtu="$(prompt_default "MTU" "$default_mtu")"
 
   enable_kcp="$(prompt_default "Enable KCP loss-resistance proxy? (yes/no)" "$default_enable_kcp")"
-  wg_portal="$(prompt_default "Enable WireGuard client VPN portal? (yes/no)" "$default_wg_portal")"
-  wg_portal_port="$default_wg_port"
-  wg_client_cidr="$default_wg_cidr"
-  if [[ "$wg_portal" == "yes" ]]; then
-    wg_portal_port="$(prompt_default "WireGuard listen port" "$default_wg_port")"
-    wg_client_cidr="$(prompt_default "WireGuard client CIDR" "$default_wg_cidr")"
-  fi
 
-  write_config "$name" "$secret" "$hostname" "$ipv4" "$protocol" "$port" "$peers" "$encryption" "$ipv6" "$mtu" "$enable_kcp" "$wg_portal" "$wg_portal_port" "$wg_client_cidr"
+  write_config "$name" "$secret" "$hostname" "$ipv4" "$protocol" "$port" "$peers" "$encryption" "$ipv6" "$mtu" "$enable_kcp"
 
   if apply_node_config; then
     info "Network: $name"

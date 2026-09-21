@@ -112,7 +112,7 @@ export type PaletteId = 'sky' | 'emerald' | 'violet' | 'amber' | 'rose' | 'oled'
 
 export type TabId = 'peers' | 'node' | 'speedtest' | 'ping' | 'tunnels';
 
-export type MeshProtocol = 'dual' | 'udp' | 'tcp' | 'ws' | 'wss' | 'quic' | 'faketcp' | 'wg';
+export type MeshProtocol = 'dual' | 'udp' | 'tcp' | 'ws' | 'wss' | 'quic' | 'faketcp';
 
 export interface NodeConfig {
   network_name: string;
@@ -126,9 +126,6 @@ export interface NodeConfig {
   ipv6: boolean;
   mtu: number;
   enable_kcp: boolean;
-  wg_portal: boolean;
-  wg_portal_port: number;
-  wg_client_cidr: string;
   public_ip?: string;
   node_configured: boolean;
   service_active: boolean;
