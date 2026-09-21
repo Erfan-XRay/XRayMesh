@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Peer, MeshProtocol } from '../../types';
 import { broadcastClusterConfig, ClusterBroadcastPayload } from '../../services/api';
 import {
@@ -50,20 +51,27 @@ export const ClusterSyncModal: React.FC<ClusterSyncModalProps> = ({
   const [isClosing, setIsClosing] = useState(false);
   const autoCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Lock body scroll while modal is open so the background never shifts
+  // Lock body scroll and listen for Escape key while modal is open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape' && !isSyncing) {
+          handleCloseGracefully();
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        document.body.style.overflow = '';
+        window.removeEventListener('keydown', handleKeyDown);
+        if (autoCloseTimerRef.current) {
+          clearTimeout(autoCloseTimerRef.current);
+        }
+      };
     } else {
       document.body.style.overflow = '';
     }
-    return () => {
-      document.body.style.overflow = '';
-      if (autoCloseTimerRef.current) {
-        clearTimeout(autoCloseTimerRef.current);
-      }
-    };
-  }, [isOpen]);
+  }, [isOpen, isSyncing]);
 
   if (!isOpen) return null;
 
@@ -127,9 +135,14 @@ export const ClusterSyncModal: React.FC<ClusterSyncModalProps> = ({
     }
   };
 
-  return (
+  return createPortal(
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md transition-opacity duration-300 ${
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isSyncing) {
+          handleCloseGracefully();
+        }
+      }}
+      className={`fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md transition-opacity duration-300 ${
         isClosing ? 'opacity-0' : 'opacity-100'
       }`}
     >
@@ -412,7 +425,8 @@ export const ClusterSyncModal: React.FC<ClusterSyncModalProps> = ({
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
