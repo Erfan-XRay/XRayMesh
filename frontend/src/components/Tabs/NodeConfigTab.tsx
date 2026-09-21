@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { NodeConfig, MeshProtocol, MeshInviteData, Language, Peer } from '../../types';
+import { NodeConfig, MeshProtocol, MeshInviteData, Language, Peer, RollbackInfo } from '../../types';
 import {
   fetchNodeConfig,
   saveNodeConfig,
@@ -12,6 +12,7 @@ import {
   startMeshNode,
   stopMeshNode,
   restartMeshNode,
+  dismissClusterRollback,
 } from '../../services/api';
 import { copyToClipboard } from '../../utils/clipboard';
 import {
@@ -33,6 +34,7 @@ import {
   Sliders,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   Play,
   Square,
   RotateCw,
@@ -333,6 +335,18 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingNode, setDeletingNode] = useState(false);
 
+  // Watchdog Rollback Alert State
+  const [lastRollback, setLastRollback] = useState<RollbackInfo | null>(null);
+
+  const handleDismissRollback = async () => {
+    try {
+      await dismissClusterRollback();
+      setLastRollback(null);
+    } catch {
+      setLastRollback(null);
+    }
+  };
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -349,6 +363,12 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
       setMtu(cfg.mtu || 1380);
       setEnableKcp(Boolean(cfg.enable_kcp));
       setPeers(cfg.peers || []);
+
+      if (cfg.last_rollback?.occurred) {
+        setLastRollback(cfg.last_rollback);
+      } else {
+        setLastRollback(null);
+      }
 
       // If node is unconfigured, start in Wizard mode by default
       if (!cfg.node_configured) {
@@ -796,6 +816,41 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
           </div>,
           document.body
         )}
+
+      {/* Watchdog Rollback Alert Banner */}
+      {lastRollback?.occurred && (
+        <div className="p-4 rounded-2xl bg-amber-500/15 border-2 border-amber-500/40 text-amber-300 flex items-start gap-3.5 shadow-xl animate-modal-in">
+          <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-400 animate-pulse" />
+          <div className="flex-1 text-xs">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <h4 className="font-bold text-sm text-amber-200">
+                {t('cluster_rollback_alert_title')}
+              </h4>
+              <span className="font-mono text-[10px] text-amber-400/90 bg-amber-500/25 px-2 py-0.5 rounded border border-amber-500/30 font-semibold">
+                Self-Healing Watchdog
+              </span>
+            </div>
+            <p className="text-amber-300/90 leading-relaxed mb-2.5">
+              {t('cluster_rollback_alert_desc')}
+            </p>
+            {lastRollback.reason && (
+              <div className="p-2.5 rounded-lg bg-black/40 border border-amber-500/20 font-mono text-[11px] text-amber-400 mb-3 leading-relaxed">
+                {lastRollback.reason}
+              </div>
+            )}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleDismissRollback}
+                className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-black font-bold text-xs transition-colors shadow-md flex items-center gap-1.5"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>{t('cluster_rollback_dismiss_btn')}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Unconfigured Alert Banner (Only when not in wizard) */}
       {!wizardActive && config && !config.node_configured && (
@@ -1887,6 +1942,15 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                 );
               })}
             </div>
+
+            {protocol === 'udp' && (
+              <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-300 animate-modal-in">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-400 mt-0.5" />
+                <p className="leading-relaxed text-[11px]">
+                  {t('node_proto_udp_hint')}
+                </p>
+              </div>
+            )}
 
             {/* Accelerators & Toggles */}
             <div className="pt-4 border-t border-white/5 text-xs">

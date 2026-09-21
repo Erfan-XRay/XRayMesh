@@ -3110,10 +3110,32 @@ ensure_xraymesh_cli() {
 
 update_web_assets() {
   mkdir -p "${WEB_DIR}/static" "${INSTALL_DIR}" /etc/xraymesh
-  ensure_xraymesh_cli
-  local script_dir branch="${XRAYMESH_BRANCH:-beta}" updated=0
+  local branch="${XRAYMESH_BRANCH:-beta}" updated=0
+  local script_dir
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+  # 1. Ensure core CLI script is updated to latest version
+  local target_sh="${INSTALL_DIR}/xraymesh.sh"
+  if [[ -f "${script_dir}/xraymesh.sh" && "${script_dir}/xraymesh.sh" != "$target_sh" ]]; then
+    install -m 0755 "${script_dir}/xraymesh.sh" "$target_sh" 2>/dev/null || cp -f "${script_dir}/xraymesh.sh" "$target_sh" 2>/dev/null || true
+    ln -sf "$target_sh" /usr/local/bin/xraymesh 2>/dev/null || true
+    updated=1
+  else
+    local tmp_sh ts
+    ts="$(date +%s)"
+    tmp_sh="$(mktemp)"
+    if curl -fsSL -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' --connect-timeout 8 --max-time 30 --retry 2 \
+      "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/${branch}/xraymesh.sh?t=${ts}" \
+      -o "$tmp_sh" 2>/dev/null && [[ -s "$tmp_sh" ]]; then
+      install -m 0755 "$tmp_sh" "$target_sh" 2>/dev/null || cp -f "$tmp_sh" "$target_sh" 2>/dev/null || true
+      chmod 0755 "$target_sh" 2>/dev/null || true
+      ln -sf "$target_sh" /usr/local/bin/xraymesh 2>/dev/null || true
+      updated=1
+    fi
+    rm -f "$tmp_sh"
+  fi
+
+  # 2. Update web server and static assets
   if [[ -f "${script_dir}/web/server.py" && -f "${script_dir}/web/static/index.html" ]]; then
     install -m 0755 "${script_dir}/web/server.py" "${WEB_DIR}/server.py"
     install -m 0644 "${script_dir}/web/static/index.html" "${WEB_DIR}/static/index.html"
@@ -3140,14 +3162,25 @@ update_web_assets() {
     rm -f "$tmp_idx"
   fi
 
-  if (( updated )); then
-    ok "Web UI assets updated successfully."
-  fi
+  # 3. Always regenerate runner and services
+  write_runner
+  write_iperf_service
+  systemctl daemon-reload 2>/dev/null || true
 
   if [[ -f "$WEB_SERVICE_FILE" ]]; then
     write_web_services
   fi
 
+  if (( updated )); then
+    ok "Core CLI, runner, and Web UI assets updated successfully."
+  fi
+
+  # 4. Restart mesh service if active to execute updated runner
+  if systemctl is-active --quiet xraymesh.service 2>/dev/null; then
+    systemctl restart xraymesh.service 2>/dev/null || true
+  fi
+
+  # 5. Restart web service
   if (( updated )) && systemctl is-active --quiet xraymesh-web.service 2>/dev/null; then
     if systemctl status xraymesh-web.service 2>/dev/null | grep -q "deactivating"; then
       systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null || true

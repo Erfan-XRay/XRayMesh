@@ -114,6 +114,15 @@ export type TabId = 'peers' | 'node' | 'speedtest' | 'ping' | 'tunnels';
 
 export type MeshProtocol = 'dual' | 'udp' | 'tcp' | 'ws' | 'wss' | 'quic' | 'faketcp';
 
+export interface RollbackInfo {
+  occurred: boolean;
+  timestamp: number;
+  reason: string;
+  failed_protocol?: string;
+  restored_protocol?: string;
+  details?: string;
+}
+
 export interface NodeConfig {
   network_name: string;
   network_secret: string;
@@ -129,6 +138,7 @@ export interface NodeConfig {
   public_ip?: string;
   node_configured: boolean;
   service_active: boolean;
+  last_rollback?: RollbackInfo;
 }
 
 export interface MeshInviteData {

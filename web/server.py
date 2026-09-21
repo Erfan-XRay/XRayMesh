@@ -456,6 +456,55 @@ def ensure_xraymesh_script():
     return target
 
 
+def ensure_cli_and_runner_fixed():
+    """Ensure xraymesh-runner and xraymesh.sh do not contain accidental TCP fallback in pure UDP mode."""
+    runner_path = os.path.join(INSTALL_DIR, "xraymesh-runner")
+    if os.path.isfile(runner_path):
+        try:
+            with open(runner_path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            changed = False
+            old_udp_listener = 'args+=(--listeners "udp://0.0.0.0:${PORT}" --listeners "tcp://0.0.0.0:${PORT}")'
+            new_udp_listener = 'args+=(--listeners "udp://0.0.0.0:${PORT}")'
+            if old_udp_listener in content:
+                content = content.replace(old_udp_listener, new_udp_listener)
+                changed = True
+
+            if re.search(r'udp\)\s+peer_args\+=\("tcp://\$\{target\}"\s+"udp://\$\{target\}"\)', content):
+                content = re.sub(r'(udp\)\s+)peer_args\+=\("tcp://\$\{target\}"\s+"udp://\$\{target\}"\)', r'\1peer_args+=("udp://${target}")', content)
+                changed = True
+
+            if changed:
+                with open(runner_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                os.chmod(runner_path, 0o755)
+                print("[Cluster-Fix] Patched /opt/xraymesh/xraymesh-runner to ensure pure UDP execution.", flush=True)
+        except Exception as e:
+            print(f"[Cluster-Fix] Warning patching runner: {e}", flush=True)
+
+    for sh_path in [os.path.join(INSTALL_DIR, "xraymesh.sh"), "/usr/local/bin/xraymesh"]:
+        if os.path.isfile(sh_path):
+            try:
+                with open(sh_path, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+                changed = False
+                old_udp_listener = 'args+=(--listeners "udp://0.0.0.0:${PORT}" --listeners "tcp://0.0.0.0:${PORT}")'
+                new_udp_listener = 'args+=(--listeners "udp://0.0.0.0:${PORT}")'
+                if old_udp_listener in content:
+                    content = content.replace(old_udp_listener, new_udp_listener)
+                    changed = True
+                if re.search(r'udp\)\s+peer_args\+=\("tcp://\$\{target\}"\s+"udp://\$\{target\}"\)', content):
+                    content = re.sub(r'(udp\)\s+)peer_args\+=\("tcp://\$\{target\}"\s+"udp://\$\{target\}"\)', r'\1peer_args+=("udp://${target}")', content)
+                    changed = True
+                if changed:
+                    with open(sh_path, "w", encoding="utf-8") as f:
+                        f.write(content)
+                    os.chmod(sh_path, 0o755)
+                    print(f"[Cluster-Fix] Patched {sh_path} to ensure pure UDP execution.", flush=True)
+            except Exception:
+                pass
+
+
 def get_xraymesh_script():
     """Find the xraymesh.sh script path."""
     return ensure_xraymesh_script()
@@ -481,6 +530,7 @@ def get_network_interfaces():
 
 def run_xraymesh_cmd(args, timeout=45):
     """Execute an xraymesh.sh command with arguments and return (success, message)."""
+    ensure_cli_and_runner_fixed()
     script = get_xraymesh_script()
     if not os.path.isfile(script):
         return False, (
@@ -660,6 +710,13 @@ CLUSTER_NONCE_CACHE = {}  # nonce -> timestamp
 ROLLBACK_TIMER = None
 ROLLBACK_LOCK = threading.Lock()
 ROLLBACK_EXPIRY = 0.0
+LAST_ROLLBACK = {
+    "occurred": False,
+    "timestamp": 0,
+    "reason": "",
+    "failed_protocol": "",
+    "restored_protocol": ""
+}
 
 ALLOWED_CLUSTER_KEYS = (
     "PROTOCOL",
@@ -749,16 +806,32 @@ def sign_cluster_request(secret, payload_dict):
     return body_bytes, headers
 
 
-def rollback_cluster_config():
+def rollback_cluster_config(reason=None):
     """Revert configuration from backup and restart node service."""
+    global LAST_ROLLBACK
     if os.path.isfile(CONFIG_BACKUP_FILE):
         try:
+            failed_cfg = load_env_file(CONFIG_FILE)
+            failed_proto = failed_cfg.get("PROTOCOL", "unknown")
+            backup_cfg = load_env_file(CONFIG_BACKUP_FILE)
+            restored_proto = backup_cfg.get("PROTOCOL", "dual")
+
             shutil.copy2(CONFIG_BACKUP_FILE, CONFIG_FILE)
             try:
                 os.remove(CONFIG_STAGED_FILE)
             except Exception:
                 pass
+
+            LAST_ROLLBACK = {
+                "occurred": True,
+                "timestamp": int(time.time()),
+                "reason": reason or f"Automatic self-healing rollback: No active peers connected with protocol '{failed_proto}' within 90s (UDP packet drop/filtering). Restored safe '{restored_proto}' configuration.",
+                "failed_protocol": failed_proto,
+                "restored_protocol": restored_proto
+            }
+            print(f"[Cluster-Rollback] {LAST_ROLLBACK['reason']}", flush=True)
             print("[Cluster-Rollback] Restored config from backup! Restarting node...", flush=True)
+            ensure_cli_and_runner_fixed()
             run_xraymesh_cmd(["node-restart"])
             return True
         except Exception as e:
@@ -766,7 +839,7 @@ def rollback_cluster_config():
     return False
 
 
-def arm_rollback_watchdog(timeout_sec=60):
+def arm_rollback_watchdog(timeout_sec=90):
     """Arm a self-healing rollback watchdog. If no peers connect within timeout, auto-rollback."""
     global ROLLBACK_TIMER, ROLLBACK_EXPIRY
     with ROLLBACK_LOCK:
@@ -835,16 +908,17 @@ def apply_staged_cluster_config():
     except Exception:
         pass
 
-    # 5. Arm rollback watchdog
-    arm_rollback_watchdog(timeout_sec=60)
+    # 5. Arm rollback watchdog (90 seconds)
+    arm_rollback_watchdog(timeout_sec=90)
 
     # 6. Restart node service in background thread so HTTP response returns immediately
     def restart_bg():
         time.sleep(0.4)
+        ensure_cli_and_runner_fixed()
         run_xraymesh_cmd(["node-restart"])
 
     threading.Thread(target=restart_bg, daemon=True).start()
-    return True, "Config committed. Service restarting with 60s rollback watchdog."
+    return True, "Config committed. Service restarting with 90s rollback watchdog."
 
 
 def send_cluster_http(target_ip, target_port, endpoint, secret, payload, timeout=6):
@@ -1022,7 +1096,8 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 "watchdog_armed": rem > 0,
                 "watchdog_remaining_sec": round(rem, 1),
                 "backup_exists": os.path.isfile(CONFIG_BACKUP_FILE),
-                "staged_exists": os.path.isfile(CONFIG_STAGED_FILE)
+                "staged_exists": os.path.isfile(CONFIG_STAGED_FILE),
+                "last_rollback": LAST_ROLLBACK
             })
             return
 
@@ -1058,7 +1133,8 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                     "enable_kcp": config.get("ENABLE_KCP", "no") == "yes",
                     "public_ip": get_server_public_ip(),
                     "node_configured": os.path.isfile(CONFIG_FILE),
-                    "service_active": svc_active
+                    "service_active": svc_active,
+                    "last_rollback": LAST_ROLLBACK
                 }
             })
             return
@@ -1815,16 +1891,17 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 if v != "":
                     cfg[k] = v
             save_node_config_env(cfg)
-            arm_rollback_watchdog(timeout_sec=60)
+            arm_rollback_watchdog(timeout_sec=90)
 
             # Restart local controller service
+            ensure_cli_and_runner_fixed()
             run_xraymesh_cmd(["node-restart"])
 
-            # Phase 4: Launch asynchronous confirmation monitor in background
+            # Phase 4: Launch asynchronous confirmation monitor in background (75s with retries)
             def monitor_and_confirm():
-                time.sleep(3.0)
+                time.sleep(4.0)
                 start_check = time.time()
-                while time.time() - start_check < 30.0:
+                while time.time() - start_check < 75.0:
                     peers = get_easytier_peers()
                     has_connected_peer = False
                     if peers:
@@ -1834,8 +1911,15 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                                 break
                     if has_connected_peer:
                         print("[Cluster-Broadcast] Peers reconnected! Sending confirmation to disarm watchdogs...", flush=True)
-                        for p in active_peers:
-                            send_cluster_http(p["ipv4"], PORT, "/api/cluster/confirm", new_secret, {}, 4)
+                        for attempt in range(3):
+                            all_ok = True
+                            for p in active_peers:
+                                ok_conf, _ = send_cluster_http(p["ipv4"], PORT, "/api/cluster/confirm", new_secret, {}, 4)
+                                if not ok_conf:
+                                    all_ok = False
+                            if all_ok:
+                                break
+                            time.sleep(1.5)
                         disarm_rollback_watchdog()
                         break
                     time.sleep(2.0)
@@ -1845,7 +1929,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             synced_names = [p["hostname"] for p in active_peers] + [cfg.get("HOSTNAME", "local")]
             self.send_json({
                 "ok": True,
-                "message": f"Successfully synchronized settings to {len(active_peers)} peer(s). Nodes are restarting with self-healing watchdogs armed.",
+                "message": f"Successfully synchronized settings to {len(active_peers)} peer(s). Nodes are restarting with 90s self-healing watchdogs armed.",
                 "synced_nodes": synced_names,
                 "applied_settings": {
                     "protocol": new_protocol,
@@ -1856,6 +1940,11 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                     "secret_rotated": new_secret != current_secret
                 }
             })
+            return
+
+        elif path == "/api/cluster/rollback/dismiss":
+            LAST_ROLLBACK["occurred"] = False
+            self.send_json({"ok": True, "message": "Rollback notice dismissed."})
             return
 
         elif path == "/api/node/start":
@@ -1900,6 +1989,9 @@ def run_server():
         os.makedirs(os.path.dirname(WEB_TOKEN_FILE), exist_ok=True)
     except Exception:
         pass
+
+    # Ensure runner and CLI are properly patched for pure UDP
+    ensure_cli_and_runner_fixed()
 
     # Prefetch and verify xraymesh script in background
     threading.Thread(target=ensure_xraymesh_script, daemon=True).start()

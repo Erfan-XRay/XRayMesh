@@ -1,4 +1,4 @@
-import { StatusResponse, Peer, TunnelsData, PingResult, SpeedtestData, NodeConfig, MeshInviteData } from '../types';
+import { StatusResponse, Peer, TunnelsData, PingResult, SpeedtestData, NodeConfig, MeshInviteData, RollbackInfo } from '../types';
 
 export async function fetchAuthStatus(): Promise<{ authenticated: boolean; password_configured: boolean }> {
   const res = await fetch('/api/auth/status');
@@ -351,9 +351,19 @@ export async function fetchClusterStatus(): Promise<{
   watchdog_remaining_sec: number;
   backup_exists: boolean;
   staged_exists: boolean;
+  last_rollback?: RollbackInfo;
 }> {
   const res = await fetch('/api/cluster/status');
   if (!res.ok) throw new Error('Failed to fetch cluster status');
   return res.json();
+}
+
+export async function dismissClusterRollback(): Promise<void> {
+  const res = await fetch('/api/cluster/rollback/dismiss', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({})
+  });
+  if (!res.ok) throw new Error('Failed to dismiss rollback notice');
 }
 
