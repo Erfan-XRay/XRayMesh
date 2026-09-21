@@ -106,7 +106,7 @@ export const PeersTab: React.FC<PeersTabProps> = ({
             return (
               <div
                 key={p.ipv4}
-                className="flex flex-col justify-between p-4 rounded-xl bg-slate-900/50 border border-white/10 hover:border-card-border-hover transition-all shadow-sm"
+                className="flex flex-col justify-between p-4 rounded-xl bg-slate-900/50 border border-white/10 hover:border-primary/30 interactive-card hover:shadow-lg transition-all shadow-sm"
               >
                 {/* Card Top */}
                 <div className="flex items-start justify-between gap-2 mb-3">
@@ -117,11 +117,11 @@ export const PeersTab: React.FC<PeersTabProps> = ({
                       </span>
                       <button
                         onClick={() => onCopy(p.ipv4)}
-                        className="p-1 rounded bg-white/5 border border-white/10 text-text-muted hover:text-primary transition-colors"
+                        className="p-1 rounded-lg bg-white/5 border border-white/10 text-text-muted hover:text-primary active:scale-90 transition-all"
                         title={t('btn_copied')}
                       >
                         {copiedKey === p.ipv4 ? (
-                          <Check className="w-3 h-3 text-accent-green" />
+                          <Check className="w-3 h-3 text-accent-green animate-bounce-subtle" />
                         ) : (
                           <Copy className="w-3 h-3" />
                         )}
@@ -170,14 +170,14 @@ export const PeersTab: React.FC<PeersTabProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => onQuickPing(p.ipv4)}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-text-main border border-white/10 transition-colors"
+                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-text-main border border-white/10 active:scale-95 transition-all"
                   >
                     <Activity className="w-3.5 h-3.5 text-text-muted" />
                     {t('peer_card_btn_ping')}
                   </button>
                   <button
                     onClick={() => onQuickSpeedtest(p.ipv4)}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-primary/15 hover:bg-primary/25 text-xs font-semibold text-primary border border-primary/30 transition-colors"
+                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-primary/15 hover:bg-primary/25 text-xs font-semibold text-primary border border-primary/30 active:scale-95 transition-all"
                   >
                     <Zap className="w-3.5 h-3.5" />
                     {t('peer_card_btn_speedtest')}

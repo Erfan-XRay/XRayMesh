@@ -39,7 +39,7 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       {/* 1. Mesh Virtual IP */}
-      <div className="p-4 rounded-xl bg-card border border-card-border hover:border-card-border-hover transition-all backdrop-blur-md relative">
+      <div className="p-4 rounded-xl bg-card border border-card-border hover:border-card-border-hover interactive-card shadow-sm hover:shadow-lg backdrop-blur-md relative">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-medium text-text-muted">{t('vip_title')}</span>
           <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-primary/10 text-primary border border-primary/20">
@@ -53,11 +53,11 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({
           {node.ipv4 && (
             <button
               onClick={() => onCopy(node.ipv4!)}
-              className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-text-muted hover:text-primary hover:border-primary/40 transition-colors"
+              className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-text-muted hover:text-primary hover:border-primary/40 active:scale-90 transition-all"
               title={t('btn_copied')}
             >
               {copiedKey === node.ipv4 ? (
-                <Check className="w-3.5 h-3.5 text-accent-green" />
+                <Check className="w-3.5 h-3.5 text-accent-green animate-bounce-subtle" />
               ) : (
                 <Copy className="w-3.5 h-3.5" />
               )}
@@ -70,7 +70,7 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({
       </div>
 
       {/* 2. Connected Peers */}
-      <div className="p-4 rounded-xl bg-card border border-card-border hover:border-card-border-hover transition-all backdrop-blur-md">
+      <div className="p-4 rounded-xl bg-card border border-card-border hover:border-card-border-hover interactive-card shadow-sm hover:shadow-lg backdrop-blur-md">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-medium text-text-muted">{t('peers_title')}</span>
           <div className="p-1 rounded-md bg-primary/10 text-primary">
@@ -84,7 +84,7 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({
       </div>
 
       {/* 3. Average Latency */}
-      <div className="p-4 rounded-xl bg-card border border-card-border hover:border-card-border-hover transition-all backdrop-blur-md">
+      <div className="p-4 rounded-xl bg-card border border-card-border hover:border-card-border-hover interactive-card shadow-sm hover:shadow-lg backdrop-blur-md">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-medium text-text-muted">{t('latency_title')}</span>
           <div className="p-1 rounded-md bg-primary/10 text-primary">
@@ -98,7 +98,7 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({
       </div>
 
       {/* 4. Host Server Resources (CPU & RAM) */}
-      <div className="p-4 rounded-xl bg-card border border-card-border hover:border-card-border-hover transition-all backdrop-blur-md">
+      <div className="p-4 rounded-xl bg-card border border-card-border hover:border-card-border-hover interactive-card shadow-sm hover:shadow-lg backdrop-blur-md">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-xs font-medium text-text-muted">{t('resources_title')}</span>
           <div className="p-1 rounded-md bg-primary/10 text-primary">

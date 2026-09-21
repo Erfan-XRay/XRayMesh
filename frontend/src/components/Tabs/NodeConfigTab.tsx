@@ -12,6 +12,7 @@ import {
   stopMeshNode,
   restartMeshNode,
 } from '../../services/api';
+import { copyToClipboard } from '../../utils/clipboard';
 import {
   Settings,
   Shield,
@@ -196,6 +197,20 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
       return inviteData;
     }
   }, [inviteData, overrideEndpoint, port]);
+
+  // Invite Token Copy State & Animation
+  const [copiedInvite, setCopiedInvite] = useState(false);
+  const handleCopyInviteToken = async (text: string) => {
+    if (!text) return;
+    const ok = await copyToClipboard(text);
+    if (ok) {
+      setCopiedInvite(true);
+      onCopy(text);
+      setTimeout(() => setCopiedInvite(false), 2500);
+    } else {
+      onNotify('Could not copy invite token to clipboard', 'error');
+    }
+  };
 
   // Delete Node State
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -877,7 +892,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
 
           {/* STEP 1: SETUP MODE SELECTION */}
           {wizardStep === 1 && (
-            <div className="space-y-6 animate-fade-in">
+            <div className="space-y-6 animate-tab-in">
               <div className="text-center max-w-lg mx-auto">
                 <h3 className="text-base font-bold text-text-main mb-1">
                   {t('wizard_step_1')}
@@ -1042,7 +1057,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
 
           {/* STEP 2: NODE IDENTITY & MANDATORY HOSTNAME */}
           {wizardStep === 2 && (
-            <div className="space-y-6 animate-fade-in max-w-2xl mx-auto">
+            <div className="space-y-6 animate-tab-in max-w-2xl mx-auto">
               <div>
                 <h3 className="text-base font-bold text-text-main mb-1">
                   {t('wizard_step_2')}
@@ -1200,6 +1215,67 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                 </div>
               </div>
 
+              {/* Performance & Security Tuning (KCP, Encryption, IPv6, MTU) */}
+              <div className="space-y-3.5 pt-4 border-t border-white/5">
+                <span className="block text-xs font-bold text-text-main">
+                  Performance & Network Tuning
+                </span>
+
+                {/* KCP Loss-Resistance Proxy */}
+                <div className="p-3.5 rounded-xl bg-slate-900/60 border border-white/10 flex items-start justify-between gap-4 transition-all hover:border-amber-500/30">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Zap className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                      <span className="font-bold text-xs text-text-main">{t('node_kcp_label')}</span>
+                    </div>
+                    <p className="text-[11px] text-text-muted leading-relaxed">{t('node_kcp_desc')}</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={enableKcp}
+                      onChange={(e) => setEnableKcp(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary" />
+                  </label>
+                </div>
+
+                {/* Extra Flags (Encryption, IPv6, MTU) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-900/40 border border-white/5 cursor-pointer hover:border-white/20 transition-all active:scale-[0.98]">
+                    <input
+                      type="checkbox"
+                      checked={encryption}
+                      onChange={(e) => setEncryption(e.target.checked)}
+                      className="rounded bg-slate-950 border-white/20 text-primary focus:ring-0"
+                    />
+                    <span className="font-medium text-text-main">{t('node_encryption_label')}</span>
+                  </label>
+
+                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-900/40 border border-white/5 cursor-pointer hover:border-white/20 transition-all active:scale-[0.98]">
+                    <input
+                      type="checkbox"
+                      checked={ipv6}
+                      onChange={(e) => setIpv6(e.target.checked)}
+                      className="rounded bg-slate-950 border-white/20 text-primary focus:ring-0"
+                    />
+                    <span className="font-medium text-text-main">{t('node_ipv6_label')}</span>
+                  </label>
+
+                  <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-900/40 border border-white/5">
+                    <Sliders className="w-3.5 h-3.5 text-text-muted flex-shrink-0" />
+                    <span className="text-[11px] text-text-muted flex-shrink-0">MTU:</span>
+                    <input
+                      type="number"
+                      value={mtu}
+                      onChange={(e) => setMtu(Number(e.target.value))}
+                      className="w-full px-2 py-1 bg-slate-950 border border-white/10 rounded font-mono text-xs text-text-main focus:outline-none focus:border-primary"
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* Step 2 Actions */}
               <div className="flex items-center justify-between pt-4 border-t border-white/5">
                 <button
@@ -1228,7 +1304,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
 
           {/* STEP 3: REVIEW & DEPLOY */}
           {wizardStep === 3 && (
-            <div className="space-y-6 animate-fade-in max-w-2xl mx-auto">
+            <div className="space-y-6 animate-tab-in max-w-2xl mx-auto">
               <div>
                 <h3 className="text-base font-bold text-text-main mb-1">
                   {t('wizard_review_title')}
@@ -1276,8 +1352,32 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     </span>
                     <span className="text-xs text-text-main font-semibold flex items-center gap-1.5">
                       <Shield className="w-3.5 h-3.5 text-accent-green" />
-                      {protocol.toUpperCase()} • ChaCha20
+                      {protocol.toUpperCase()} • {encryption ? 'ChaCha20' : 'Plaintext'}
                     </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-900/60 border border-white/5 sm:col-span-2 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Zap className={`w-4 h-4 ${enableKcp ? 'text-amber-400' : 'text-text-muted'}`} />
+                      <div>
+                        <span className="text-[10px] text-text-muted uppercase font-sans block">
+                          Acceleration & Tunnel Tuning
+                        </span>
+                        <span className="text-xs text-text-main font-semibold">
+                          {enableKcp ? 'KCP Loss-Resistance Active' : 'Standard Transport'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] font-mono">
+                      <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-text-muted">
+                        MTU: <strong className="text-text-main">{mtu}</strong>
+                      </span>
+                      {ipv6 && (
+                        <span className="px-2 py-0.5 rounded bg-primary/10 border border-primary/20 text-primary">
+                          IPv6 Enabled
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -1333,7 +1433,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
       {/* 🛠️ ADVANCED / MANUAL CONFIGURATION VIEW                                   */}
       {/* ========================================================================= */}
       {!wizardActive && (
-        <>
+        <div className="space-y-6 animate-tab-in">
           {/* Section 1: Network Identity Card */}
           <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
             <h3 className="text-sm font-bold text-text-main flex items-center gap-2 mb-4 pb-2 border-b border-white/5">
@@ -1613,14 +1713,18 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
               </div>
 
               <button
-                onClick={() => computedInvite && onCopy(computedInvite.invite)}
+                onClick={() => computedInvite && handleCopyInviteToken(computedInvite.invite)}
                 disabled={!computedInvite}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-accent-green/15 text-emerald-400 hover:bg-accent-green/25 font-semibold text-xs border border-accent-green/30 transition-all disabled:opacity-50"
+                className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-xs border transition-all duration-200 active:scale-95 disabled:opacity-50 ${
+                  copiedInvite || copiedKey === computedInvite?.invite
+                    ? 'bg-emerald-500/25 text-emerald-300 border-emerald-400/60 shadow-lg shadow-emerald-500/20 scale-[1.01]'
+                    : 'bg-accent-green/15 text-emerald-400 hover:bg-accent-green/25 border-accent-green/30 hover:shadow-md'
+                }`}
               >
-                {copiedKey === computedInvite?.invite ? (
+                {copiedInvite || copiedKey === computedInvite?.invite ? (
                   <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>{t('btn_copied')}</span>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 animate-bounce-subtle" />
+                    <span>{t('btn_copied')} ✓</span>
                   </>
                 ) : (
                   <>
@@ -1750,7 +1854,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
               </button>
             </div>
           </div>
-        </>
+        </div>
       )}
 
       {/* Delete Confirmation Modal */}

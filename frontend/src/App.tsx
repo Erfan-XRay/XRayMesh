@@ -29,6 +29,7 @@ import { PingTab } from './components/Tabs/PingTab';
 import { TunnelsTab } from './components/Tabs/TunnelsTab';
 
 import { Users, Zap, Activity, Network, Settings } from 'lucide-react';
+import { copyToClipboard } from './utils/clipboard';
 
 const EMPTY_STATUS: StatusResponse = {
   node: {},
@@ -57,8 +58,8 @@ export default function App() {
   const [tunnels, setTunnels] = useState<TunnelsData>({ haproxy: [], iptables: [], gost: [], realm: [] });
   const [interfaces, setInterfaces] = useState<string[]>(['any']);
 
-  // Active tab
-  const [activeTab, setActiveTab] = useState<TabId>('peers');
+  // Active tab (Default to Node & Mesh Config)
+  const [activeTab, setActiveTab] = useState<TabId>('node');
 
   // Speedtest state
   const [speedTarget, setSpeedTarget] = useState('');
@@ -108,12 +109,15 @@ export default function App() {
 
   // ─── Clipboard ───────────────────────────────────────────
   const handleCopy = useCallback(
-    (text: string) => {
-      navigator.clipboard.writeText(text).then(() => {
+    async (text: string) => {
+      const ok = await copyToClipboard(text);
+      if (ok) {
         setCopiedKey(text);
         addToast(t('btn_copied'), 'success');
         setTimeout(() => setCopiedKey(null), 2000);
-      });
+      } else {
+        addToast('Could not copy to clipboard', 'error');
+      }
     },
     [addToast, t]
   );
@@ -392,8 +396,8 @@ export default function App() {
 
   // ─── Tab Config ─────────────────────────────────────────
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
-    { id: 'peers', label: t('tab_peers'), icon: <Users className="w-4 h-4" /> },
     { id: 'node', label: t('tab_node'), icon: <Settings className="w-4 h-4" /> },
+    { id: 'peers', label: t('tab_peers'), icon: <Users className="w-4 h-4" /> },
     { id: 'speedtest', label: t('tab_speedtest'), icon: <Zap className="w-4 h-4" /> },
     { id: 'ping', label: t('tab_ping'), icon: <Activity className="w-4 h-4" /> },
     { id: 'tunnels', label: t('tab_tunnels'), icon: <Network className="w-4 h-4" /> },
@@ -455,83 +459,88 @@ export default function App() {
           </div>
 
           {/* Tab Navigation */}
-          <div className="flex flex-wrap gap-1.5 mb-6 p-1 rounded-xl bg-card/50 border border-card-border backdrop-blur-sm">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === tab.id
-                    ? 'bg-primary/15 text-primary border border-primary/25 shadow-sm'
-                    : 'text-text-muted hover:text-text-main hover:bg-white/5'
-                }`}
-              >
-                {tab.icon}
-                <span className="hidden sm:inline">{tab.label}</span>
-              </button>
-            ))}
+          <div className="flex flex-wrap gap-1.5 mb-6 p-1.5 rounded-2xl bg-card/60 border border-card-border backdrop-blur-md shadow-sm">
+            {tabs.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 active:scale-95 ${
+                    isActive
+                      ? 'bg-primary text-black shadow-md shadow-primary/20 font-bold scale-[1.01]'
+                      : 'text-text-muted hover:text-text-main hover:bg-white/5'
+                  }`}
+                >
+                  {tab.icon}
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
           </div>
 
-          {/* Tab Content */}
-          {activeTab === 'peers' && (
-            <PeersTab
-              peers={peers}
-              onRefresh={handleRefresh}
-              onQuickPing={handleQuickPing}
-              onQuickSpeedtest={handleQuickSpeedtest}
-              onCopy={handleCopy}
-              copiedKey={copiedKey}
-              t={t}
-            />
-          )}
-          {activeTab === 'node' && (
-            <NodeConfigTab
-              onRefreshStatus={handleRefresh}
-              onNotify={addToast}
-              onCopy={handleCopy}
-              copiedKey={copiedKey}
-              t={t}
-              lang={lang}
-              isRtl={isRtl}
-            />
-          )}
-          {activeTab === 'speedtest' && (
-            <SpeedtestTab
-              peers={peers}
-              targetIp={speedTarget}
-              onTargetChange={setSpeedTarget}
-              isRunning={isSpeedtesting}
-              onRun={handleRunSpeedtest}
-              lastResult={speedResult}
-              t={t}
-            />
-          )}
-          {activeTab === 'ping' && (
-            <PingTab
-              targetIp={pingTarget}
-              onTargetChange={setPingTarget}
-              isRunning={isPinging}
-              onRun={handleRunPing}
-              lastResult={pingResult}
-              t={t}
-            />
-          )}
-          {activeTab === 'tunnels' && (
-            <TunnelsTab
-              tunnels={tunnels}
-              onRefresh={handleRefresh}
-              onOpenCreateHaproxy={() => openCreateTunnel('haproxy')}
-              onOpenEditHaproxy={(t) => openEditTunnel('haproxy', t)}
-              onOpenCreateIptables={() => openCreateTunnel('iptables')}
-              onOpenEditIptables={(t) => openEditTunnel('iptables', t)}
-              onOpenCreateGost={() => openCreateTunnel('gost')}
-              onOpenEditGost={(t) => openEditTunnel('gost', t)}
-              onOpenCreateRealm={() => openCreateTunnel('realm')}
-              onOpenEditRealm={(t) => openEditTunnel('realm', t)}
-              onDeleteTunnel={handleDeleteTunnelRequest}
-              t={t}
-            />
-          )}
+          {/* Tab Content with Smooth Transition */}
+          <div key={activeTab} className="animate-tab-in">
+            {activeTab === 'node' && (
+              <NodeConfigTab
+                onRefreshStatus={handleRefresh}
+                onNotify={addToast}
+                onCopy={handleCopy}
+                copiedKey={copiedKey}
+                t={t}
+                lang={lang}
+                isRtl={isRtl}
+              />
+            )}
+            {activeTab === 'peers' && (
+              <PeersTab
+                peers={peers}
+                onRefresh={handleRefresh}
+                onQuickPing={handleQuickPing}
+                onQuickSpeedtest={handleQuickSpeedtest}
+                onCopy={handleCopy}
+                copiedKey={copiedKey}
+                t={t}
+              />
+            )}
+            {activeTab === 'speedtest' && (
+              <SpeedtestTab
+                peers={peers}
+                targetIp={speedTarget}
+                onTargetChange={setSpeedTarget}
+                isRunning={isSpeedtesting}
+                onRun={handleRunSpeedtest}
+                lastResult={speedResult}
+                t={t}
+              />
+            )}
+            {activeTab === 'ping' && (
+              <PingTab
+                targetIp={pingTarget}
+                onTargetChange={setPingTarget}
+                isRunning={isPinging}
+                onRun={handleRunPing}
+                lastResult={pingResult}
+                t={t}
+              />
+            )}
+            {activeTab === 'tunnels' && (
+              <TunnelsTab
+                tunnels={tunnels}
+                onRefresh={handleRefresh}
+                onOpenCreateHaproxy={() => openCreateTunnel('haproxy')}
+                onOpenEditHaproxy={(t) => openEditTunnel('haproxy', t)}
+                onOpenCreateIptables={() => openCreateTunnel('iptables')}
+                onOpenEditIptables={(t) => openEditTunnel('iptables', t)}
+                onOpenCreateGost={() => openCreateTunnel('gost')}
+                onOpenEditGost={(t) => openEditTunnel('gost', t)}
+                onOpenCreateRealm={() => openCreateTunnel('realm')}
+                onOpenEditRealm={(t) => openEditTunnel('realm', t)}
+                onDeleteTunnel={handleDeleteTunnelRequest}
+                t={t}
+              />
+            )}
+          </div>
 
           {/* Tunnel Create/Edit Modal */}
           <TunnelModal
