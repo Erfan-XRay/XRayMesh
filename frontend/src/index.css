@@ -5,7 +5,7 @@
 :root {
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
-  --font-persian: 'Vazirmatn', 'Shabnam', Tahoma, sans-serif;
+  --font-persian: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Shabnam', Tahoma, sans-serif;
 }
 
 body {
@@ -16,8 +16,48 @@ body {
   min-height: 100dvh;
   overflow-x: hidden;
   line-height: 1.5;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Persian / RTL Typography & Layout Improvements */
+html[lang="fa"],
+html[dir="rtl"],
+body.font-persian,
+[dir="rtl"] {
+  font-family: var(--font-persian) !important;
+  letter-spacing: normal !important;
+  line-height: 1.65;
+}
+
+/* Neutralize letter-spacing in Persian as it breaks cursive Arabic/Persian ligatures */
+[dir="rtl"] .tracking-tight,
+[dir="rtl"] .tracking-tighter,
+[dir="rtl"] .tracking-wide,
+[dir="rtl"] .tracking-wider,
+[dir="rtl"] .tracking-widest {
+  letter-spacing: normal !important;
+}
+
+/* Fix technical inputs, IP addresses, ports, and monospace numbers in RTL */
+[dir="rtl"] .font-mono,
+[dir="rtl"] code,
+[dir="rtl"] pre,
+[dir="rtl"] input[type="number"],
+[dir="rtl"] input[type="password"],
+[dir="rtl"] input.font-mono {
+  direction: ltr !important;
+  text-align: left;
+  unicode-bidi: isolate;
+}
+
+/* Ensure Persian buttons and form inputs have appropriate font */
+[dir="rtl"] button,
+[dir="rtl"] input,
+[dir="rtl"] select,
+[dir="rtl"] textarea {
+  font-family: var(--font-persian);
 }
 
 /* Tabular figures for stable telemetry and numbers */

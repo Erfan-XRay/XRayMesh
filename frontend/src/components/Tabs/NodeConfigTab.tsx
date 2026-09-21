@@ -1138,7 +1138,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                   className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-black font-semibold text-xs hover:bg-primary-hover transition-all shadow-md disabled:opacity-40"
                 >
                   <span>{t('wizard_btn_next')}</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  {isRtl ? <ArrowLeft className="w-3.5 h-3.5" /> : <ArrowRight className="w-3.5 h-3.5" />}
                 </button>
               </div>
             </div>
@@ -1527,7 +1527,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                   onClick={() => setWizardStep(1)}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs text-text-muted hover:text-text-main transition-colors"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5" />
+                  {isRtl ? <ArrowRight className="w-3.5 h-3.5" /> : <ArrowLeft className="w-3.5 h-3.5" />}
                   <span>{t('wizard_btn_prev')}</span>
                 </button>
                 <button
@@ -1536,7 +1536,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                   className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-black font-semibold text-xs hover:bg-primary-hover transition-all shadow-md active:scale-95 cursor-pointer"
                 >
                   <span>{t('wizard_btn_next')}</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  {isRtl ? <ArrowLeft className="w-3.5 h-3.5" /> : <ArrowRight className="w-3.5 h-3.5" />}
                 </button>
               </div>
             </div>
@@ -1647,7 +1647,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                   onClick={() => setWizardStep(2)}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs text-text-muted hover:text-text-main transition-colors"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5" />
+                  {isRtl ? <ArrowRight className="w-3.5 h-3.5" /> : <ArrowLeft className="w-3.5 h-3.5" />}
                   <span>{t('wizard_btn_prev')}</span>
                 </button>
                 <button

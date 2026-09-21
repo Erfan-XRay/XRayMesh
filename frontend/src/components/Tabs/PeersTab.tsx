@@ -61,13 +61,13 @@ export const PeersTab: React.FC<PeersTabProps> = ({
 
       {/* Filter Bar */}
       <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
+        <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t('peers_search_placeholder')}
-          className="w-full pl-9 pr-4 py-2 bg-slate-900/80 border border-white/10 rounded-xl text-xs sm:text-sm font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
+          className="w-full ps-9 pe-4 py-2 bg-slate-900/80 border border-white/10 rounded-xl text-xs sm:text-sm text-text-main placeholder-text-subtle focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
         />
       </div>
 

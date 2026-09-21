@@ -33,7 +33,7 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
         {/* Close button */}
         <button
           onClick={onCancel}
-          className="absolute top-4 right-4 p-1.5 rounded-lg text-text-muted hover:text-text-main hover:bg-white/10 transition-colors"
+          className="absolute top-4 end-4 p-1.5 rounded-lg text-text-muted hover:text-text-main hover:bg-white/10 transition-colors"
         >
           <X className="w-4 h-4" />
         </button>

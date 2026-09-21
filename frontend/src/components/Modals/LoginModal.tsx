@@ -92,25 +92,25 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-3.5">
           {tab === 'pw' ? (
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+              <Lock className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={t('modal_login_pw_placeholder')}
-                className="w-full pl-9 pr-4 py-2.5 bg-slate-950 border border-white/15 rounded-xl text-sm font-mono text-center text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                className="w-full ps-9 pe-4 py-2.5 bg-slate-950 border border-white/15 rounded-xl text-sm font-mono text-center text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
                 required
               />
             </div>
           ) : (
             <div className="relative">
-              <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+              <Key className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
               <input
                 type="text"
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
                 placeholder={t('modal_login_tk_placeholder')}
-                className="w-full pl-9 pr-4 py-2.5 bg-slate-950 border border-white/15 rounded-xl text-sm font-mono text-center text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                className="w-full ps-9 pe-4 py-2.5 bg-slate-950 border border-white/15 rounded-xl text-sm font-mono text-center text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
                 required
               />
             </div>
