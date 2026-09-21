@@ -1277,8 +1277,8 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             wg_portal_port = int(data.get("wg_portal_port", 22022))
             wg_client_cidr = data.get("wg_client_cidr", "10.99.11.0/24").strip()
 
-            if not net_name or not secret or not ipv4 or not port:
-                self.send_json({"ok": False, "error": "Missing required fields: network_name, network_secret, ipv4, port"}, status=400)
+            if not net_name or not secret or not ipv4 or not port or not hostname:
+                self.send_json({"ok": False, "error": "Missing required fields: network_name, network_secret, ipv4, port, hostname"}, status=400)
                 return
 
             if isinstance(peers, list):
@@ -1385,19 +1385,25 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": "Invite token is missing network name or secret"}, status=400)
                 return
 
+            custom_hostname = data.get("hostname", "").strip()
+            custom_ipv4 = data.get("ipv4", "").strip()
+
             cfg = load_env_file(CONFIG_FILE)
-            cur_ip = cfg.get("IPV4", "")
+            cur_ip = custom_ipv4 or cfg.get("IPV4", "")
             if not cur_ip or cur_ip == "10.144.144.1":
                 cur_ip = f"10.144.144.{secrets.randbelow(200) + 2}"
+
+            final_hostname = custom_hostname or cfg.get("HOSTNAME", "").strip()
+            if not final_hostname:
+                final_hostname = os.uname().nodename if hasattr(os, "uname") else "node"
 
             cfg["NETWORK_NAME"] = net
             cfg["NETWORK_SECRET"] = secret
             cfg["PROTOCOL"] = proto
             cfg["IPV4"] = cur_ip
+            cfg["HOSTNAME"] = final_hostname
             if not cfg.get("PORT"):
                 cfg["PORT"] = "11010"
-            if not cfg.get("HOSTNAME"):
-                cfg["HOSTNAME"] = os.uname().nodename if hasattr(os, "uname") else "node"
             if not cfg.get("ENCRYPTION"):
                 cfg["ENCRYPTION"] = "yes"
             if not cfg.get("IPV6"):

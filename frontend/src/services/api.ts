@@ -280,11 +280,18 @@ export async function fetchMeshInvite(): Promise<MeshInviteData> {
   return d.data;
 }
 
-export async function joinMeshNetwork(invite: string): Promise<string> {
+export async function joinMeshNetwork(
+  invite: string,
+  options?: { hostname?: string; ipv4?: string }
+): Promise<string> {
   const res = await fetch('/api/node/join', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ invite }),
+    body: JSON.stringify({
+      invite,
+      hostname: options?.hostname,
+      ipv4: options?.ipv4,
+    }),
   });
   const d = await res.json();
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to join mesh network');
