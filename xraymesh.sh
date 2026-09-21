@@ -336,13 +336,16 @@ case "$proto_lower" in
     args+=(--listeners "wss://0.0.0.0:${PORT}/")
     ;;
   quic)
-    args+=(--listeners "quic://0.0.0.0:${PORT}")
+    # QUIC mode: enable QUIC listener with proxy and TCP fallback for strict firewall environments
+    args+=(--listeners "quic://0.0.0.0:${PORT}" --listeners "tcp://0.0.0.0:${PORT}" --enable-quic-proxy)
     ;;
   faketcp)
     args+=(--listeners "faketcp://0.0.0.0:${PORT}")
     ;;
   wg)
-    args+=(--listeners "wg://0.0.0.0:${PORT}")
+    # EasyTier wg:// is designed for client VPN ingress (vpn-portal), not inter-node mesh peering.
+    # Provide robust dual TCP+UDP mesh peering so node-to-node connectivity never fails.
+    args+=(--listeners "tcp://0.0.0.0:${PORT}" --listeners "udp://0.0.0.0:${PORT}")
     ;;
   dual|*)
     args+=(--listeners "tcp://0.0.0.0:${PORT}" --listeners "udp://0.0.0.0:${PORT}")
@@ -404,6 +407,10 @@ if [[ -n "${PEERS:-}" ]]; then
     if [[ -n "$p_scheme" ]]; then
       if [[ "$p_scheme" == "ws" || "$p_scheme" == "wss" ]]; then
         peer_args+=("${p_scheme}://${target}/")
+      elif [[ "$p_scheme" == "quic" ]]; then
+        peer_args+=("quic://${target}" "tcp://${target}")
+      elif [[ "$p_scheme" == "wg" ]]; then
+        peer_args+=("tcp://${target}" "udp://${target}")
       else
         peer_args+=("${p_scheme}://${target}")
       fi
@@ -419,13 +426,13 @@ if [[ -n "${PEERS:-}" ]]; then
           peer_args+=("wss://${target}/")
           ;;
         quic)
-          peer_args+=("quic://${target}")
+          peer_args+=("quic://${target}" "tcp://${target}")
           ;;
         faketcp)
           peer_args+=("faketcp://${target}")
           ;;
         wg)
-          peer_args+=("wg://${target}")
+          peer_args+=("tcp://${target}" "udp://${target}")
           ;;
         udp)
           peer_args+=("udp://${target}" "tcp://${target}")

@@ -1189,23 +1189,23 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                 <label className="block font-medium text-text-muted mb-2 text-xs">
                   {t('node_protocol')}
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {protocolsList.slice(0, 4).map((p) => {
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {protocolsList.map((p) => {
                     const isSelected = protocol === p.id;
                     return (
                       <button
                         key={p.id}
                         type="button"
                         onClick={() => setProtocol(p.id)}
-                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                        className={`p-3 rounded-xl border text-left transition-all ${
                           isSelected
                             ? 'bg-primary/10 border-primary text-primary font-bold shadow-sm'
                             : 'bg-slate-900/40 border-white/10 text-text-muted hover:border-white/20'
                         } ${isRtl ? 'text-right' : 'text-left'}`}
                       >
                         <div className="flex items-center justify-between gap-1 mb-1">
-                          <span className="text-xs truncate">{p.badge}</span>
-                          {isSelected && <Check className="w-3 h-3 text-primary" />}
+                          <span className="text-xs font-bold truncate">{p.badge}</span>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" />}
                         </div>
                         <span className="text-[10px] text-text-muted block leading-tight truncate">
                           {p.id === 'dual' ? 'Auto hybrid' : p.id.toUpperCase()}
