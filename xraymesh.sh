@@ -3047,6 +3047,10 @@ menu() {
   require_root
   require_linux
   install_dependencies
+  set +e
+  set +u
+  set +o pipefail
+  trap - ERR
 
   # If not installed, start initial setup immediately
   if [[ ! -f "$CONFIG_FILE" ]]; then
