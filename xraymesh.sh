@@ -324,7 +324,7 @@ case "$proto_lower" in
     args+=(--listeners "tcp://0.0.0.0:${PORT}")
     ;;
   udp)
-    args+=(--listeners "udp://0.0.0.0:${PORT}" --listeners "tcp://0.0.0.0:${PORT}")
+    args+=(--listeners "udp://0.0.0.0:${PORT}")
     ;;
   ws)
     args+=(--listeners "ws://0.0.0.0:${PORT}/")
@@ -419,7 +419,7 @@ if [[ -n "${PEERS:-}" ]]; then
           peer_args+=("faketcp://${target}")
           ;;
         udp)
-          peer_args+=("udp://${target}" "tcp://${target}")
+          peer_args+=("udp://${target}")
           ;;
         dual|*)
           peer_args+=("tcp://${target}" "udp://${target}")
@@ -656,11 +656,29 @@ setup_node() {
   if apply_node_config; then
     info "Network: $name"
     info "Virtual IP: $ipv4"
-    if [[ "$protocol" == "wss" || "$protocol" == "quic" ]]; then
-      info "Strict listener: ${protocol}://0.0.0.0:${port}"
-    else
-      info "Listeners: TCP and UDP on 0.0.0.0:${port}"
-    fi
+    case "$protocol" in
+      wss)
+        info "Strict listener: wss://0.0.0.0:${port}"
+        ;;
+      quic)
+        info "QUIC listener with TCP fallback: quic://0.0.0.0:${port}"
+        ;;
+      ws)
+        info "WebSocket listener: ws://0.0.0.0:${port}"
+        ;;
+      faketcp)
+        info "FakeTCP listener: faketcp://0.0.0.0:${port}"
+        ;;
+      tcp)
+        info "TCP-only listener: tcp://0.0.0.0:${port}"
+        ;;
+      udp)
+        info "UDP-only listener: udp://0.0.0.0:${port}"
+        ;;
+      dual|*)
+        info "Dual listeners: TCP and UDP on 0.0.0.0:${port}"
+        ;;
+    esac
     warn "Keep this network secret private: $secret"
   else
     warn "Restoring the previous working node configuration."
@@ -778,11 +796,29 @@ render_network_overview() {
     printf '  %-16s %b%s%b\n' "Node" "$BOLD$CYAN" "$HOSTNAME" "$RESET"
     printf '  %-16s %b%s%b\n' "Virtual IP" "$CYAN" "$IPV4" "$RESET"
     printf '  %-16s %b%s%b\n' "Network" "$PURPLE" "$NETWORK_NAME" "$RESET"
-    if [[ "$PROTOCOL" == "wss" || "$PROTOCOL" == "quic" ]]; then
-      printf '  %-16s %b%s only%b\n' "Transport" "$YELLOW" "${PROTOCOL^^}" "$RESET"
-    else
-      printf '  %-16s %bTCP + UDP fallback%b\n' "Transport" "$GREEN" "$RESET"
-    fi
+    case "${PROTOCOL:-dual}" in
+      wss)
+        printf '  %-16s %b%s only%b\n' "Transport" "$YELLOW" "WSS" "$RESET"
+        ;;
+      quic)
+        printf '  %-16s %b%s (TCP fallback)%b\n' "Transport" "$PURPLE" "QUIC" "$RESET"
+        ;;
+      ws)
+        printf '  %-16s %b%s%b\n' "Transport" "$CYAN" "WebSocket (ws)" "$RESET"
+        ;;
+      faketcp)
+        printf '  %-16s %b%s%b\n' "Transport" "$RED" "FakeTCP" "$RESET"
+        ;;
+      tcp)
+        printf '  %-16s %b%s only%b\n' "Transport" "$BLUE" "TCP" "$RESET"
+        ;;
+      udp)
+        printf '  %-16s %b%s only%b\n' "Transport" "$GREEN" "UDP" "$RESET"
+        ;;
+      dual|*)
+        printf '  %-16s %bDual (TCP + UDP)%b\n' "Transport" "$GREEN" "$RESET"
+        ;;
+    esac
   else
     printf '\n'
   fi
@@ -958,13 +994,36 @@ diagnostics() {
   printf '  Service:       %s\n' "$(service_state)"
   printf '  Network name:  %s\n' "$NETWORK_NAME"
   printf '  Virtual IP:    %s\n' "$IPV4"
-  if [[ "$PROTOCOL" == "wss" || "$PROTOCOL" == "quic" ]]; then
-    printf '  Transport:     %s only (strict)\n' "${PROTOCOL^^}"
-    printf '  Listen port:   %s/%s\n' "$PORT" "${PROTOCOL^^}"
-  else
-    printf '  Transport:     TCP + UDP fallback\n'
-    printf '  Listen port:   %s (TCP + UDP)\n' "$PORT"
-  fi
+  case "${PROTOCOL:-dual}" in
+    wss)
+      printf '  Transport:     WSS only (strict)\n'
+      printf '  Listen port:   %s/WSS\n' "$PORT"
+      ;;
+    quic)
+      printf '  Transport:     QUIC (with TCP fallback)\n'
+      printf '  Listen port:   %s (QUIC + TCP)\n' "$PORT"
+      ;;
+    ws)
+      printf '  Transport:     WebSocket (ws)\n'
+      printf '  Listen port:   %s/WS\n' "$PORT"
+      ;;
+    faketcp)
+      printf '  Transport:     FakeTCP\n'
+      printf '  Listen port:   %s/FakeTCP\n' "$PORT"
+      ;;
+    tcp)
+      printf '  Transport:     TCP only\n'
+      printf '  Listen port:   %s/TCP\n' "$PORT"
+      ;;
+    udp)
+      printf '  Transport:     UDP only\n'
+      printf '  Listen port:   %s/UDP\n' "$PORT"
+      ;;
+    dual|*)
+      printf '  Transport:     Dual (TCP + UDP)\n'
+      printf '  Listen port:   %s (TCP + UDP)\n' "$PORT"
+      ;;
+  esac
   printf '  Configured peers: %s\n\n' "${PEERS:-none — first/standalone node}"
 
   say "  ── Local listeners ──────────────────────────" "$GRAY"

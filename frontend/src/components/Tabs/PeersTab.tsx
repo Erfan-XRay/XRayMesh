@@ -12,6 +12,16 @@ interface PeersTabProps {
   t: (key: any) => string;
 }
 
+function formatTunnelProto(proto?: string): string {
+  if (!proto) return 'UDP';
+  const clean = proto.trim();
+  const lower = clean.toLowerCase();
+  if (lower.includes('udp') && lower.includes('tcp')) {
+    return 'Dual (UDP + TCP)';
+  }
+  return clean.toUpperCase();
+}
+
 export const PeersTab: React.FC<PeersTabProps> = ({
   peers,
   onRefresh,
@@ -150,7 +160,7 @@ export const PeersTab: React.FC<PeersTabProps> = ({
                 <div className="grid grid-cols-2 gap-2 p-2.5 rounded-lg bg-black/20 border border-white/5 text-xs mb-3">
                   <div>
                     <div className="text-[11px] text-text-muted">{t('peer_card_protocol')}</div>
-                    <div className="font-mono font-medium text-primary mt-0.5">{p.tunnel_proto || 'UDP'}</div>
+                    <div className="font-mono font-medium text-primary mt-0.5">{formatTunnelProto(p.tunnel_proto)}</div>
                   </div>
                   <div>
                     <div className="text-[11px] text-text-muted">{t('peer_card_cost')}</div>

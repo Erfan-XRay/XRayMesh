@@ -972,7 +972,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                     "network_name": config.get("NETWORK_NAME", ""),
                     "hostname": config.get("HOSTNAME", ""),
                     "ipv4": config.get("IPV4", ""),
-                    "protocol": config.get("PROTOCOL", "tcp/udp"),
+                    "protocol": config.get("PROTOCOL", "dual"),
                     "port": config.get("PORT", ""),
                     "encryption": config.get("ENCRYPTION", "yes"),
                     "service_active": svc_active,
