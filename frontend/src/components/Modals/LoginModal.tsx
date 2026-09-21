@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Copy, Check, Lock, Key, Layers, Loader2 } from 'lucide-react';
+import { Copy, Check, Lock, Key, Loader2 } from 'lucide-react';
+import { XRayMeshLogo } from '../XRayMeshLogo';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -49,8 +50,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-modal-in">
       <div className="w-full max-w-md p-6 rounded-2xl bg-slate-900 border border-white/15 shadow-2xl text-center relative">
         {/* Brand Icon */}
-        <div className="w-12 h-12 rounded-xl bg-primary/20 border border-primary/40 flex items-center justify-center text-primary mx-auto mb-3.5 shadow-md">
-          <Layers className="w-6 h-6" />
+        <div className="flex items-center justify-center mx-auto mb-4">
+          <XRayMeshLogo className="w-14 h-14" size={56} glow={true} />
         </div>
 
         <h2 className="text-lg font-bold text-text-main">{t('modal_login_title')}</h2>

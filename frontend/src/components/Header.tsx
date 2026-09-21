@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { NodeInfo, PaletteId, Language } from '../types';
 import { PaletteDef } from '../theme/palettes';
-import { RefreshCw, LogOut, Palette, Layers } from 'lucide-react';
+import { RefreshCw, LogOut, Palette } from 'lucide-react';
+import { XRayMeshLogo } from './XRayMeshLogo';
 
 interface HeaderProps {
   node: NodeInfo;
@@ -34,15 +35,18 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="relative z-50 flex flex-wrap items-center justify-between gap-4 p-4 md:p-6 mb-6 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
-      {/* Brand */}
+      {/* Brand & Custom Logo */}
       <div className="flex items-center gap-3.5">
-        <div className="w-10 h-10 rounded-xl bg-primary/20 border border-primary/40 flex items-center justify-center text-primary shadow-sm">
-          <Layers className="w-5 h-5" />
-        </div>
+        <XRayMeshLogo className="w-11 h-11" size={44} glow={true} />
         <div>
-          <h1 className="text-lg font-bold text-text-main tracking-tight leading-tight">
-            {t('brand_title')}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-bold text-text-main tracking-tight leading-tight">
+              {t('brand_title')}
+            </h1>
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-primary/10 text-primary border border-primary/20">
+              MESH
+            </span>
+          </div>
           <p className="text-xs text-text-muted mt-0.5">
             {t('network_prefix')}: <span className="font-mono text-primary font-medium">{node.network_name || 'XRayMesh'}</span>
             {node.easytier_version && ` | v${node.easytier_version}`}
