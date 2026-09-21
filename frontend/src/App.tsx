@@ -11,6 +11,7 @@ import {
   GostTunnel,
   RealmTunnel,
   TabId,
+  MeshProtocol,
 } from './types';
 import { useTheme } from './theme/useTheme';
 import { useTranslation } from './i18n/useTranslation';
@@ -22,6 +23,7 @@ import { ToastContainer } from './components/Toast';
 import { LoginModal } from './components/Modals/LoginModal';
 import { TunnelModal, TunnelModalType } from './components/Modals/TunnelModal';
 import { DeleteConfirmModal } from './components/Modals/DeleteConfirmModal';
+import { ClusterSyncModal } from './components/Modals/ClusterSyncModal';
 import { PeersTab } from './components/Tabs/PeersTab';
 import { NodeConfigTab } from './components/Tabs/NodeConfigTab';
 import { SpeedtestTab } from './components/Tabs/SpeedtestTab';
@@ -86,6 +88,36 @@ export default function App() {
     name: string;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Cluster SafeSync state
+  const [clusterSyncOpen, setClusterSyncOpen] = useState(false);
+  const [clusterSyncConfig, setClusterSyncConfig] = useState<{
+    protocol: MeshProtocol;
+    enableKcp: boolean;
+    encryption: boolean;
+    ipv6: boolean;
+    mtu: number;
+    networkSecret: string;
+    hostname: string;
+    ipv4: string;
+  } | null>(null);
+
+  const handleOpenClusterSync = useCallback(
+    (cfg: {
+      protocol: MeshProtocol;
+      enableKcp: boolean;
+      encryption: boolean;
+      ipv6: boolean;
+      mtu: number;
+      networkSecret: string;
+      hostname: string;
+      ipv4: string;
+    }) => {
+      setClusterSyncConfig(cfg);
+      setClusterSyncOpen(true);
+    },
+    []
+  );
 
   // UI state
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -491,6 +523,7 @@ export default function App() {
                 lang={lang}
                 isRtl={isRtl}
                 activePeers={peers}
+                onOpenClusterSync={handleOpenClusterSync}
               />
             )}
             {activeTab === 'peers' && (
@@ -568,6 +601,20 @@ export default function App() {
             isDeleting={isDeleting}
             t={t}
           />
+
+          {/* Cluster SafeSync Modal */}
+          {clusterSyncConfig && (
+            <ClusterSyncModal
+              isOpen={clusterSyncOpen}
+              onClose={() => setClusterSyncOpen(false)}
+              peers={peers}
+              currentConfig={clusterSyncConfig}
+              onNotify={addToast}
+              onRefreshData={handleRefresh}
+              t={t}
+              isRtl={isRtl}
+            />
+          )}
         </>
       )}
 

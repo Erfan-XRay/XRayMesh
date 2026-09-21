@@ -12,9 +12,7 @@ import {
   startMeshNode,
   stopMeshNode,
   restartMeshNode,
-  fetchPeers,
 } from '../../services/api';
-import { ClusterSyncModal } from '../Modals/ClusterSyncModal';
 import { copyToClipboard } from '../../utils/clipboard';
 import {
   Settings,
@@ -53,6 +51,16 @@ interface NodeConfigTabProps {
   lang: Language;
   isRtl: boolean;
   activePeers?: Peer[];
+  onOpenClusterSync?: (cfg: {
+    protocol: MeshProtocol;
+    enableKcp: boolean;
+    encryption: boolean;
+    ipv6: boolean;
+    mtu: number;
+    networkSecret: string;
+    hostname: string;
+    ipv4: string;
+  }) => void;
 }
 
 function sanitizePeerInput(raw: string, defaultPort?: number): string {
@@ -139,14 +147,12 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
   copiedKey,
   t,
   isRtl,
-  activePeers = [],
+  onOpenClusterSync,
 }) => {
   const [config, setConfig] = useState<NodeConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
-  const [isClusterSyncModalOpen, setIsClusterSyncModalOpen] = useState(false);
-  const [fallbackPeers, setFallbackPeers] = useState<Peer[]>([]);
 
   // Form State
   const [networkName, setNetworkName] = useState('');
@@ -162,6 +168,21 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
   const [peers, setPeers] = useState<string[]>([]);
   const [newPeer, setNewPeer] = useState('');
   const [addingPeer, setAddingPeer] = useState(false);
+
+  const triggerClusterSync = () => {
+    if (onOpenClusterSync) {
+      onOpenClusterSync({
+        protocol,
+        enableKcp,
+        encryption,
+        ipv6,
+        mtu: Number(mtu),
+        networkSecret,
+        hostname,
+        ipv4,
+      });
+    }
+  };
 
   // Invite & Join (Manual Mode)
   const [inviteData, setInviteData] = useState<MeshInviteData | null>(null);
@@ -336,7 +357,6 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
 
       if (cfg.node_configured) {
         loadInvite();
-        fetchPeers().then(setFallbackPeers).catch(() => {});
       }
     } catch (e: any) {
       onNotify(e.message || 'Failed to load configuration', 'error');
@@ -344,10 +364,6 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
       setLoading(false);
     }
   }, [onNotify]);
-
-  const effectiveActivePeers = useMemo(() => {
-    return activePeers.length > 0 ? activePeers : fallbackPeers;
-  }, [activePeers, fallbackPeers]);
 
   const loadInvite = async () => {
     setLoadingInvite(true);
@@ -901,7 +917,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
               {/* Broadcast to All Nodes (Cluster SafeSync) Button */}
               <button
                 type="button"
-                onClick={() => setIsClusterSyncModalOpen(true)}
+                onClick={triggerClusterSync}
                 disabled={saving}
                 title={t('cluster_btn_sync_all_desc')}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-primary via-cyan-500 to-teal-400 text-black font-bold text-xs hover:opacity-95 transition-all shadow-lg shadow-primary/20 active:scale-95 disabled:opacity-50"
@@ -1949,7 +1965,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => setIsClusterSyncModalOpen(true)}
+                onClick={triggerClusterSync}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-black font-bold text-xs transition-all shadow-md shadow-primary/20 whitespace-nowrap self-stretch sm:self-auto justify-center"
               >
                 <Globe className="w-3.5 h-3.5" />
@@ -2195,7 +2211,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setIsClusterSyncModalOpen(true)}
+                  onClick={triggerClusterSync}
                   disabled={saving}
                   className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-primary via-cyan-500 to-teal-400 text-black font-bold text-xs hover:opacity-95 transition-all shadow-md shadow-primary/20 active:scale-95 disabled:opacity-50"
                 >
@@ -2263,30 +2279,6 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
           </div>,
           document.body
         )}
-
-      {/* Cluster SafeSync Modal */}
-      <ClusterSyncModal
-        isOpen={isClusterSyncModalOpen}
-        onClose={() => setIsClusterSyncModalOpen(false)}
-        peers={effectiveActivePeers}
-        currentConfig={{
-          protocol,
-          enableKcp,
-          encryption,
-          ipv6,
-          mtu: Number(mtu),
-          networkSecret,
-          hostname,
-          ipv4,
-        }}
-        onNotify={onNotify}
-        onRefreshData={async () => {
-          await loadData();
-          onRefreshStatus();
-        }}
-        t={t}
-        isRtl={isRtl}
-      />
     </div>
   );
 };
