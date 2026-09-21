@@ -511,6 +511,76 @@ EOF_IPERF_SVC
   systemctl daemon-reload
 }
 
+apply_node_config() {
+  require_root
+  require_linux
+
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    fail "Configuration file not found: $CONFIG_FILE"
+    return 1
+  fi
+
+  # 1. Ensure core binary is installed and executable
+  if [[ ! -x "${BIN_DIR}/easytier-core" ]]; then
+    info "EasyTier core binary not found. Installing..."
+    install_core || { fail "Failed to install EasyTier core."; return 1; }
+  fi
+
+  # 2. Source configuration to get port and parameters
+  local port="11010"
+  # shellcheck disable=SC1090
+  source "$CONFIG_FILE"
+  port="${PORT:-11010}"
+
+  # 3. Ensure kernel IP forwarding and persistence
+  sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+  if [[ ! -f /etc/sysctl.d/99-xraymesh.conf ]]; then
+    echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/99-xraymesh.conf 2>/dev/null || true
+  fi
+
+  # 4. Whitelist firewall ports
+  if command -v iptables >/dev/null 2>&1; then
+    iptables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null || true
+    iptables -C INPUT -p udp --dport "$port" -j ACCEPT 2>/dev/null || iptables -I INPUT -p udp --dport "$port" -j ACCEPT 2>/dev/null || true
+  fi
+  if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+    ufw allow "$port"/tcp >/dev/null 2>&1 || true
+    ufw allow "$port"/udp >/dev/null 2>&1 || true
+  fi
+
+  # 5. Write service file, runner, iperf service, and reload systemd
+  write_service
+
+  # 6. Enable systemd units on boot
+  systemctl enable xraymesh.service >/dev/null 2>&1 || true
+  systemctl enable xraymesh-iperf.service >/dev/null 2>&1 || true
+
+  # 7. Start or restart xraymesh.service
+  if systemctl is-active --quiet xraymesh.service; then
+    systemctl restart xraymesh.service
+  else
+    systemctl start xraymesh.service
+  fi
+
+  # 8. Start or restart xraymesh-iperf.service (isolated so it never blocks mesh)
+  if systemctl is-active --quiet xraymesh-iperf.service; then
+    systemctl restart xraymesh-iperf.service >/dev/null 2>&1 || true
+  else
+    systemctl start xraymesh-iperf.service >/dev/null 2>&1 || true
+  fi
+
+  # 9. Wait and verify service health
+  sleep 2
+  if systemctl is-active --quiet xraymesh.service; then
+    ok "The XRayMesh node is online and active."
+    return 0
+  else
+    fail "The XRayMesh node service failed to start."
+    journalctl -u xraymesh.service -n 25 --no-pager 2>/dev/null || true
+    return 1
+  fi
+}
+
 setup_node() {
   require_root
   [[ -x "${BIN_DIR}/easytier-core" ]] || install_core
@@ -601,35 +671,8 @@ setup_node() {
   fi
 
   write_config "$name" "$secret" "$hostname" "$ipv4" "$protocol" "$port" "$peers" "$encryption" "$ipv6" "$mtu" "$enable_kcp" "$wg_portal" "$wg_portal_port" "$wg_client_cidr"
-  
-  # Ensure kernel forwarding and port availability
-  sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
-  if [[ ! -f /etc/sysctl.d/99-xraymesh.conf ]]; then
-    echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/99-xraymesh.conf 2>/dev/null || true
-  fi
-  if command -v iptables >/dev/null 2>&1; then
-    iptables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null || true
-    iptables -C INPUT -p udp --dport "$port" -j ACCEPT 2>/dev/null || iptables -I INPUT -p udp --dport "$port" -j ACCEPT 2>/dev/null || true
-  fi
-  if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
-    ufw allow "$port"/tcp >/dev/null 2>&1 || true
-    ufw allow "$port"/udp >/dev/null 2>&1 || true
-  fi
 
-  write_service
-  systemctl enable xraymesh.service xraymesh-iperf.service >/dev/null 2>&1 || true
-  if systemctl is-active --quiet xraymesh.service; then
-    info "Applying the updated node configuration..."
-    systemctl restart xraymesh.service
-    systemctl restart xraymesh-iperf.service >/dev/null 2>&1 || true
-  else
-    info "Starting the mesh node..."
-    systemctl start xraymesh.service
-    systemctl start xraymesh-iperf.service >/dev/null 2>&1 || true
-  fi
-  sleep 2
-  if systemctl is-active --quiet xraymesh.service; then
-    ok "The XRayMesh node is online."
+  if apply_node_config; then
     info "Network: $name"
     info "Virtual IP: $ipv4"
     if [[ "$protocol" == "wss" || "$protocol" == "quic" ]]; then
@@ -639,15 +682,14 @@ setup_node() {
     fi
     warn "Keep this network secret private: $secret"
   else
-    fail "The service failed to start."
-    journalctl -u xraymesh.service -n 20 --no-pager
     warn "Restoring the previous working node configuration."
     systemctl stop xraymesh.service 2>/dev/null || true
-    if (( had_config )); then
+    if (( had_config )) && [[ -f "$config_backup" ]]; then
       cp -p "$config_backup" "$CONFIG_FILE"
       write_service
       if (( service_was_active )); then
-        systemctl restart xraymesh.service || true
+        systemctl start xraymesh.service >/dev/null 2>&1 || true
+        systemctl start xraymesh-iperf.service >/dev/null 2>&1 || true
       fi
     else
       systemctl disable xraymesh.service 2>/dev/null || true
@@ -3645,10 +3687,11 @@ main() {
   iperf-stop) require_root; require_linux; systemctl disable --now xraymesh-iperf.service 2>/dev/null || systemctl stop xraymesh-iperf.service 2>/dev/null || true ;;
   iperf-restart) require_root; require_linux; write_iperf_service; systemctl restart xraymesh-iperf.service ;;
   write-runner) require_root; require_linux; write_runner; write_iperf_service; systemctl daemon-reload ;;
-  node-restart) require_root; require_linux; write_runner; write_iperf_service; systemctl daemon-reload; systemctl restart xraymesh.service xraymesh-iperf.service ;;
+  node-restart|node-apply) require_root; require_linux; apply_node_config ;;
   web-update) require_root; require_linux; update_web_assets ;;
   self-test|doctor) require_linux; self_test ;;
-  start|stop|restart) require_root; systemctl "$1" xraymesh.service ;;
+  start|restart) require_root; require_linux; apply_node_config ;;
+  stop) require_root; require_linux; systemctl stop xraymesh.service xraymesh-iperf.service 2>/dev/null || true ;;
   version|-v|--version) echo "${APP} ${VERSION} - © ${OWNER}" ;;
   *)
     echo "Usage: $0 [menu|install|status|peers|routes|logs|update|delete|delete-node|tunnels|realm|haproxy|iptables|gost|web|token|web-update|write-runner|node-restart|self-test|start|stop|restart|version]"

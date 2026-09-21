@@ -1309,9 +1309,9 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             save_node_config_env(cfg_dict)
             ok, msg = run_xraymesh_cmd(["node-restart"])
             if ok:
-                self.send_json({"ok": True, "message": "Node configuration saved and mesh service restarted."})
+                self.send_json({"ok": True, "message": "Node configuration saved and mesh service is online."})
             else:
-                self.send_json({"ok": True, "message": "Configuration saved. Service reload issued.", "warning": msg})
+                self.send_json({"ok": False, "error": f"Configuration saved, but service failed to start: {msg}"}, status=500)
             return
 
         elif path == "/api/node/peers/add":
@@ -1335,7 +1335,10 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             save_node_config_env(cfg)
 
             ok, msg = run_xraymesh_cmd(["node-restart"])
-            self.send_json({"ok": True, "message": f"Peer '{new_peer}' added and mesh service restarted.", "peers": cur_peers})
+            if ok:
+                self.send_json({"ok": True, "message": f"Peer '{new_peer}' added and mesh service restarted.", "peers": cur_peers})
+            else:
+                self.send_json({"ok": False, "error": f"Peer added, but service reload failed: {msg}"}, status=500)
             return
 
         elif path == "/api/node/peers/remove":
@@ -1353,7 +1356,10 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             save_node_config_env(cfg)
 
             ok, msg = run_xraymesh_cmd(["node-restart"])
-            self.send_json({"ok": True, "message": f"Peer '{peer_to_remove}' removed.", "peers": cur_peers})
+            if ok:
+                self.send_json({"ok": True, "message": f"Peer '{peer_to_remove}' removed.", "peers": cur_peers})
+            else:
+                self.send_json({"ok": False, "error": f"Peer removed, but service reload failed: {msg}"}, status=500)
             return
 
         elif path == "/api/node/join":
@@ -1409,15 +1415,42 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
 
             save_node_config_env(cfg)
             ok, msg = run_xraymesh_cmd(["node-restart"])
-            self.send_json({
-                "ok": True,
-                "message": f"Successfully joined mesh '{net}'. Node restarted.",
-                "data": {
-                    "network_name": net,
-                    "ipv4": cur_ip,
-                    "peer": clean_endpoint
-                }
-            })
+            if ok:
+                self.send_json({
+                    "ok": True,
+                    "message": f"Successfully joined mesh '{net}'. Node is online.",
+                    "data": {
+                        "network_name": net,
+                        "ipv4": cur_ip,
+                        "peer": clean_endpoint
+                    }
+                })
+            else:
+                self.send_json({"ok": False, "error": f"Joined mesh '{net}', but node service failed to start: {msg}"}, status=500)
+            return
+
+        elif path == "/api/node/start":
+            ok, msg = run_xraymesh_cmd(["node-restart"])
+            if ok:
+                self.send_json({"ok": True, "message": "Mesh node service started successfully."})
+            else:
+                self.send_json({"ok": False, "error": msg or "Failed to start node service."}, status=500)
+            return
+
+        elif path == "/api/node/stop":
+            ok, msg = run_xraymesh_cmd(["stop"])
+            if ok:
+                self.send_json({"ok": True, "message": "Mesh node service stopped."})
+            else:
+                self.send_json({"ok": False, "error": msg or "Failed to stop node service."}, status=500)
+            return
+
+        elif path == "/api/node/restart":
+            ok, msg = run_xraymesh_cmd(["node-restart"])
+            if ok:
+                self.send_json({"ok": True, "message": "Mesh node service restarted successfully."})
+            else:
+                self.send_json({"ok": False, "error": msg or "Failed to restart node service."}, status=500)
             return
 
         elif path == "/api/node/delete":

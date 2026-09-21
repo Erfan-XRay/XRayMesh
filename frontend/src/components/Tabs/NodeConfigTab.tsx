@@ -8,6 +8,9 @@ import {
   fetchMeshInvite,
   joinMeshNetwork,
   deleteNodeConfig,
+  startMeshNode,
+  stopMeshNode,
+  restartMeshNode,
 } from '../../services/api';
 import {
   Settings,
@@ -27,7 +30,10 @@ import {
   Link,
   Sliders,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Play,
+  Square,
+  RotateCw,
 } from 'lucide-react';
 
 interface NodeConfigTabProps {
@@ -267,6 +273,50 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
     }
   };
 
+  const [controllingService, setControllingService] = useState(false);
+
+  const handleStartNode = async () => {
+    setControllingService(true);
+    try {
+      const msg = await startMeshNode();
+      onNotify(msg || t('node_service_online'), 'success');
+      await loadData();
+      onRefreshStatus();
+    } catch (err: any) {
+      onNotify(err.message || 'Failed to start node service', 'error');
+    } finally {
+      setControllingService(false);
+    }
+  };
+
+  const handleRestartNode = async () => {
+    setControllingService(true);
+    try {
+      const msg = await restartMeshNode();
+      onNotify(msg || 'Node service restarted', 'success');
+      await loadData();
+      onRefreshStatus();
+    } catch (err: any) {
+      onNotify(err.message || 'Failed to restart node service', 'error');
+    } finally {
+      setControllingService(false);
+    }
+  };
+
+  const handleStopNode = async () => {
+    setControllingService(true);
+    try {
+      const msg = await stopMeshNode();
+      onNotify(msg || t('node_service_offline'), 'info');
+      await loadData();
+      onRefreshStatus();
+    } catch (err: any) {
+      onNotify(err.message || 'Failed to stop node service', 'error');
+    } finally {
+      setControllingService(false);
+    }
+  };
+
   const generateRandomSecret = () => {
     const chars = '0123456789abcdef';
     let s = '';
@@ -381,14 +431,67 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
       {/* Top Header Card */}
       <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-base font-bold text-text-main flex items-center gap-2">
-            <Settings className="w-4 h-4 text-primary" />
-            {t('node_panel_title')}
-          </h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-base font-bold text-text-main flex items-center gap-2">
+              <Settings className="w-4 h-4 text-primary" />
+              {t('node_panel_title')}
+            </h2>
+            {config?.node_configured && (
+              config.service_active ? (
+                <span className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shadow-sm">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  {t('node_service_online')}
+                </span>
+              ) : (
+                <span className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1.5 shadow-sm">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                  {t('node_service_offline')}
+                </span>
+              )
+            )}
+          </div>
           <p className="text-xs text-text-muted mt-0.5">{t('node_panel_desc')}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {config?.node_configured && (
+            config.service_active ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleRestartNode}
+                  disabled={controllingService}
+                  title={t('node_btn_restart')}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-xs font-medium text-amber-400 transition-colors disabled:opacity-50"
+                >
+                  <RotateCw className={`w-3.5 h-3.5 ${controllingService ? 'animate-spin' : ''}`} />
+                  <span>{t('node_btn_restart')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStopNode}
+                  disabled={controllingService}
+                  title={t('node_btn_stop')}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-xs font-medium text-rose-400 transition-colors disabled:opacity-50"
+                >
+                  <Square className="w-3.5 h-3.5" />
+                  <span>{t('node_btn_stop')}</span>
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={handleStartNode}
+                disabled={controllingService}
+                title={t('node_btn_start')}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-xs font-medium text-emerald-400 transition-colors disabled:opacity-50"
+              >
+                <Play className={`w-3.5 h-3.5 ${controllingService ? 'animate-spin' : ''}`} />
+                <span>{t('node_btn_start')}</span>
+              </button>
+            )
+          )}
           <button
+            type="button"
             onClick={loadData}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-text-muted hover:text-text-main transition-colors"
           >
@@ -396,6 +499,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
             {t('btn_refresh')}
           </button>
           <button
+            type="button"
             onClick={() => handleSave()}
             disabled={saving}
             className="flex items-center gap-2 px-5 py-2 rounded-xl bg-primary text-black font-semibold text-xs hover:bg-primary-hover transition-all shadow-md disabled:opacity-50"

@@ -290,3 +290,24 @@ export async function joinMeshNetwork(invite: string): Promise<string> {
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to join mesh network');
   return d.message;
 }
+
+export async function startMeshNode(): Promise<string> {
+  const res = await fetch('/api/node/start', { method: 'POST' });
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to start mesh node');
+  return d.message || 'Mesh node started successfully.';
+}
+
+export async function stopMeshNode(): Promise<string> {
+  const res = await fetch('/api/node/stop', { method: 'POST' });
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to stop mesh node');
+  return d.message || 'Mesh node stopped.';
+}
+
+export async function restartMeshNode(): Promise<string> {
+  const res = await fetch('/api/node/restart', { method: 'POST' });
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to restart mesh node');
+  return d.message || 'Mesh node restarted successfully.';
+}
