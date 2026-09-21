@@ -621,8 +621,11 @@ def get_xraymesh_script():
 
 
 def get_network_interfaces():
-    """Retrieve available host network interfaces."""
+    """Retrieve available host network interfaces using multiple discovery methods."""
     interfaces = ["any"]
+    found = set()
+
+    # 1. Method A: ip -o link show
     try:
         r = subprocess.run(["ip", "-o", "link", "show"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=2)
         if r.returncode == 0:
@@ -630,11 +633,35 @@ def get_network_interfaces():
                 parts = line.split(":", 2)
                 if len(parts) >= 2:
                     iface = parts[1].strip().split("@")[0]
-                    if iface and iface not in ("lo", "any") and not iface.startswith("easytier") and not iface.startswith("docker"):
-                        if iface not in interfaces:
-                            interfaces.append(iface)
+                    if iface and iface not in ("lo", "any") and not iface.startswith(("easytier", "docker", "veth", "br-")):
+                        found.add(iface)
     except Exception:
         pass
+
+    # 2. Method B: /sys/class/net directory listing
+    try:
+        if os.path.isdir("/sys/class/net"):
+            for iface in os.listdir("/sys/class/net"):
+                if iface not in ("lo", "any") and not iface.startswith(("easytier", "docker", "veth", "br-")):
+                    found.add(iface)
+    except Exception:
+        pass
+
+    # 3. Method C: /proc/net/dev inspection
+    try:
+        if os.path.isfile("/proc/net/dev"):
+            with open("/proc/net/dev", "r") as f:
+                for line in f:
+                    if ":" in line:
+                        iface = line.split(":")[0].strip()
+                        if iface and iface not in ("lo", "any") and not iface.startswith(("easytier", "docker", "veth", "br-")):
+                            found.add(iface)
+    except Exception:
+        pass
+
+    for iface in sorted(found):
+        if iface not in interfaces:
+            interfaces.append(iface)
     return interfaces
 
 
@@ -1039,7 +1066,9 @@ def send_cluster_http(target_ip, target_port, endpoint, secret, payload, timeout
     insecure_ssl_ctx.check_hostname = False
     insecure_ssl_ctx.verify_mode = ssl.CERT_NONE
 
-    for scheme in ("http", "https"):
+    schemes = ("https", "http") if is_ssl_enabled() else ("http", "https")
+    last_err = "Failed to connect to cluster peer"
+    for scheme in schemes:
         url = f"{scheme}://{target_ip}:{target_port}{endpoint}"
         req = urllib.request.Request(url, data=body_bytes, headers=headers, method="POST")
         try:
@@ -1049,15 +1078,16 @@ def send_cluster_http(target_ip, target_port, endpoint, secret, payload, timeout
                 return True, data
         except urllib.error.HTTPError as e:
             try:
-                data = json.loads(e.read().decode("utf-8"))
-                return False, data.get("error", str(e))
+                err_data = json.loads(e.read().decode("utf-8"))
+                last_err = err_data.get("error", str(e))
             except Exception:
-                return False, str(e)
+                last_err = str(e)
+            # If 400 Bad Request or 404, the peer might use the other scheme or port
+            continue
         except Exception as e:
-            if scheme == "http":
-                continue
-            return False, str(e)
-    return False, "Failed to connect to cluster peer"
+            last_err = str(e)
+            continue
+    return False, last_err
 
 
 def proxy_tunnel_if_remote(handler, data, tunnel_type, action):
@@ -1168,7 +1198,8 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 "ok": True,
                 "version": CURRENT_VERSION,
                 "hostname": config.get("HOSTNAME", ""),
-                "ipv4": config.get("IPV4", "")
+                "ipv4": config.get("IPV4", ""),
+                "interfaces": get_network_interfaces()
             })
             return
 
@@ -1345,14 +1376,33 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                         "node": query_node
                     })
                     return
-                else:
-                    self.send_json({
-                        "ok": True,
-                        "data": ["any"],
-                        "node": query_node,
-                        "warning": "Could not reach remote node for interface list, fallback to any."
-                    })
-                    return
+
+                # HMAC auth failed — fall back to unauthenticated /api/cluster/info which also includes interfaces
+                fallback_ifaces = ["any"]
+                insecure_ssl_ctx = ssl.create_default_context()
+                insecure_ssl_ctx.check_hostname = False
+                insecure_ssl_ctx.verify_mode = ssl.CERT_NONE
+                for scheme in (("https", "http") if is_ssl_enabled() else ("http", "https")):
+                    try:
+                        info_url = f"{scheme}://{query_node}:{PORT}/api/cluster/info"
+                        info_req = urllib.request.Request(info_url, method="GET")
+                        ctx = insecure_ssl_ctx if scheme == "https" else None
+                        with urllib.request.urlopen(info_req, timeout=3, context=ctx) as resp:
+                            info_data = json.loads(resp.read().decode("utf-8"))
+                            ifaces = info_data.get("interfaces")
+                            if isinstance(ifaces, list) and len(ifaces) > 0:
+                                fallback_ifaces = ifaces
+                        break
+                    except Exception:
+                        continue
+
+                self.send_json({
+                    "ok": True,
+                    "data": fallback_ifaces,
+                    "node": query_node,
+                    "warning": "Used unauthenticated fallback for interface list." if fallback_ifaces != ["any"] else "Could not reach remote node for interface list."
+                })
+                return
 
             ifaces = get_network_interfaces()
             self.send_json({
