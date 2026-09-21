@@ -28,6 +28,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
   t,
 }) => {
   const [name, setName] = useState('');
+  const [originNode, setOriginNode] = useState('');
   const [target, setTarget] = useState('');
   const [ports, setPorts] = useState('');
   const [protocol, setProtocol] = useState('udp');
@@ -39,6 +40,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
   useEffect(() => {
     if (initialData && isEdit) {
       setName(initialData.TUNNEL_NAME || '');
+      setOriginNode((initialData as any)._node_ip || '');
       setTarget(initialData.TARGET_IP || '');
       setPorts(initialData.PORT_SPEC || '');
       if (type === 'iptables') {
@@ -55,6 +57,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
       }
     } else {
       setName('');
+      setOriginNode('');
       setTarget('');
       setPorts('');
       setProtocol(type === 'gost' || type === 'realm' ? 'both' : 'udp');
@@ -86,6 +89,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
       await onSubmit({
         isEdit,
         name: name.trim(),
+        originNode: originNode.trim() || undefined,
         target: target.trim(),
         ports: ports.trim(),
         protocol,
@@ -151,6 +155,27 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          {/* Origin Server (Host Node) */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block font-medium text-text-muted">{t('tunnels_origin_server')}</label>
+              <span className="text-[10px] text-text-subtle">{t('tunnels_origin_server_desc')}</span>
+            </div>
+            <select
+              value={originNode}
+              onChange={(e) => setOriginNode(e.target.value)}
+              disabled={isEdit}
+              className="w-full px-3.5 py-2 bg-slate-950 border border-white/15 rounded-xl font-mono text-text-main focus:outline-none focus:border-primary disabled:opacity-60"
+            >
+              <option value="">{t('tunnels_origin_local')}</option>
+              {peers.map((p) => (
+                <option key={p.ipv4} value={p.ipv4}>
+                  {p.hostname || p.ipv4} ({p.ipv4})
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Tunnel Name */}
           <div>
             <label className="block font-medium text-text-muted mb-1.5">{t('modal_tunnel_name')}</label>

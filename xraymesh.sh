@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="1.8.0"
+readonly VERSION="2.0.0"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
 readonly BIN_DIR="${INSTALL_DIR}/bin"
@@ -715,6 +715,8 @@ setup_node() {
     info "Re-enabling the existing Realm TCP/UDP tunnels."
     apply_realm_config || warn "The mesh is online, but Realm tunnels need attention."
   fi
+
+  configure_web_ui_interactive
 }
 
 delete_mesh_noninteractive() {
@@ -3243,6 +3245,20 @@ get_web_port() {
   fi
 }
 
+get_web_domain() {
+  if [[ -f "$WEB_CONFIG_FILE" ]]; then
+    grep -E '^WEB_DOMAIN=' "$WEB_CONFIG_FILE" 2>/dev/null | cut -d= -f2 | tr -d '"'\'' '
+  fi
+}
+
+get_web_proto() {
+  if [[ -f "$WEB_CONFIG_FILE" ]] && grep -q '^WEB_SSL_CERT=' "$WEB_CONFIG_FILE" 2>/dev/null; then
+    echo "https"
+  else
+    echo "http"
+  fi
+}
+
 get_server_ip() {
   local ip
   ip="$(curl -fsS4 --connect-timeout 2 https://api.ipify.org 2>/dev/null || true)"
@@ -3252,14 +3268,231 @@ get_server_ip() {
   echo "${ip:-127.0.0.1}"
 }
 
-generate_web_token() {
+is_port_80_busy() {
+  if command -v ss >/dev/null 2>&1; then
+    ss -tlpn 'sport = :80' 2>/dev/null | grep -q ':80 '
+  elif command -v lsof >/dev/null 2>&1; then
+    lsof -i :80 >/dev/null 2>&1
+  else
+    fuser 80/tcp >/dev/null 2>&1
+  fi
+}
+
+get_port_80_service() {
+  local svc=""
+  if command -v ss >/dev/null 2>&1; then
+    svc="$(ss -tlpn 'sport = :80' 2>/dev/null | grep -oP 'users:\(\("\K[^"]+' | head -n1 || true)"
+  fi
+  if [[ -z "$svc" ]] && command -v fuser >/dev/null 2>&1; then
+    local pid
+    pid="$(fuser 80/tcp 2>/dev/null | awk '{print $1}' || true)"
+    if [[ -n "$pid" ]]; then
+      svc="$(ps -p "$pid" -o comm= 2>/dev/null || true)"
+    fi
+  fi
+  echo "${svc:-webserver}"
+}
+
+ensure_certbot() {
+  if ! command -v certbot >/dev/null 2>&1; then
+    info "Installing Certbot for free Let's Encrypt SSL certificate generation..."
+    if command -v apt-get >/dev/null 2>&1; then
+      apt-get update -qq && apt-get install -y -qq certbot >/dev/null 2>&1 || true
+    elif command -v dnf >/dev/null 2>&1; then
+      dnf install -y -q certbot >/dev/null 2>&1 || true
+    elif command -v yum >/dev/null 2>&1; then
+      yum install -y -q certbot >/dev/null 2>&1 || true
+    fi
+  fi
+  command -v certbot >/dev/null 2>&1
+}
+
+configure_web_ssl() {
   install_web_runtime
-  local token now expiry_ts pub_ip port mesh_ip
+  header
+  section "CONFIGURE DOMAIN & FREE SSL (HTTPS)"
+  info "This will obtain a Let's Encrypt SSL certificate with automatic background renewal."
+  printf '\n'
+
+  local domain pub_ip
+  pub_ip="$(get_server_ip)"
+  read -r -p "  Enter your domain name pointed to this server (e.g. panel.example.com): " domain
+  domain="${domain//[[:space:]]/}"
+  if [[ -z "$domain" ]]; then
+    fail "Domain cannot be empty."
+    return 1
+  fi
+
+  info "Verifying DNS records for ${domain}..."
+  local resolved_ip=""
+  if command -v getent >/dev/null 2>&1; then
+    resolved_ip="$(getent ahosts "$domain" 2>/dev/null | awk '{print $1; exit}' || true)"
+  elif command -v dig >/dev/null 2>&1; then
+    resolved_ip="$(dig +short "$domain" 2>/dev/null | tail -n1 || true)"
+  fi
+
+  if [[ -n "$resolved_ip" && "$resolved_ip" != "$pub_ip" ]]; then
+    warn "Domain resolves to ${resolved_ip}, but server public IP is ${pub_ip}."
+    local cont="n"
+    read -r -p "  Proceed anyway? [y/N]: " cont
+    [[ "$cont" =~ ^[Yy]$ ]] || return 1
+  fi
+
+  ensure_certbot || {
+    fail "Could not install certbot. Please install certbot manually."
+    return 1
+  }
+
+  local paused_service=""
+  if is_port_80_busy; then
+    paused_service="$(get_port_80_service)"
+    warn "Port 80 is currently occupied by: ${paused_service}"
+    local stop_perm="y"
+    read -r -p "  Temporarily pause ${paused_service} for 10s to issue SSL and restart it immediately after? [Y/n]: " stop_perm
+    if [[ "$stop_perm" =~ ^[Nn]$ ]]; then
+      fail "Port 80 is required for Let's Encrypt verification. Aborting SSL setup."
+      return 1
+    fi
+    info "Temporarily pausing ${paused_service}..."
+    systemctl stop "$paused_service" 2>/dev/null || true
+  fi
+
+  # Guaranteed trap to restart paused service regardless of outcome
+  trap '[[ -n "$paused_service" ]] && systemctl start "$paused_service" 2>/dev/null || true' RETURN
+
+  info "Requesting SSL certificate from Let's Encrypt for ${domain}..."
+  if certbot certonly --standalone -d "$domain" --non-interactive --agree-tos --register-unsafely-without-email; then
+    ok "SSL certificate obtained successfully!"
+    local cert_file="/etc/letsencrypt/live/${domain}/fullchain.pem"
+    local key_file="/etc/letsencrypt/live/${domain}/privkey.pem"
+
+    if [[ -f "$cert_file" && -f "$key_file" ]]; then
+      # Setup automatic renewal hook
+      mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+      cat > /etc/letsencrypt/renewal-hooks/deploy/xraymesh-web.sh <<'EOF_RENEW'
+#!/usr/bin/env bash
+systemctl restart xraymesh-web.service >/dev/null 2>&1 || true
+EOF_RENEW
+      chmod 0755 /etc/letsencrypt/renewal-hooks/deploy/xraymesh-web.sh
+
+      # Update web.env
+      sed -i '/^WEB_DOMAIN=/d' "$WEB_CONFIG_FILE"
+      sed -i '/^WEB_SSL_CERT=/d' "$WEB_CONFIG_FILE"
+      sed -i '/^WEB_SSL_KEY=/d' "$WEB_CONFIG_FILE"
+      printf 'WEB_DOMAIN=%q\n' "$domain" >> "$WEB_CONFIG_FILE"
+      printf 'WEB_SSL_CERT=%q\n' "$cert_file" >> "$WEB_CONFIG_FILE"
+      printf 'WEB_SSL_KEY=%q\n' "$key_file" >> "$WEB_CONFIG_FILE"
+
+      systemctl restart xraymesh-web.service 2>/dev/null || true
+      ok "Web Dashboard SSL active: https://${domain}:$(get_web_port)"
+      return 0
+    fi
+  else
+    fail "Failed to obtain SSL certificate from Let's Encrypt."
+    return 1
+  fi
+}
+
+remove_web_ssl() {
+  install_web_runtime
+  header
+  section "REMOVE WEB SSL (REVERT TO HTTP)"
+  if [[ -f "$WEB_CONFIG_FILE" ]]; then
+    sed -i '/^WEB_DOMAIN=/d' "$WEB_CONFIG_FILE"
+    sed -i '/^WEB_SSL_CERT=/d' "$WEB_CONFIG_FILE"
+    sed -i '/^WEB_SSL_KEY=/d' "$WEB_CONFIG_FILE"
+  fi
+  systemctl restart xraymesh-web.service 2>/dev/null || true
+  ok "Web SSL removed. Dashboard reverted to HTTP."
+  pause
+}
+
+configure_web_ui_interactive() {
+  install_web_runtime
+  header
+  say "  +----------------------------------------------------------+" "$GREEN"
+  say "  |  WEB DASHBOARD & REMOTE MANAGEMENT (XRayMesh v2.0)       |" "$BOLD$GREEN"
+  say "  +----------------------------------------------------------+" "$GREEN"
+  info "XRayMesh v2.0 includes the full multi-node Web Dashboard by default."
+  printf '\n'
+
+  local current_port
+  current_port="$(get_web_port)"
+  local custom_port
+  read -r -p "  Change Web Dashboard port? [current: ${current_port}] (Press Enter to keep): " custom_port
+  if [[ -n "$custom_port" ]]; then
+    if valid_port "$custom_port"; then
+      if grep -q '^WEB_PORT=' "$WEB_CONFIG_FILE" 2>/dev/null; then
+        sed -i "s|^WEB_PORT=.*|WEB_PORT=\"${custom_port}\"|" "$WEB_CONFIG_FILE"
+      else
+        printf 'WEB_PORT=%q\n' "$custom_port" >> "$WEB_CONFIG_FILE"
+      fi
+      ok "Web port set to ${custom_port}."
+    else
+      warn "Invalid port entered. Keeping default port ${current_port}."
+    fi
+  fi
+
+  printf '\n'
+  local want_ssl="n"
+  read -r -p "  Do you want to configure a custom domain with free auto-renewing SSL (HTTPS)? [y/N]: " want_ssl
+  if [[ "$want_ssl" =~ ^[Yy]$ ]]; then
+    configure_web_ssl || warn "SSL configuration skipped or failed. Web Dashboard will run over HTTP."
+  fi
+
+  systemctl enable --now xraymesh-web.service >/dev/null 2>&1 || true
+  systemctl enable --now xraymesh-iperf.service >/dev/null 2>&1 || true
+
+  # Generate 1-hour access link
+  local token now expiry_ts pub_ip port proto domain
   token="$(openssl rand -hex 16)"
   now="$(date +%s)"
   expiry_ts=$(( now + 3600 ))
   port="$(get_web_port)"
   pub_ip="$(get_server_ip)"
+  proto="$(get_web_proto)"
+  domain="$(get_web_domain)"
+
+  python3 -c "import json, os, sys
+p = sys.argv[1]
+tk = sys.argv[2]
+exp = int(sys.argv[3])
+tokens = {}
+if os.path.isfile(p):
+    try:
+        with open(p, 'r') as f: tokens = json.load(f)
+    except Exception: pass
+tokens[tk] = {'expires': exp, 'one_time': True}
+with open(p, 'w') as f: json.dump(tokens, f, indent=2)
+try: os.chmod(p, 0o600)
+except Exception: pass
+" "$WEB_TOKEN_FILE" "$token" "$expiry_ts"
+
+  printf '\n'
+  say "  +----------------------------------------------------------+" "$BOLD$GREEN"
+  say "  |  WEB DASHBOARD READY                                     |" "$BOLD$GREEN"
+  say "  +----------------------------------------------------------+" "$BOLD$GREEN"
+  if [[ "$proto" == "https" && -n "$domain" ]]; then
+    say "  Web Dashboard HTTPS Link:" "$BOLD$CYAN"
+    printf '  %bhttps://%s:%s/?token=%s%b\n\n' "$BOLD$GREEN" "$domain" "$port" "$token" "$RESET"
+  else
+    say "  Web Dashboard Direct Link:" "$BOLD$CYAN"
+    printf '  %bhttp://%s:%s/?token=%s%b\n\n' "$BOLD$GREEN" "$pub_ip" "$port" "$token" "$RESET"
+  fi
+  info "Use this one-click link to log in immediately and set an admin password."
+  pause
+}
+
+generate_web_token() {
+  install_web_runtime
+  local token now expiry_ts pub_ip port mesh_ip proto domain
+  token="$(openssl rand -hex 16)"
+  now="$(date +%s)"
+  expiry_ts=$(( now + 3600 ))
+  port="$(get_web_port)"
+  pub_ip="$(get_server_ip)"
+  proto="$(get_web_proto)"
+  domain="$(get_web_domain)"
   mesh_ip=""
   if [[ -f "$CONFIG_FILE" ]]; then
     mesh_ip="$(grep -E '^IPV4=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2 | tr -d '"'\'' ')"
@@ -3289,8 +3522,13 @@ except Exception: pass
   section "ONE-CLICK WEB DASHBOARD LOGIN"
   ok "A temporary login token was generated (valid for 60 minutes)."
   printf '\n'
-  say "  Direct Browser Link (Public IP):" "$BOLD$CYAN"
-  printf '  %bhttp://%s:%s/?token=%s%b\n\n' "$BOLD$GREEN" "$pub_ip" "$port" "$token" "$RESET"
+  if [[ "$proto" == "https" && -n "$domain" ]]; then
+    say "  Direct Browser Link (SSL Domain):" "$BOLD$CYAN"
+    printf '  %bhttps://%s:%s/?token=%s%b\n\n' "$BOLD$GREEN" "$domain" "$port" "$token" "$RESET"
+  else
+    say "  Direct Browser Link (Public IP):" "$BOLD$CYAN"
+    printf '  %bhttp://%s:%s/?token=%s%b\n\n' "$BOLD$GREEN" "$pub_ip" "$port" "$token" "$RESET"
+  fi
 
   if [[ -n "$mesh_ip" ]]; then
     say "  Internal Mesh Link (Virtual IP):" "$BOLD$PURPLE"
@@ -3372,19 +3610,33 @@ web_menu() {
   while true; do
     header
     section "WEB DASHBOARD & SPEEDTEST"
-    local web_state iperf_state port pub_ip has_pw
+    local web_state iperf_state port pub_ip has_pw proto domain ssl_info
     web_state="$(systemctl is-active xraymesh-web.service 2>/dev/null || echo inactive)"
     iperf_state="$(systemctl is-active xraymesh-iperf.service 2>/dev/null || echo inactive)"
     port="$(get_web_port)"
     pub_ip="$(get_server_ip)"
+    proto="$(get_web_proto)"
+    domain="$(get_web_domain)"
+
+    if [[ "$proto" == "https" && -n "$domain" ]]; then
+      ssl_info="Active (https://${domain}:${port})"
+    else
+      ssl_info="Inactive (HTTP only)"
+    fi
+
     has_pw="No (Token only)"
     if grep -qE '^WEB_PASSWORD_HASH="sha256' "$WEB_CONFIG_FILE" 2>/dev/null; then
       has_pw="Yes (Password + Token)"
     fi
 
     printf '  Web Service:      %s\n' "$web_state"
+    printf '  Web SSL (HTTPS):  %s\n' "$ssl_info"
     printf '  In-Mesh iperf3:   %s (Mesh-Only Port 5201)\n' "$iperf_state"
-    printf '  Web URL:          http://%s:%s\n' "$pub_ip" "$port"
+    if [[ "$proto" == "https" && -n "$domain" ]]; then
+      printf '  Web URL:          https://%s:%s\n' "$domain" "$port"
+    else
+      printf '  Web URL:          http://%s:%s\n' "$pub_ip" "$port"
+    fi
     printf '  Password Login:   %s\n\n' "$has_pw"
 
     printf '  %b[1]%b  Start / Enable Web Dashboard\n' "$GREEN" "$RESET"
@@ -3393,12 +3645,14 @@ web_menu() {
     printf '  %b[4]%b  Generate One-Click Login Link (Token)\n' "$CYAN" "$RESET"
     printf '  %b[5]%b  Set / Change Admin Password\n' "$PURPLE" "$RESET"
     printf '  %b[6]%b  Change Web Port\n' "$YELLOW" "$RESET"
-    printf '  %b[7]%b  Toggle In-Mesh iperf3 Speedtest Daemon\n' "$CYAN" "$RESET"
-    printf '  %b[8]%b  View Web Logs\n' "$PINK" "$RESET"
-    printf '  %b[9]%b  Update Web Dashboard to Latest Version\n' "$GREEN" "$RESET"
+    printf '  %b[7]%b  Configure Custom Domain & Free SSL (HTTPS)\n' "$GREEN" "$RESET"
+    printf '  %b[8]%b  Remove SSL (Revert to HTTP)\n' "$RED" "$RESET"
+    printf '  %b[9]%b  Toggle In-Mesh iperf3 Speedtest Daemon\n' "$CYAN" "$RESET"
+    printf '  %b[10]%b View Web Logs\n' "$PINK" "$RESET"
+    printf '  %b[11]%b Update Web Dashboard to Latest Version\n' "$GREEN" "$RESET"
     printf '  %b[0]%b  Back\n\n' "$GRAY" "$RESET"
 
-    read -r -p "  Select an option [0-9]: " choice
+    read -r -p "  Select an option [0-11]: " choice
     case "$choice" in
       1)
         systemctl enable --now xraymesh-web.service
@@ -3424,7 +3678,9 @@ web_menu() {
       4) run_screen generate_web_token ;;
       5) run_screen set_web_password ;;
       6) run_screen configure_web_port ;;
-      7)
+      7) run_screen configure_web_ssl; pause ;;
+      8) run_screen remove_web_ssl ;;
+      9)
         if systemctl is-active --quiet xraymesh-iperf.service 2>/dev/null; then
           systemctl disable --now xraymesh-iperf.service >/dev/null 2>&1 || true
           warn "In-Mesh iperf3 daemon stopped & disabled."
@@ -3435,8 +3691,8 @@ web_menu() {
         fi
         pause
         ;;
-      8) journalctl -u xraymesh-web.service -f -n 50 ;;
-      9)
+      10) journalctl -u xraymesh-web.service -f -n 50 ;;
+      11)
         info "Updating Web Dashboard assets..."
         update_web_assets
         ok "Web Dashboard updated to latest version."
@@ -3761,13 +4017,15 @@ main() {
   iperf-restart) require_root; require_linux; write_iperf_service; systemctl restart xraymesh-iperf.service ;;
   write-runner) require_root; require_linux; write_runner; write_iperf_service; systemctl daemon-reload ;;
   node-restart|node-apply) require_root; require_linux; apply_node_config ;;
-  web-update) require_root; require_linux; update_web_assets ;;
+  web-update|update-all-assets|node-update) require_root; require_linux; update_web_assets ;;
+  web-ssl) require_root; require_linux; configure_web_ssl ;;
+  web-ssl-remove) require_root; require_linux; remove_web_ssl ;;
   self-test|doctor) require_linux; self_test ;;
   start|restart) require_root; require_linux; apply_node_config ;;
   stop) require_root; require_linux; systemctl stop xraymesh.service xraymesh-iperf.service 2>/dev/null || true ;;
   version|-v|--version) echo "${APP} ${VERSION} - © ${OWNER}" ;;
   *)
-    echo "Usage: $0 [menu|install|status|peers|routes|logs|update|delete|delete-node|tunnels|realm|haproxy|iptables|gost|web|token|web-update|write-runner|node-restart|self-test|start|stop|restart|version]"
+    echo "Usage: $0 [menu|install|status|peers|routes|logs|update|delete|delete-node|tunnels|realm|haproxy|iptables|gost|web|token|web-update|web-ssl|web-ssl-remove|write-runner|node-restart|self-test|start|stop|restart|version]"
     exit 2
     ;;
 esac

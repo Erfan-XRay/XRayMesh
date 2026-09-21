@@ -46,10 +46,19 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-primary/10 text-primary border border-primary/20">
               MESH
             </span>
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20">
+              v{node.xraymesh_version || '2.0.0'}
+            </span>
+            {node.ssl_enabled && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" title="SSL/TLS Active">
+                <span>🔒</span>
+                <span>SSL</span>
+              </span>
+            )}
           </div>
           <p className="text-xs text-text-muted mt-0.5">
             {t('network_prefix')}: <span className="font-mono text-primary font-medium">{node.network_name || 'XRayMesh'}</span>
-            {node.easytier_version && ` | v${node.easytier_version}`}
+            {node.easytier_version && ` | EasyTier v${node.easytier_version}`}
           </p>
         </div>
       </div>

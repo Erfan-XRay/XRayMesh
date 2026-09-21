@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { TunnelsData, HaproxyTunnel, IptablesTunnel, GostTunnel, RealmTunnel } from '../../types';
-import { Network, Plus, RefreshCw, Trash2, Edit3, Cpu, Zap } from 'lucide-react';
+import { Network, Plus, RefreshCw, Trash2, Edit3, Cpu, Zap, Server } from 'lucide-react';
 
 interface TunnelsTabProps {
   tunnels: TunnelsData;
@@ -13,7 +13,7 @@ interface TunnelsTabProps {
   onOpenEditIptables: (t: IptablesTunnel) => void;
   onOpenCreateGost: () => void;
   onOpenEditGost: (t: GostTunnel) => void;
-  onDeleteTunnel: (type: 'haproxy' | 'iptables' | 'gost' | 'realm', name: string) => void;
+  onDeleteTunnel: (type: 'haproxy' | 'iptables' | 'gost' | 'realm', name: string, originNode?: string) => void;
   t: (key: any) => string;
 }
 
@@ -32,11 +32,52 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
   t,
 }) => {
   const [filter, setFilter] = useState<'all' | 'realm' | 'haproxy' | 'iptables' | 'gost'>('all');
+  const [serverFilter, setServerFilter] = useState<string>('all');
 
-  const realmCount = (tunnels.realm || []).length;
-  const haproxyCount = (tunnels.haproxy || []).length;
-  const iptablesCount = (tunnels.iptables || []).length;
-  const gostCount = (tunnels.gost || []).length;
+  const uniqueNodes = useMemo(() => {
+    const map = new Map<string, string>();
+    const all = [
+      ...(tunnels.realm || []),
+      ...(tunnels.haproxy || []),
+      ...(tunnels.iptables || []),
+      ...(tunnels.gost || []),
+    ];
+    for (const item of all) {
+      if (item._node_ip) {
+        map.set(item._node_ip, item._node_name || item._node_ip);
+      }
+    }
+    return Array.from(map.entries()).map(([ip, name]) => ({ ip, name }));
+  }, [tunnels]);
+
+  const filteredRealm = useMemo(() => {
+    const list = tunnels.realm || [];
+    if (serverFilter === 'all') return list;
+    return list.filter((t) => t._node_ip === serverFilter);
+  }, [tunnels.realm, serverFilter]);
+
+  const filteredHaproxy = useMemo(() => {
+    const list = tunnels.haproxy || [];
+    if (serverFilter === 'all') return list;
+    return list.filter((t) => t._node_ip === serverFilter);
+  }, [tunnels.haproxy, serverFilter]);
+
+  const filteredIptables = useMemo(() => {
+    const list = tunnels.iptables || [];
+    if (serverFilter === 'all') return list;
+    return list.filter((t) => t._node_ip === serverFilter);
+  }, [tunnels.iptables, serverFilter]);
+
+  const filteredGost = useMemo(() => {
+    const list = tunnels.gost || [];
+    if (serverFilter === 'all') return list;
+    return list.filter((t) => t._node_ip === serverFilter);
+  }, [tunnels.gost, serverFilter]);
+
+  const realmCount = filteredRealm.length;
+  const haproxyCount = filteredHaproxy.length;
+  const iptablesCount = filteredIptables.length;
+  const gostCount = filteredGost.length;
   const totalCount = realmCount + haproxyCount + iptablesCount + gostCount;
 
   return (
@@ -96,13 +137,34 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
           </button>
         </div>
 
-        <button
-          onClick={onRefresh}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-medium text-text-muted hover:text-text-main transition-colors"
-        >
-          <RefreshCw className="w-3 h-3" />
-          <span>{t('btn_refresh')}</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {uniqueNodes.length > 1 && (
+            <div className="flex items-center gap-1.5 bg-white/5 px-2.5 py-1.5 rounded-lg border border-white/10 text-xs">
+              <Server className="w-3.5 h-3.5 text-primary" />
+              <span className="text-text-muted text-[11px] hidden sm:inline">{t('tunnels_filter_server')}:</span>
+              <select
+                value={serverFilter}
+                onChange={(e) => setServerFilter(e.target.value)}
+                className="bg-slate-900 border border-white/10 rounded px-2 py-0.5 text-xs text-text-main focus:outline-none focus:border-primary font-mono"
+              >
+                <option value="all">{t('tunnels_filter_all_servers')} ({totalCount})</option>
+                {uniqueNodes.map((n) => (
+                  <option key={n.ip} value={n.ip}>
+                    {n.name} ({n.ip})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <button
+            onClick={onRefresh}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-medium text-text-muted hover:text-text-main transition-colors"
+          >
+            <RefreshCw className="w-3 h-3" />
+            <span>{t('btn_refresh')}</span>
+          </button>
+        </div>
       </div>
 
       {/* 1. Realm Section (Rust) */}
@@ -125,7 +187,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
             </button>
           </div>
 
-          {(tunnels.realm || []).length === 0 ? (
+          {filteredRealm.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-8 text-center rounded-xl bg-white/[0.02] border border-dashed border-white/10">
               <p className="text-xs font-semibold text-text-main mb-1">{t('tunnels_empty_realm')}</p>
               <p className="text-xs text-text-muted max-w-sm mb-3">{t('tunnels_empty_realm_desc')}</p>
@@ -138,7 +200,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {(tunnels.realm || []).map((tItem) => {
+              {filteredRealm.map((tItem) => {
                 const proto = (tItem.PROTOCOL || 'both').toUpperCase();
                 return (
                   <div
@@ -153,6 +215,14 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                         <div className="text-xs text-text-muted mt-0.5 font-mono">
                           {t('tunnels_col_destination')}: {tItem.TARGET_IP || '--'}
                         </div>
+                        {tItem._node_name && (
+                          <div className="flex items-center gap-1 mt-1 text-[11px] font-mono text-text-muted">
+                            <Server className="w-2.5 h-2.5 text-primary" />
+                            <span className="text-text-subtle">{t('tunnels_badge_origin')}:</span>
+                            <span className="text-primary font-medium">{tItem._node_name}</span>
+                            <span className="text-text-subtle">({tItem._node_ip})</span>
+                          </div>
+                        )}
                       </div>
                       <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
                         {proto} Relay
@@ -178,7 +248,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                         {t('btn_edit')}
                       </button>
                       <button
-                        onClick={() => onDeleteTunnel('realm', tItem.TUNNEL_NAME)}
+                        onClick={() => onDeleteTunnel('realm', tItem.TUNNEL_NAME, tItem._node_ip)}
                         className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-rose-500/10 hover:bg-rose-500/20 text-xs text-rose-400 border border-rose-500/25 transition-colors"
                       >
                         <Trash2 className="w-3 h-3" />
@@ -213,7 +283,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
             </button>
           </div>
 
-          {tunnels.haproxy.length === 0 ? (
+          {filteredHaproxy.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-8 text-center rounded-xl bg-white/[0.02] border border-dashed border-white/10">
               <p className="text-xs font-semibold text-text-main mb-1">{t('tunnels_empty_haproxy')}</p>
               <p className="text-xs text-text-muted max-w-sm mb-3">{t('tunnels_empty_haproxy_desc')}</p>
@@ -226,7 +296,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {tunnels.haproxy.map((tItem) => (
+              {filteredHaproxy.map((tItem) => (
                 <div
                   key={tItem.TUNNEL_NAME}
                   className="p-4 rounded-xl bg-slate-900/50 border border-white/10 hover:border-card-border-hover transition-all"
@@ -239,6 +309,14 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                       <div className="text-xs text-text-muted mt-0.5 font-mono">
                         {t('tunnels_col_destination')}: {tItem.TARGET_IP || '--'}
                       </div>
+                      {tItem._node_name && (
+                        <div className="flex items-center gap-1 mt-1 text-[11px] font-mono text-text-muted">
+                          <Server className="w-2.5 h-2.5 text-primary" />
+                          <span className="text-text-subtle">{t('tunnels_badge_origin')}:</span>
+                          <span className="text-primary font-medium">{tItem._node_name}</span>
+                          <span className="text-text-subtle">({tItem._node_ip})</span>
+                        </div>
+                      )}
                     </div>
                     <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-sky-500/10 text-sky-400 border border-sky-500/25">
                       TCP Proxy
@@ -259,7 +337,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                       {t('btn_edit')}
                     </button>
                     <button
-                      onClick={() => onDeleteTunnel('haproxy', tItem.TUNNEL_NAME)}
+                      onClick={() => onDeleteTunnel('haproxy', tItem.TUNNEL_NAME, tItem._node_ip)}
                       className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-rose-500/10 hover:bg-rose-500/20 text-xs text-rose-400 border border-rose-500/25 transition-colors"
                     >
                       <Trash2 className="w-3 h-3" />
@@ -293,7 +371,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
             </button>
           </div>
 
-          {tunnels.iptables.length === 0 ? (
+          {filteredIptables.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-8 text-center rounded-xl bg-white/[0.02] border border-dashed border-white/10">
               <p className="text-xs font-semibold text-text-main mb-1">{t('tunnels_empty_iptables')}</p>
               <p className="text-xs text-text-muted max-w-sm mb-3">{t('tunnels_empty_iptables_desc')}</p>
@@ -306,7 +384,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {tunnels.iptables.map((tItem) => {
+              {filteredIptables.map((tItem) => {
                 const proto = (tItem.FORWARD_PROTOCOL || 'udp').toUpperCase();
                 return (
                   <div
@@ -321,6 +399,14 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                         <div className="text-xs text-text-muted mt-0.5 font-mono">
                           {t('tunnels_col_destination')}: {tItem.TARGET_IP || '--'}
                         </div>
+                        {tItem._node_name && (
+                          <div className="flex items-center gap-1 mt-1 text-[11px] font-mono text-text-muted">
+                            <Server className="w-2.5 h-2.5 text-primary" />
+                            <span className="text-text-subtle">{t('tunnels_badge_origin')}:</span>
+                            <span className="text-primary font-medium">{tItem._node_name}</span>
+                            <span className="text-text-subtle">({tItem._node_ip})</span>
+                          </div>
+                        )}
                       </div>
                       <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
                         {proto} DNAT
@@ -347,7 +433,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                         {t('btn_edit')}
                       </button>
                       <button
-                        onClick={() => onDeleteTunnel('iptables', tItem.TUNNEL_NAME)}
+                        onClick={() => onDeleteTunnel('iptables', tItem.TUNNEL_NAME, tItem._node_ip)}
                         className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-rose-500/10 hover:bg-rose-500/20 text-xs text-rose-400 border border-rose-500/25 transition-colors"
                       >
                         <Trash2 className="w-3 h-3" />
@@ -382,7 +468,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
             </button>
           </div>
 
-          {tunnels.gost.length === 0 ? (
+          {filteredGost.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-8 text-center rounded-xl bg-white/[0.02] border border-dashed border-white/10">
               <p className="text-xs font-semibold text-text-main mb-1">{t('tunnels_empty_gost')}</p>
               <p className="text-xs text-text-muted max-w-sm mb-3">{t('tunnels_empty_gost_desc')}</p>
@@ -395,7 +481,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {tunnels.gost.map((tItem) => {
+              {filteredGost.map((tItem) => {
                 const proto = (tItem.PROTOCOL || 'both').toUpperCase();
                 return (
                   <div
@@ -410,6 +496,14 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                         <div className="text-xs text-text-muted mt-0.5 font-mono">
                           {t('tunnels_col_destination')}: {tItem.TARGET_IP || '--'}
                         </div>
+                        {tItem._node_name && (
+                          <div className="flex items-center gap-1 mt-1 text-[11px] font-mono text-text-muted">
+                            <Server className="w-2.5 h-2.5 text-primary" />
+                            <span className="text-text-subtle">{t('tunnels_badge_origin')}:</span>
+                            <span className="text-primary font-medium">{tItem._node_name}</span>
+                            <span className="text-text-subtle">({tItem._node_ip})</span>
+                          </div>
+                        )}
                       </div>
                       <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/25">
                         {proto} Forwarder
@@ -435,7 +529,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                         {t('btn_edit')}
                       </button>
                       <button
-                        onClick={() => onDeleteTunnel('gost', tItem.TUNNEL_NAME)}
+                        onClick={() => onDeleteTunnel('gost', tItem.TUNNEL_NAME, tItem._node_ip)}
                         className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-rose-500/10 hover:bg-rose-500/20 text-xs text-rose-400 border border-rose-500/25 transition-colors"
                       >
                         <Trash2 className="w-3 h-3" />

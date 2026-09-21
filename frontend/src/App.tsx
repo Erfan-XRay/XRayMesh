@@ -12,6 +12,7 @@ import {
   RealmTunnel,
   TabId,
   MeshProtocol,
+  VersionInfo,
 } from './types';
 import { useTheme } from './theme/useTheme';
 import { useTranslation } from './i18n/useTranslation';
@@ -30,7 +31,7 @@ import { SpeedtestTab } from './components/Tabs/SpeedtestTab';
 import { PingTab } from './components/Tabs/PingTab';
 import { TunnelsTab } from './components/Tabs/TunnelsTab';
 
-import { Users, Zap, Activity, Network, Settings } from 'lucide-react';
+import { Users, Zap, Activity, Network, Settings, ArrowUpCircle } from 'lucide-react';
 import { copyToClipboard } from './utils/clipboard';
 
 const EMPTY_STATUS: StatusResponse = {
@@ -57,6 +58,8 @@ export default function App() {
   // Dashboard data
   const [status, setStatus] = useState<StatusResponse>(EMPTY_STATUS);
   const [peers, setPeers] = useState<Peer[]>([]);
+  const [clusterVersionDrift, setClusterVersionDrift] = useState<boolean>(false);
+  const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
   const [tunnels, setTunnels] = useState<TunnelsData>({ haproxy: [], iptables: [], gost: [], realm: [] });
   const [interfaces, setInterfaces] = useState<string[]>(['any']);
 
@@ -86,6 +89,7 @@ export default function App() {
   const [deleteTarget, setDeleteTarget] = useState<{
     type: 'haproxy' | 'iptables' | 'gost' | 'realm';
     name: string;
+    originNode?: string;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -157,14 +161,17 @@ export default function App() {
   // ─── Data Fetching ──────────────────────────────────────
   const loadDashboard = useCallback(async () => {
     try {
-      const [statusData, peersData, tunnelsData] = await Promise.all([
+      const [statusData, peersResult, tunnelsData, verData] = await Promise.all([
         api.fetchStatus(),
-        api.fetchPeers(),
+        api.fetchPeersData(),
         api.fetchTunnels(),
+        api.fetchVersionInfo(),
       ]);
       setStatus(statusData);
-      setPeers(peersData);
+      setPeers(peersResult.peers);
+      setClusterVersionDrift(!!peersResult.clusterVersionDrift);
       setTunnels(tunnelsData);
+      setVersionInfo(verData);
     } catch {
       // Silent fail on periodic poll
     }
@@ -336,7 +343,8 @@ export default function App() {
             tunnelModalEdit,
             formData.name,
             formData.target,
-            formData.ports
+            formData.ports,
+            formData.originNode
           );
         } else if (tunnelModalType === 'iptables') {
           msg = await api.saveIptablesTunnel(
@@ -346,7 +354,8 @@ export default function App() {
             formData.ports,
             formData.protocol || 'tcp',
             formData.interface || 'any',
-            formData.source_cidr || '0.0.0.0/0'
+            formData.source_cidr || '0.0.0.0/0',
+            formData.originNode
           );
         } else if (tunnelModalType === 'gost') {
           msg = await api.saveGostTunnel(
@@ -354,7 +363,8 @@ export default function App() {
             formData.name,
             formData.target,
             formData.ports,
-            formData.protocol || 'tcp'
+            formData.protocol || 'tcp',
+            formData.originNode
           );
         } else if (tunnelModalType === 'realm') {
           msg = await api.saveRealmTunnel(
@@ -362,7 +372,8 @@ export default function App() {
             formData.name,
             formData.target,
             formData.ports,
-            formData.protocol || 'tcp,udp'
+            formData.protocol || 'tcp,udp',
+            formData.originNode
           );
         }
         addToast(msg || '✓ Saved', 'success');
@@ -379,8 +390,8 @@ export default function App() {
   );
 
   const handleDeleteTunnelRequest = useCallback(
-    (type: 'haproxy' | 'iptables' | 'gost' | 'realm', name: string) => {
-      setDeleteTarget({ type, name });
+    (type: 'haproxy' | 'iptables' | 'gost' | 'realm', name: string, originNode?: string) => {
+      setDeleteTarget({ type, name, originNode });
       setDeleteModalOpen(true);
     },
     []
@@ -392,13 +403,13 @@ export default function App() {
     try {
       let msg = '';
       if (deleteTarget.type === 'haproxy') {
-        msg = await api.deleteHaproxyTunnel(deleteTarget.name);
+        msg = await api.deleteHaproxyTunnel(deleteTarget.name, deleteTarget.originNode);
       } else if (deleteTarget.type === 'iptables') {
-        msg = await api.deleteIptablesTunnel(deleteTarget.name);
+        msg = await api.deleteIptablesTunnel(deleteTarget.name, deleteTarget.originNode);
       } else if (deleteTarget.type === 'gost') {
-        msg = await api.deleteGostTunnel(deleteTarget.name);
+        msg = await api.deleteGostTunnel(deleteTarget.name, deleteTarget.originNode);
       } else if (deleteTarget.type === 'realm') {
-        msg = await api.deleteRealmTunnel(deleteTarget.name);
+        msg = await api.deleteRealmTunnel(deleteTarget.name, deleteTarget.originNode);
       }
       addToast(msg || '✓ Deleted', 'success');
       setDeleteModalOpen(false);
@@ -412,6 +423,40 @@ export default function App() {
       setIsDeleting(false);
     }
   }, [deleteTarget, addToast]);
+
+  // ─── Remote Node & Cluster Updating ─────────────────────
+  const handleUpdateNode = useCallback(
+    async (ip: string, hostname?: string) => {
+      addToast(`${t('version_updating')} (${hostname || ip})...`, 'info');
+      try {
+        const res = await api.updateNode(ip);
+        if (res.ok) {
+          addToast(res.message || '✓ Update initiated', 'success');
+        } else {
+          addToast(res.message || 'Update failed', 'error');
+        }
+        setTimeout(handleRefresh, 3000);
+      } catch (e: any) {
+        addToast(e.message || 'Update failed', 'error');
+      }
+    },
+    [addToast, handleRefresh, t]
+  );
+
+  const handleUpdateAllNodes = useCallback(async () => {
+    addToast(`${t('version_updating')} (Mesh)...`, 'info');
+    try {
+      const res = await api.updateAllNodes();
+      if (res.ok) {
+        addToast(res.message || '✓ Mesh update initiated', 'success');
+      } else {
+        addToast(res.message || 'Mesh update failed', 'error');
+      }
+      setTimeout(handleRefresh, 5000);
+    } catch (e: any) {
+      addToast(e.message || 'Mesh update failed', 'error');
+    }
+  }, [addToast, handleRefresh, t]);
 
   // ─── Computed Values ────────────────────────────────────
   const avgLatency = (() => {
@@ -477,6 +522,41 @@ export default function App() {
             />
           </div>
 
+          {/* Version Update Notification Banner */}
+          {versionInfo?.update_available && (
+            <div className="relative z-20 mb-6 p-4 md:p-5 rounded-2xl bg-gradient-to-r from-purple-950/40 via-purple-900/30 to-slate-900/50 border border-purple-500/30 backdrop-blur-xl shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-fade-in">
+              <div className="flex items-start md:items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center justify-center shrink-0 mt-0.5 md:mt-0">
+                  <ArrowUpCircle className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-sm font-bold text-text-main">
+                      {t('version_update_available')}: v{versionInfo.latest_version}
+                    </h4>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-primary/20 text-primary border border-primary/30">
+                      Current: v{versionInfo.current_version}
+                    </span>
+                  </div>
+                  <p className="text-xs text-text-muted mt-1 max-w-2xl leading-relaxed">
+                    {versionInfo.release_notes || 'A new update is available for XRayMesh.'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 w-full md:w-auto shrink-0">
+                {versionInfo.update_command && (
+                  <button
+                    onClick={() => handleCopy(versionInfo.update_command!)}
+                    className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-primary text-black font-semibold text-xs shadow-md shadow-primary/20 hover:opacity-90 active:scale-95 transition-all cursor-pointer"
+                    title={versionInfo.update_command}
+                  >
+                    <span>{t('version_copy_update_cmd')}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Overview Cards */}
           <div className="relative z-10">
             <OverviewCards
@@ -529,9 +609,12 @@ export default function App() {
             {activeTab === 'peers' && (
               <PeersTab
                 peers={peers}
+                clusterVersionDrift={clusterVersionDrift}
                 onRefresh={handleRefresh}
                 onQuickPing={handleQuickPing}
                 onQuickSpeedtest={handleQuickSpeedtest}
+                onUpdateNode={handleUpdateNode}
+                onUpdateAllNodes={handleUpdateAllNodes}
                 onCopy={handleCopy}
                 copiedKey={copiedKey}
                 t={t}

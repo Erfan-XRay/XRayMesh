@@ -7,6 +7,10 @@ export interface NodeInfo {
   encryption?: string;
   service_active?: boolean;
   easytier_version?: string;
+  xraymesh_version?: string;
+  web_port?: number;
+  ssl_enabled?: boolean;
+  web_domain?: string;
 }
 
 export interface SystemStats {
@@ -33,12 +37,18 @@ export interface Peer {
   tx_bytes?: string;
   rx_packets?: string | number;
   tx_packets?: string | number;
+  xraymesh_version?: string;
+  update_available?: boolean;
+  version_drift?: boolean;
 }
 
 export interface HaproxyTunnel {
   TUNNEL_NAME: string;
   TARGET_IP: string;
   PORT_SPEC: string;
+  _node_ip?: string;
+  _node_name?: string;
+  _is_local?: boolean;
 }
 
 export interface IptablesTunnel {
@@ -48,6 +58,9 @@ export interface IptablesTunnel {
   FORWARD_PROTOCOL?: string;
   IN_IF?: string;
   SOURCE_CIDR?: string;
+  _node_ip?: string;
+  _node_name?: string;
+  _is_local?: boolean;
 }
 
 export interface GostTunnel {
@@ -55,6 +68,9 @@ export interface GostTunnel {
   TARGET_IP: string;
   PORT_SPEC: string;
   PROTOCOL?: string;
+  _node_ip?: string;
+  _node_name?: string;
+  _is_local?: boolean;
 }
 
 export interface RealmTunnel {
@@ -62,6 +78,9 @@ export interface RealmTunnel {
   TARGET_IP: string;
   PORT_SPEC: string;
   PROTOCOL?: string;
+  _node_ip?: string;
+  _node_name?: string;
+  _is_local?: boolean;
 }
 
 export interface TunnelsData {
@@ -73,6 +92,15 @@ export interface TunnelsData {
   iptables_service?: string;
   gost_service?: string;
   realm_service?: string;
+}
+
+export interface VersionInfo {
+  current_version: string;
+  latest_version: string;
+  update_available: boolean;
+  changelog?: string[];
+  release_notes?: string;
+  update_command?: string;
 }
 
 export interface SpeedtestInterval {

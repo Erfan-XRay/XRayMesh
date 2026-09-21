@@ -1,4 +1,4 @@
-import { StatusResponse, Peer, TunnelsData, PingResult, SpeedtestData, NodeConfig, MeshInviteData, RollbackInfo } from '../types';
+import { StatusResponse, Peer, TunnelsData, PingResult, SpeedtestData, NodeConfig, MeshInviteData, RollbackInfo, VersionInfo } from '../types';
 
 export async function fetchAuthStatus(): Promise<{ authenticated: boolean; password_configured: boolean }> {
   const res = await fetch('/api/auth/status');
@@ -38,7 +38,15 @@ export async function fetchStatus(): Promise<StatusResponse> {
   return res.json();
 }
 
-export async function fetchPeers(): Promise<Peer[]> {
+export interface PeersResult {
+  peers: Peer[];
+  cluster_version_drift?: boolean;
+  clusterVersionDrift?: boolean;
+  current_version?: string;
+  latest_version?: string;
+}
+
+export async function fetchPeersData(): Promise<PeersResult> {
   const res = await fetch('/api/peers');
   if (!res.ok) throw new Error('Failed to fetch peers');
   const d = await res.json();
@@ -50,7 +58,23 @@ export async function fetchPeers(): Promise<Peer[]> {
     if (Array.isArray(rawPeers.peers)) list = rawPeers.peers;
     else list = Object.values(rawPeers);
   }
-  return list.filter((p) => p && p.cost !== 'Local' && p.ipv4);
+  const filtered = list.filter((p) => p && p.cost !== 'Local' && p.ipv4);
+  return {
+    peers: filtered,
+    cluster_version_drift: d.cluster_version_drift,
+    clusterVersionDrift: d.cluster_version_drift,
+    current_version: d.current_version,
+    latest_version: d.latest_version,
+  };
+}
+
+export async function fetchPeers(): Promise<Peer[]> {
+  const data = await fetchPeersData();
+  const list = data.peers;
+  (list as any).cluster_version_drift = data.cluster_version_drift;
+  (list as any).current_version = data.current_version;
+  (list as any).latest_version = data.latest_version;
+  return list;
 }
 
 export async function fetchTunnels(): Promise<TunnelsData> {
@@ -102,24 +126,25 @@ export async function saveHaproxyTunnel(
   isEdit: boolean,
   name: string,
   target: string,
-  ports: string
+  ports: string,
+  originNode?: string
 ): Promise<string> {
   const endpoint = isEdit ? '/api/tunnels/haproxy/edit' : '/api/tunnels/haproxy/create';
   const res = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, target, ports }),
+    body: JSON.stringify({ name, target, ports, origin_node: originNode }),
   });
   const d = await res.json();
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to save HAProxy tunnel');
   return d.message;
 }
 
-export async function deleteHaproxyTunnel(name: string): Promise<string> {
+export async function deleteHaproxyTunnel(name: string, originNode?: string): Promise<string> {
   const res = await fetch('/api/tunnels/haproxy/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, origin_node: originNode }),
   });
   const d = await res.json();
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to delete tunnel');
@@ -133,7 +158,8 @@ export async function saveIptablesTunnel(
   ports: string,
   protocol: string,
   iface: string,
-  sourceCidr: string
+  sourceCidr: string,
+  originNode?: string
 ): Promise<string> {
   const endpoint = isEdit ? '/api/tunnels/iptables/edit' : '/api/tunnels/iptables/create';
   const res = await fetch(endpoint, {
@@ -146,6 +172,7 @@ export async function saveIptablesTunnel(
       protocol,
       interface: iface,
       source_cidr: sourceCidr || '0.0.0.0/0',
+      origin_node: originNode,
     }),
   });
   const d = await res.json();
@@ -153,11 +180,11 @@ export async function saveIptablesTunnel(
   return d.message;
 }
 
-export async function deleteIptablesTunnel(name: string): Promise<string> {
+export async function deleteIptablesTunnel(name: string, originNode?: string): Promise<string> {
   const res = await fetch('/api/tunnels/iptables/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, origin_node: originNode }),
   });
   const d = await res.json();
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to delete tunnel');
@@ -169,24 +196,25 @@ export async function saveGostTunnel(
   name: string,
   target: string,
   ports: string,
-  protocol: string
+  protocol: string,
+  originNode?: string
 ): Promise<string> {
   const endpoint = isEdit ? '/api/tunnels/gost/edit' : '/api/tunnels/gost/create';
   const res = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, target, ports, protocol }),
+    body: JSON.stringify({ name, target, ports, protocol, origin_node: originNode }),
   });
   const d = await res.json();
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to save GOST tunnel');
   return d.message;
 }
 
-export async function deleteGostTunnel(name: string): Promise<string> {
+export async function deleteGostTunnel(name: string, originNode?: string): Promise<string> {
   const res = await fetch('/api/tunnels/gost/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, origin_node: originNode }),
   });
   const d = await res.json();
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to delete tunnel');
@@ -198,24 +226,25 @@ export async function saveRealmTunnel(
   name: string,
   target: string,
   ports: string,
-  protocol: string
+  protocol: string,
+  originNode?: string
 ): Promise<string> {
   const endpoint = isEdit ? '/api/tunnels/realm/edit' : '/api/tunnels/realm/create';
   const res = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, target, ports, protocol }),
+    body: JSON.stringify({ name, target, ports, protocol, origin_node: originNode }),
   });
   const d = await res.json();
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to save Realm tunnel');
   return d.message;
 }
 
-export async function deleteRealmTunnel(name: string): Promise<string> {
+export async function deleteRealmTunnel(name: string, originNode?: string): Promise<string> {
   const res = await fetch('/api/tunnels/realm/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, origin_node: originNode }),
   });
   const d = await res.json();
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to delete Realm tunnel');
@@ -366,4 +395,34 @@ export async function dismissClusterRollback(): Promise<void> {
   });
   if (!res.ok) throw new Error('Failed to dismiss rollback notice');
 }
+
+export async function fetchVersionInfo(): Promise<VersionInfo> {
+  const res = await fetch('/api/version');
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to fetch version info');
+  return d.data;
+}
+
+export async function updateNode(targetIp?: string): Promise<{ ok: boolean; message: string }> {
+  const res = await fetch('/api/cluster/update', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target_ip: targetIp || 'local' }),
+  });
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to update node');
+  return d;
+}
+
+export async function updateAllNodes(): Promise<{ ok: boolean; message: string; results?: Record<string, any> }> {
+  const res = await fetch('/api/cluster/update', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target_ip: 'all' }),
+  });
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to update all nodes');
+  return d;
+}
+
 

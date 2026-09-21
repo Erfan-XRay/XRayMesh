@@ -1,14 +1,17 @@
 import React, { useState, useMemo } from 'react';
 import { Peer } from '../../types';
-import { Search, Copy, Check, Activity, Zap, RefreshCw, Server } from 'lucide-react';
+import { Search, Copy, Check, Activity, Zap, RefreshCw, Server, ArrowUpCircle, AlertTriangle, Loader2 } from 'lucide-react';
 
 interface PeersTabProps {
   peers: Peer[];
+  clusterVersionDrift?: boolean;
   onRefresh: () => void;
   onQuickPing: (ip: string) => void;
   onQuickSpeedtest: (ip: string) => void;
   onCopy: (text: string) => void;
   copiedKey: string | null;
+  onUpdateNode?: (ip: string, hostname?: string) => Promise<void>;
+  onUpdateAllNodes?: () => Promise<void>;
   t: (key: any) => string;
 }
 
@@ -24,14 +27,54 @@ function formatTunnelProto(proto?: string): string {
 
 export const PeersTab: React.FC<PeersTabProps> = ({
   peers,
+  clusterVersionDrift,
   onRefresh,
   onQuickPing,
   onQuickSpeedtest,
   onCopy,
   copiedKey,
+  onUpdateNode,
+  onUpdateAllNodes,
   t,
 }) => {
   const [search, setSearch] = useState('');
+  const [updatingIps, setUpdatingIps] = useState<string[]>([]);
+  const [isUpdatingAll, setIsUpdatingAll] = useState(false);
+
+  const hasDrift = clusterVersionDrift || peers.some((p) => p.update_available || p.version_drift);
+
+  const handleUpdateSingle = async (ip: string, hostname?: string) => {
+    if (!onUpdateNode) return;
+    const confirmMsg = t('version_update_node_confirm')
+      .replace('{hostname}', hostname || ip)
+      .replace('{ip}', ip);
+    if (!window.confirm(confirmMsg)) return;
+
+    setUpdatingIps((prev) => [...prev, ip]);
+    try {
+      await onUpdateNode(ip, hostname);
+    } finally {
+      setTimeout(() => {
+        setUpdatingIps((prev) => prev.filter((x) => x !== ip));
+        onRefresh();
+      }, 3500);
+    }
+  };
+
+  const handleUpdateAll = async () => {
+    if (!onUpdateAllNodes) return;
+    if (!window.confirm(t('version_update_all_confirm'))) return;
+
+    setIsUpdatingAll(true);
+    try {
+      await onUpdateAllNodes();
+    } finally {
+      setTimeout(() => {
+        setIsUpdatingAll(false);
+        onRefresh();
+      }, 4500);
+    }
+  };
 
   const filteredPeers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -68,6 +111,40 @@ export const PeersTab: React.FC<PeersTabProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Cluster Version Drift Warning Banner */}
+      {hasDrift && (
+        <div className="mb-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 flex flex-wrap items-center justify-between gap-3 animate-fade-in">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-amber-300">{t('version_drift_warning_title')}</h3>
+              <p className="text-[11px] text-text-muted mt-0.5">{t('version_drift_warning_desc')}</p>
+            </div>
+          </div>
+          {onUpdateAllNodes && (
+            <button
+              onClick={handleUpdateAll}
+              disabled={isUpdatingAll}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-amber-500 text-black hover:bg-amber-400 text-xs font-bold transition-all shadow-sm disabled:opacity-50 active:scale-95"
+            >
+              {isUpdatingAll ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>{t('version_updating')}</span>
+                </>
+              ) : (
+                <>
+                  <ArrowUpCircle className="w-3.5 h-3.5" />
+                  <span>{t('version_update_all_btn')}</span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Filter Bar */}
       <div className="relative mb-4">
@@ -175,6 +252,47 @@ export const PeersTab: React.FC<PeersTabProps> = ({
                     <div className="font-mono text-text-main mt-0.5">{p.tx_bytes || '0 B'}</div>
                   </div>
                 </div>
+
+                {/* Version & Update Indicator */}
+                <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-black/20 border border-white/5 text-xs mb-3">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-text-muted">{t('version_title')}:</span>
+                    <span className="font-mono font-semibold text-text-main">
+                      {p.xraymesh_version || 'v2.0.0'}
+                    </span>
+                  </div>
+                  {p.update_available ? (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                      <ArrowUpCircle className="w-2.5 h-2.5" />
+                      {t('version_update_available')}
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                      {t('version_up_to_date')}
+                    </span>
+                  )}
+                </div>
+
+                {/* Per-node update button */}
+                {p.update_available && onUpdateNode && (
+                  <button
+                    onClick={() => handleUpdateSingle(p.ipv4, p.hostname)}
+                    disabled={updatingIps.includes(p.ipv4)}
+                    className="w-full mb-2.5 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-xs font-semibold text-amber-300 border border-amber-500/35 transition-all disabled:opacity-50 active:scale-95"
+                  >
+                    {updatingIps.includes(p.ipv4) ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>{t('version_updating')}</span>
+                      </>
+                    ) : (
+                      <>
+                        <ArrowUpCircle className="w-3.5 h-3.5" />
+                        <span>{t('version_update_btn')}</span>
+                      </>
+                    )}
+                  </button>
+                )}
 
                 {/* Action buttons */}
                 <div className="flex items-center gap-2">

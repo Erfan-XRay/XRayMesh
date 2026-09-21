@@ -305,6 +305,29 @@ export const translations = {
     modal_tunnel_proto: "Forward Protocol",
     modal_tunnel_interface: "Inbound Interface",
     modal_tunnel_source_cidr: "Allowed Source CIDR",
+
+    // Origin Server & Distributed Tunnels
+    tunnels_origin_server: "Origin Server (Hosted On)",
+    tunnels_origin_server_desc: "Select which mesh server executes and listens for this tunnel",
+    tunnels_origin_local: "This Node (Local)",
+    tunnels_filter_server: "Server Filter",
+    tunnels_filter_all_servers: "All Servers",
+    tunnels_badge_origin: "Origin",
+
+    // Version & Updates
+    version_title: "Version",
+    version_latest: "Latest",
+    version_update_available: "Update Available",
+    version_update_btn: "Update",
+    version_update_all_btn: "Update All Outdated Nodes",
+    version_updating: "Updating...",
+    version_drift_warning_title: "Version Drift Detected Across Mesh",
+    version_drift_warning_desc: "Some nodes in your mesh cluster are running different versions of XRayMesh. Updating all nodes ensures total compatibility and protocol reliability.",
+    version_update_node_confirm: "Update Node {hostname} ({ip}) to latest version? The service will restart automatically.",
+    version_update_all_confirm: "Update all outdated nodes across the mesh network simultaneously? Each node will download the latest assets and reload services.",
+    version_copy_update_cmd: "Copy Update Command",
+    version_cmd_copied: "Update command copied to clipboard!",
+    version_up_to_date: "Up to Date",
   },
 
   fa: {
@@ -613,5 +636,28 @@ export const translations = {
     modal_tunnel_proto: "پروتکل فوروارد",
     modal_tunnel_interface: "کارت شبکه ورودی",
     modal_tunnel_source_cidr: "محدوده مجاز مبدا (CIDR)",
+
+    // Origin Server & Distributed Tunnels
+    tunnels_origin_server: "سرور مبدأ (میزبان تونل)",
+    tunnels_origin_server_desc: "مشخص کنید این تونل روی کدام سرور شبکه مِش اجرا و لیسن شود",
+    tunnels_origin_local: "همین سرور (محلی)",
+    tunnels_filter_server: "فیلتر بر اساس سرور",
+    tunnels_filter_all_servers: "همه سرورها",
+    tunnels_badge_origin: "مبدأ",
+
+    // Version & Updates
+    version_title: "نسخه",
+    version_latest: "آخرین نسخه",
+    version_update_available: "به‌روزرسانی موجود است",
+    version_update_btn: "به‌روزرسانی",
+    version_update_all_btn: "به‌روزرسانی تمام نودهای قدیمی",
+    version_updating: "در حال به‌روزرسانی...",
+    version_drift_warning_title: "عدم هماهنگی نسخه در نودهای شبکه مِش",
+    version_drift_warning_desc: "برخی از سرورهای شبکه مِش از نسخه قدیمی‌تر XRayMesh استفاده می‌کنند. به‌روزرسانی تمام نودها به نسخه جدید، هماهنگی کامل پروتکل‌ها و پایداری شبکه را تضمین می‌کند.",
+    version_update_node_confirm: "آیا مایلید نود {hostname} ({ip}) به آخرین نسخه به‌روزرسانی شود؟ سرویس‌ها خودکار ری‌استارت می‌شوند.",
+    version_update_all_confirm: "آیا از به‌روزرسانی هم‌زمان تمام نودهای قدیمی کل شبکه مِش مطمئن هستید؟ هر سرور فایل‌های به‌روزرسانی را دریافت و سرویس را ری‌استارت خواهد کرد.",
+    version_copy_update_cmd: "کپی دستور به‌روزرسانی",
+    version_cmd_copied: "دستور به‌روزرسانی در کلیپ‌بورد کپی شد!",
+    version_up_to_date: "به‌روز",
   }
 };
