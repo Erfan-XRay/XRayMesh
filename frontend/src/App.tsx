@@ -490,6 +490,7 @@ export default function App() {
                 t={t}
                 lang={lang}
                 isRtl={isRtl}
+                activePeers={peers}
               />
             )}
             {activeTab === 'peers' && (

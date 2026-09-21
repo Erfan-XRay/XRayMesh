@@ -318,3 +318,42 @@ export async function restartMeshNode(): Promise<string> {
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to restart mesh node');
   return d.message || 'Mesh node restarted successfully.';
 }
+
+export interface ClusterBroadcastPayload {
+  protocol?: string;
+  enable_kcp?: boolean;
+  encryption?: boolean;
+  ipv6?: boolean;
+  mtu?: number;
+  network_secret?: string;
+}
+
+export interface ClusterBroadcastResponse {
+  ok: boolean;
+  message: string;
+  synced_nodes: string[];
+  applied_settings: Record<string, any>;
+}
+
+export async function broadcastClusterConfig(payload: ClusterBroadcastPayload): Promise<ClusterBroadcastResponse> {
+  const res = await fetch('/api/cluster/broadcast', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const d = await res.json();
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to broadcast cluster configuration');
+  return d;
+}
+
+export async function fetchClusterStatus(): Promise<{
+  watchdog_armed: boolean;
+  watchdog_remaining_sec: number;
+  backup_exists: boolean;
+  staged_exists: boolean;
+}> {
+  const res = await fetch('/api/cluster/status');
+  if (!res.ok) throw new Error('Failed to fetch cluster status');
+  return res.json();
+}
+

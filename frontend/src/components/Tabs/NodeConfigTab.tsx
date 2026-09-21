@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { NodeConfig, MeshProtocol, MeshInviteData, Language } from '../../types';
+import { NodeConfig, MeshProtocol, MeshInviteData, Language, Peer } from '../../types';
 import {
   fetchNodeConfig,
   saveNodeConfig,
@@ -11,7 +11,9 @@ import {
   startMeshNode,
   stopMeshNode,
   restartMeshNode,
+  fetchPeers,
 } from '../../services/api';
+import { ClusterSyncModal } from '../Modals/ClusterSyncModal';
 import { copyToClipboard } from '../../utils/clipboard';
 import {
   Settings,
@@ -49,6 +51,7 @@ interface NodeConfigTabProps {
   t: (key: any) => string;
   lang: Language;
   isRtl: boolean;
+  activePeers?: Peer[];
 }
 
 function sanitizePeerInput(raw: string, defaultPort?: number): string {
@@ -135,11 +138,14 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
   copiedKey,
   t,
   isRtl,
+  activePeers = [],
 }) => {
   const [config, setConfig] = useState<NodeConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
+  const [isClusterSyncModalOpen, setIsClusterSyncModalOpen] = useState(false);
+  const [fallbackPeers, setFallbackPeers] = useState<Peer[]>([]);
 
   // Form State
   const [networkName, setNetworkName] = useState('');
@@ -329,6 +335,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
 
       if (cfg.node_configured) {
         loadInvite();
+        fetchPeers().then(setFallbackPeers).catch(() => {});
       }
     } catch (e: any) {
       onNotify(e.message || 'Failed to load configuration', 'error');
@@ -336,6 +343,10 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
       setLoading(false);
     }
   }, [onNotify]);
+
+  const effectiveActivePeers = useMemo(() => {
+    return activePeers.length > 0 ? activePeers : fallbackPeers;
+  }, [activePeers, fallbackPeers]);
 
   const loadInvite = async () => {
     setLoadingInvite(true);
@@ -871,15 +882,34 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
           </button>
 
           {!wizardActive && (
-            <button
-              type="button"
-              onClick={() => handleSave()}
-              disabled={saving}
-              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-primary text-black font-semibold text-xs hover:bg-primary-hover transition-all shadow-md disabled:opacity-50"
-            >
-              {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-              {t('btn_save')}
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Single Node Save Button */}
+              <button
+                type="button"
+                onClick={() => handleSave()}
+                disabled={saving}
+                title={t('cluster_btn_save_local_desc')}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-text-main font-semibold text-xs transition-all shadow-sm active:scale-95 disabled:opacity-50"
+              >
+                {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 text-text-muted" />}
+                <span>{t('cluster_btn_save_local')}</span>
+              </button>
+
+              {/* Broadcast to All Nodes (Cluster SafeSync) Button */}
+              <button
+                type="button"
+                onClick={() => setIsClusterSyncModalOpen(true)}
+                disabled={saving}
+                title={t('cluster_btn_sync_all_desc')}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-primary via-cyan-500 to-teal-400 text-black font-bold text-xs hover:opacity-95 transition-all shadow-lg shadow-primary/20 active:scale-95 disabled:opacity-50"
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>{t('cluster_sync_btn')}</span>
+                <span className="hidden sm:inline px-1.5 py-0.5 rounded bg-black/20 text-[10px] font-mono uppercase tracking-wider">
+                  SafeSync
+                </span>
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -1895,6 +1925,34 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                 />
               </div>
             </div>
+
+            {/* Quick Cluster-Wide Sync Prompt for Protocol & Acceleration */}
+            <div className="mt-5 p-4 rounded-xl bg-gradient-to-r from-primary/10 via-cyan-500/10 to-transparent border border-primary/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <Globe className="w-4 h-4 text-primary" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-text-main flex items-center gap-1.5">
+                    <span>{t('cluster_quick_sync_title')}</span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                      Mesh-Wide
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-text-muted mt-0.5 leading-relaxed">
+                    {t('cluster_quick_sync_desc')}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsClusterSyncModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-black font-bold text-xs transition-all shadow-md shadow-primary/20 whitespace-nowrap self-stretch sm:self-auto justify-center"
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>{t('cluster_sync_btn')}</span>
+              </button>
+            </div>
           </div>
 
           {/* Section 3: One-Click Multi-Server Meshing (Invite & Join) */}
@@ -2073,6 +2131,78 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
             )}
           </div>
 
+          {/* Section: Save & Deploy Configuration (Local vs Cluster SafeSync) */}
+          <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
+            <h3 className="text-sm font-bold text-text-main flex items-center gap-2 mb-1">
+              <Sparkles className="w-4 h-4 text-primary" />
+              <span>{t('cluster_actions_section_title')}</span>
+            </h3>
+            <p className="text-xs text-text-muted mb-5">
+              {t('cluster_actions_section_desc')}
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Card 1: Local Only Save */}
+              <div className="p-4 rounded-xl bg-slate-900/40 border border-white/10 hover:border-white/20 transition-all flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-2.5 mb-2">
+                    <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
+                      <Save className="w-3.5 h-3.5 text-text-muted" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-text-main">{t('cluster_btn_save_local')}</h4>
+                      <span className="text-[10px] text-text-subtle font-mono">{t('cluster_badge_single_node')}</span>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-text-muted leading-relaxed mb-4">
+                    {t('cluster_btn_save_local_desc')}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleSave()}
+                  disabled={saving}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-text-main font-semibold text-xs transition-all active:scale-95 disabled:opacity-50"
+                >
+                  {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  <span>{t('cluster_btn_save_local')}</span>
+                </button>
+              </div>
+
+              {/* Card 2: Cluster SafeSync */}
+              <div className="p-4 rounded-xl bg-gradient-to-br from-primary/10 via-cyan-500/5 to-slate-900/60 border border-primary/25 hover:border-primary/40 transition-all flex flex-col justify-between shadow-lg shadow-primary/5">
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center">
+                        <Globe className="w-3.5 h-3.5 text-primary" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-text-main">{t('cluster_sync_btn')}</h4>
+                        <span className="text-[10px] text-cyan-400 font-mono font-semibold">{t('cluster_badge_all_nodes')}</span>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                      60s Watchdog
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-text-muted leading-relaxed mb-4">
+                    {t('cluster_btn_sync_all_desc')}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsClusterSyncModalOpen(true)}
+                  disabled={saving}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-primary via-cyan-500 to-teal-400 text-black font-bold text-xs hover:opacity-95 transition-all shadow-md shadow-primary/20 active:scale-95 disabled:opacity-50"
+                >
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>{t('cluster_sync_btn')}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Section 5: Danger Zone */}
           <div className="p-5 rounded-2xl bg-rose-500/5 border border-rose-500/20 backdrop-blur-xl shadow-lg">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -2128,6 +2258,30 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
           </div>
         </div>
       )}
+
+      {/* Cluster SafeSync Modal */}
+      <ClusterSyncModal
+        isOpen={isClusterSyncModalOpen}
+        onClose={() => setIsClusterSyncModalOpen(false)}
+        peers={effectiveActivePeers}
+        currentConfig={{
+          protocol,
+          enableKcp,
+          encryption,
+          ipv6,
+          mtu: Number(mtu),
+          networkSecret,
+          hostname,
+          ipv4,
+        }}
+        onNotify={onNotify}
+        onRefreshData={async () => {
+          await loadData();
+          onRefreshStatus();
+        }}
+        t={t}
+        isRtl={isRtl}
+      />
     </div>
   );
 };

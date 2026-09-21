@@ -22,16 +22,21 @@ import base64
 import time
 import uuid
 import hashlib
+import hmac
 import secrets
 import re
 import signal
 import threading
+import shutil
+import concurrent.futures
 from pathlib import Path
 
 # Paths & Defaults
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/xraymesh")
 BIN_DIR = os.path.join(INSTALL_DIR, "bin")
 CONFIG_FILE = os.environ.get("CONFIG_FILE", "/etc/xraymesh/config.env")
+CONFIG_BACKUP_FILE = CONFIG_FILE + ".bak"
+CONFIG_STAGED_FILE = CONFIG_FILE + ".staged"
 WEB_ENV_FILE = os.environ.get("WEB_ENV_FILE", "/etc/xraymesh/web.env")
 WEB_TOKEN_FILE = os.environ.get("WEB_TOKEN_FILE", "/etc/xraymesh/web-tokens.json")
 HAPROXY_DIR = os.environ.get("HAPROXY_DIR", "/etc/xraymesh/haproxy-tunnels")
@@ -647,6 +652,214 @@ def save_node_config_env(cfg):
     os.replace(tmp, CONFIG_FILE)
 
 
+# ==============================================================================
+# 🌐 SafeSync: Mesh-Wide Cluster Synchronization & Rollback Watchdog
+# ==============================================================================
+
+CLUSTER_NONCE_CACHE = {}  # nonce -> timestamp
+ROLLBACK_TIMER = None
+ROLLBACK_LOCK = threading.Lock()
+ROLLBACK_EXPIRY = 0.0
+
+ALLOWED_CLUSTER_KEYS = (
+    "PROTOCOL",
+    "ENABLE_KCP",
+    "ENCRYPTION",
+    "IPV6",
+    "MTU",
+    "NETWORK_SECRET",
+    "NETWORK_NAME",
+)
+
+
+def cleanup_nonce_cache():
+    now = time.time()
+    for n in list(CLUSTER_NONCE_CACHE.keys()):
+        if now - CLUSTER_NONCE_CACHE[n] > 120.0:
+            del CLUSTER_NONCE_CACHE[n]
+
+
+def verify_cluster_hmac(headers, raw_body):
+    """Verify HMAC-SHA256 signature on inter-node cluster commands."""
+    cleanup_nonce_cache()
+    sig = headers.get("X-Cluster-Signature", "").strip()
+    ts_str = headers.get("X-Cluster-Timestamp", "").strip()
+    nonce = headers.get("X-Cluster-Nonce", "").strip()
+
+    if not sig or not ts_str or not nonce:
+        return False, "Missing cluster authentication headers"
+
+    try:
+        ts = float(ts_str)
+    except Exception:
+        return False, "Invalid timestamp"
+
+    now = time.time()
+    if abs(now - ts) > 35.0:
+        return False, f"Request expired or clock skew (drift: {round(abs(now - ts), 1)}s)"
+
+    if nonce in CLUSTER_NONCE_CACHE:
+        return False, "Replay attack detected (nonce already processed)"
+
+    cfg = load_env_file(CONFIG_FILE)
+    secret = cfg.get("NETWORK_SECRET", "").strip()
+
+    # Also verify against staged secret or backup secret if recently committed
+    secrets_to_try = [secret]
+    if os.path.isfile(CONFIG_BACKUP_FILE):
+        bak_cfg = load_env_file(CONFIG_BACKUP_FILE)
+        bak_secret = bak_cfg.get("NETWORK_SECRET", "").strip()
+        if bak_secret and bak_secret not in secrets_to_try:
+            secrets_to_try.append(bak_secret)
+
+    body_hash = hashlib.sha256(raw_body if raw_body else b"{}").hexdigest()
+    msg = f"{ts_str}\n{nonce}\n{body_hash}".encode("utf-8")
+
+    verified = False
+    for s in secrets_to_try:
+        if not s:
+            continue
+        expected = hmac.new(s.encode("utf-8"), msg, hashlib.sha256).hexdigest()
+        if secrets.compare_digest(sig.lower(), expected.lower()):
+            verified = True
+            break
+
+    if not verified:
+        return False, "Invalid HMAC signature"
+
+    CLUSTER_NONCE_CACHE[nonce] = now
+    return True, ""
+
+
+def sign_cluster_request(secret, payload_dict):
+    """Sign inter-node cluster request using HMAC-SHA256."""
+    body_bytes = json.dumps(payload_dict, ensure_ascii=False).encode("utf-8")
+    ts_str = str(int(time.time()))
+    nonce = secrets.token_hex(16)
+    body_hash = hashlib.sha256(body_bytes).hexdigest()
+    msg = f"{ts_str}\n{nonce}\n{body_hash}".encode("utf-8")
+    sig = hmac.new(secret.encode("utf-8"), msg, hashlib.sha256).hexdigest()
+    headers = {
+        "Content-Type": "application/json; charset=utf-8",
+        "X-Cluster-Signature": sig,
+        "X-Cluster-Timestamp": ts_str,
+        "X-Cluster-Nonce": nonce,
+        "User-Agent": "XRayMesh-Cluster/1.8.0"
+    }
+    return body_bytes, headers
+
+
+def rollback_cluster_config():
+    """Revert configuration from backup and restart node service."""
+    if os.path.isfile(CONFIG_BACKUP_FILE):
+        try:
+            shutil.copy2(CONFIG_BACKUP_FILE, CONFIG_FILE)
+            try:
+                os.remove(CONFIG_STAGED_FILE)
+            except Exception:
+                pass
+            print("[Cluster-Rollback] Restored config from backup! Restarting node...", flush=True)
+            run_xraymesh_cmd(["node-restart"])
+            return True
+        except Exception as e:
+            print(f"[Cluster-Rollback] Error rolling back: {e}", flush=True)
+    return False
+
+
+def arm_rollback_watchdog(timeout_sec=60):
+    """Arm a self-healing rollback watchdog. If no peers connect within timeout, auto-rollback."""
+    global ROLLBACK_TIMER, ROLLBACK_EXPIRY
+    with ROLLBACK_LOCK:
+        if ROLLBACK_TIMER:
+            ROLLBACK_TIMER.cancel()
+        ROLLBACK_EXPIRY = time.time() + timeout_sec
+
+        def watchdog_action():
+            print("[Cluster-Watchdog] Timer expired! Verifying peer connectivity...", flush=True)
+            peers = get_easytier_peers()
+            connected = False
+            if peers:
+                for p in peers:
+                    cost = str(p.get("cost", "0"))
+                    if cost not in ("0", "Local", "none", ""):
+                        connected = True
+                        break
+            if not connected:
+                print("[Cluster-Watchdog] ⚠️ No active peers detected after configuration sync. Initiating self-healing rollback!", flush=True)
+                rollback_cluster_config()
+            else:
+                print("[Cluster-Watchdog] ✓ Active peer detected. Configuration verified safe.", flush=True)
+
+        ROLLBACK_TIMER = threading.Timer(timeout_sec, watchdog_action)
+        ROLLBACK_TIMER.daemon = True
+        ROLLBACK_TIMER.start()
+
+
+def disarm_rollback_watchdog():
+    """Disarm the rollback watchdog once configuration safety is verified."""
+    global ROLLBACK_TIMER, ROLLBACK_EXPIRY
+    with ROLLBACK_LOCK:
+        if ROLLBACK_TIMER:
+            ROLLBACK_TIMER.cancel()
+            ROLLBACK_TIMER = None
+        ROLLBACK_EXPIRY = 0.0
+
+
+def apply_staged_cluster_config():
+    """Apply staged configuration, create backup, arm watchdog, and restart service."""
+    if not os.path.isfile(CONFIG_STAGED_FILE):
+        return False, "No staged configuration found"
+
+    staged = load_env_file(CONFIG_STAGED_FILE)
+    if not staged:
+        return False, "Staged configuration file is empty"
+
+    current = load_env_file(CONFIG_FILE)
+    # 1. Create backup
+    try:
+        shutil.copy2(CONFIG_FILE, CONFIG_BACKUP_FILE)
+    except Exception as e:
+        return False, f"Failed to backup current config: {e}"
+
+    # 2. Merge only cluster-wide keys, preserving node identity (Hostname, IPV4, Port)
+    for k in ALLOWED_CLUSTER_KEYS:
+        if k in staged and staged[k] != "":
+            current[k] = staged[k]
+
+    # 3. Save new config
+    save_node_config_env(current)
+
+    # 4. Remove staged file
+    try:
+        os.remove(CONFIG_STAGED_FILE)
+    except Exception:
+        pass
+
+    # 5. Arm rollback watchdog
+    arm_rollback_watchdog(timeout_sec=60)
+
+    # 6. Restart node service in background thread so HTTP response returns immediately
+    def restart_bg():
+        time.sleep(0.4)
+        run_xraymesh_cmd(["node-restart"])
+
+    threading.Thread(target=restart_bg, daemon=True).start()
+    return True, "Config committed. Service restarting with 60s rollback watchdog."
+
+
+def send_cluster_http(target_ip, target_port, endpoint, secret, payload, timeout=6):
+    """Send signed HTTP POST request to a cluster peer."""
+    url = f"http://{target_ip}:{target_port}{endpoint}"
+    body_bytes, headers = sign_cluster_request(secret, payload)
+    req = urllib.request.Request(url, data=body_bytes, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return True, data
+    except Exception as e:
+        return False, str(e)
+
+
 class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
     """Custom HTTP handler with REST API and Single Page Application routing."""
 
@@ -801,6 +1014,18 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             })
             return
 
+        elif path == "/api/cluster/status":
+            now = time.time()
+            rem = max(0.0, ROLLBACK_EXPIRY - now) if ROLLBACK_EXPIRY > now else 0.0
+            self.send_json({
+                "ok": True,
+                "watchdog_armed": rem > 0,
+                "watchdog_remaining_sec": round(rem, 1),
+                "backup_exists": os.path.isfile(CONFIG_BACKUP_FILE),
+                "staged_exists": os.path.isfile(CONFIG_STAGED_FILE)
+            })
+            return
+
         elif path == "/api/node/config":
             config = load_env_file(CONFIG_FILE)
             peers_raw = config.get("PEERS", "")
@@ -921,6 +1146,81 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             clear_cookie = f"{SESSION_COOKIE_NAME}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT"
             self.send_json({"ok": True}, headers={"Set-Cookie": clear_cookie})
             return
+
+        # ======================================================================
+        # 🌐 Cluster Inter-Node SafeSync Endpoints (Authenticated via HMAC-SHA256)
+        # ======================================================================
+        if path in ("/api/cluster/prepare", "/api/cluster/commit", "/api/cluster/confirm", "/api/cluster/rollback"):
+            valid, err_msg = verify_cluster_hmac(self.headers, body)
+            if not valid:
+                self.send_json({"ok": False, "error": f"Cluster authentication failed: {err_msg}"}, status=403)
+                return
+
+            if path == "/api/cluster/prepare":
+                try:
+                    shutil.copy2(CONFIG_FILE, CONFIG_BACKUP_FILE)
+                except Exception as e:
+                    self.send_json({"ok": False, "error": f"Failed to create config backup: {e}"}, status=500)
+                    return
+
+                lines = []
+                for k in ALLOWED_CLUSTER_KEYS:
+                    if k in data and data[k] != "":
+                        v = str(data[k]).replace("'", "'\\''")
+                        lines.append(f"{k}='{v}'\n")
+
+                with open(CONFIG_STAGED_FILE, "w", encoding="utf-8") as f:
+                    f.writelines(lines)
+                try:
+                    os.chmod(CONFIG_STAGED_FILE, 0o600)
+                except Exception:
+                    pass
+
+                cur_cfg = load_env_file(CONFIG_FILE)
+                self.send_json({
+                    "ok": True,
+                    "status": "prepared",
+                    "node": cur_cfg.get("HOSTNAME", "node"),
+                    "staged_keys": [k for k in ALLOWED_CLUSTER_KEYS if k in data]
+                })
+                return
+
+            elif path == "/api/cluster/commit":
+                ok, msg = apply_staged_cluster_config()
+                cur_cfg = load_env_file(CONFIG_FILE)
+                if ok:
+                    self.send_json({
+                        "ok": True,
+                        "status": "committed",
+                        "node": cur_cfg.get("HOSTNAME", "node"),
+                        "message": msg
+                    })
+                else:
+                    self.send_json({"ok": False, "error": msg}, status=500)
+                return
+
+            elif path == "/api/cluster/confirm":
+                disarm_rollback_watchdog()
+                cur_cfg = load_env_file(CONFIG_FILE)
+                self.send_json({
+                    "ok": True,
+                    "status": "confirmed_safe",
+                    "node": cur_cfg.get("HOSTNAME", "node")
+                })
+                return
+
+            elif path == "/api/cluster/rollback":
+                ok = rollback_cluster_config()
+                cur_cfg = load_env_file(CONFIG_FILE)
+                if ok:
+                    self.send_json({
+                        "ok": True,
+                        "status": "rolled_back",
+                        "node": cur_cfg.get("HOSTNAME", "node")
+                    })
+                else:
+                    self.send_json({"ok": False, "error": "No backup file found or rollback failed."}, status=500)
+                return
 
         # Authenticated Endpoints
         auth_ok, _ = is_authenticated(self.headers)
@@ -1424,6 +1724,138 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 })
             else:
                 self.send_json({"ok": False, "error": f"Joined mesh '{net}', but node service failed to start: {msg}"}, status=500)
+        elif path == "/api/cluster/broadcast":
+            cfg = load_env_file(CONFIG_FILE)
+            current_secret = cfg.get("NETWORK_SECRET", "").strip()
+            if not current_secret:
+                self.send_json({"ok": False, "error": "Current node has no network secret configured."}, status=400)
+                return
+
+            new_protocol = data.get("protocol", cfg.get("PROTOCOL", "dual")).strip().lower()
+            new_kcp = "yes" if data.get("enable_kcp", cfg.get("ENABLE_KCP") == "yes") else "no"
+            new_encryption = "yes" if data.get("encryption", cfg.get("ENCRYPTION") != "no") else "no"
+            new_ipv6 = "yes" if data.get("ipv6", cfg.get("IPV6") == "yes") else "no"
+            new_mtu = str(data.get("mtu", cfg.get("MTU", "1380"))).strip()
+            new_secret = data.get("network_secret", current_secret).strip()
+
+            staged_payload = {
+                "PROTOCOL": new_protocol,
+                "ENABLE_KCP": new_kcp,
+                "ENCRYPTION": new_encryption,
+                "IPV6": new_ipv6,
+                "MTU": new_mtu,
+                "NETWORK_SECRET": new_secret,
+                "NETWORK_NAME": cfg.get("NETWORK_NAME", "xraymesh")
+            }
+
+            # Find active peer nodes in the mesh
+            peers_raw = get_easytier_peers() or []
+            if isinstance(peers_raw, dict):
+                peers_raw = peers_raw.get("peers", []) or []
+
+            active_peers = []
+            for p in peers_raw:
+                if not isinstance(p, dict):
+                    continue
+                vip = p.get("ipv4", "").strip()
+                cost = str(p.get("cost", "0"))
+                if vip and vip != cfg.get("IPV4", "") and cost not in ("0", "Local", "none", ""):
+                    active_peers.append({
+                        "ipv4": vip,
+                        "hostname": p.get("hostname", vip),
+                        "cost": cost
+                    })
+
+            if not active_peers:
+                self.send_json({"ok": False, "error": "No active connected peers found in the mesh to sync with."}, status=400)
+                return
+
+            # Phase 1: Prepare all remote peers
+            prep_results = {}
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                futures = {
+                    executor.submit(send_cluster_http, p["ipv4"], PORT, "/api/cluster/prepare", current_secret, staged_payload, 6): p
+                    for p in active_peers
+                }
+                for fut in concurrent.futures.as_completed(futures):
+                    p = futures[fut]
+                    try:
+                        ok, res = fut.result()
+                        prep_results[p["ipv4"]] = {"ok": ok, "res": res, "hostname": p["hostname"]}
+                    except Exception as ex:
+                        prep_results[p["ipv4"]] = {"ok": False, "res": str(ex), "hostname": p["hostname"]}
+
+            failed_preps = [f"{v['hostname']} ({ip}): {v['res']}" for ip, v in prep_results.items() if not v["ok"]]
+            if failed_preps:
+                # Abort Phase 1 - Rollback any nodes that prepared
+                for ip, v in prep_results.items():
+                    if v["ok"]:
+                        send_cluster_http(ip, PORT, "/api/cluster/rollback", current_secret, {}, 3)
+                self.send_json({
+                    "ok": False,
+                    "error": f"Preparation failed on {len(failed_preps)} node(s). Sync safely aborted without modifying cluster state.",
+                    "details": failed_preps
+                }, status=500)
+                return
+
+            # Phase 2: Commit remote peers
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                commit_futures = [
+                    executor.submit(send_cluster_http, p["ipv4"], PORT, "/api/cluster/commit", current_secret, {}, 6)
+                    for p in active_peers
+                ]
+                concurrent.futures.wait(commit_futures, timeout=8)
+
+            # Phase 3: Commit Controller locally
+            try:
+                shutil.copy2(CONFIG_FILE, CONFIG_BACKUP_FILE)
+            except Exception:
+                pass
+            for k, v in staged_payload.items():
+                if v != "":
+                    cfg[k] = v
+            save_node_config_env(cfg)
+            arm_rollback_watchdog(timeout_sec=60)
+
+            # Restart local controller service
+            run_xraymesh_cmd(["node-restart"])
+
+            # Phase 4: Launch asynchronous confirmation monitor in background
+            def monitor_and_confirm():
+                time.sleep(3.0)
+                start_check = time.time()
+                while time.time() - start_check < 30.0:
+                    peers = get_easytier_peers()
+                    has_connected_peer = False
+                    if peers:
+                        for p in peers:
+                            if str(p.get("cost", "0")) not in ("0", "Local", "none", ""):
+                                has_connected_peer = True
+                                break
+                    if has_connected_peer:
+                        print("[Cluster-Broadcast] Peers reconnected! Sending confirmation to disarm watchdogs...", flush=True)
+                        for p in active_peers:
+                            send_cluster_http(p["ipv4"], PORT, "/api/cluster/confirm", new_secret, {}, 4)
+                        disarm_rollback_watchdog()
+                        break
+                    time.sleep(2.0)
+
+            threading.Thread(target=monitor_and_confirm, daemon=True).start()
+
+            synced_names = [p["hostname"] for p in active_peers] + [cfg.get("HOSTNAME", "local")]
+            self.send_json({
+                "ok": True,
+                "message": f"Successfully synchronized settings to {len(active_peers)} peer(s). Nodes are restarting with self-healing watchdogs armed.",
+                "synced_nodes": synced_names,
+                "applied_settings": {
+                    "protocol": new_protocol,
+                    "enable_kcp": new_kcp == "yes",
+                    "encryption": new_encryption == "yes",
+                    "ipv6": new_ipv6 == "yes",
+                    "mtu": new_mtu,
+                    "secret_rotated": new_secret != current_secret
+                }
+            })
             return
 
         elif path == "/api/node/start":
