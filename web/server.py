@@ -814,11 +814,50 @@ def is_public_ipv4(ip_str):
     return True
 
 def get_server_public_ip():
-    """Detect public IPv4 of the server with multi-provider fallback (cached for 60s)."""
+    """Detect public IPv4 of the server prioritizing local physical interfaces before outbound NAT (cached 60s)."""
     now = time.time()
     if _public_ip_cache["ip"] and (now - _public_ip_cache["time"]) < 60:
         return _public_ip_cache["ip"]
 
+    # 1. Check web.env or config.env for explicit public IP
+    web_cfg = load_env_file(WEB_ENV_FILE)
+    node_cfg = load_env_file(CONFIG_FILE)
+    configured = web_cfg.get("WEB_PUBLIC_IP") or node_cfg.get("PUBLIC_IP")
+    if configured and is_public_ipv4(configured):
+        _public_ip_cache["ip"] = configured
+        _public_ip_cache["time"] = now
+        return configured
+
+    # 2. Check physical network interfaces for a directly bound public IPv4
+    try:
+        r = subprocess.run(["ip", "-o", "-4", "addr", "show", "scope", "global"], stdout=subprocess.PIPE, text=True, timeout=2)
+        for line in r.stdout.splitlines():
+            parts = line.split()
+            if len(parts) >= 4:
+                dev = parts[1]
+                if any(dev.startswith(pfx) for pfx in ("easytier", "tun", "tap", "docker", "br-", "veth", "wg", "lo")):
+                    continue
+                ip = parts[3].split("/")[0]
+                if is_public_ipv4(ip):
+                    _public_ip_cache["ip"] = ip
+                    _public_ip_cache["time"] = now
+                    return ip
+    except Exception:
+        pass
+
+    # 3. Route lookup (if default route source is public)
+    try:
+        r = subprocess.run(["ip", "route", "get", "1.1.1.1"], stdout=subprocess.PIPE, text=True, timeout=2)
+        m = re.search(r"src\s+([0-9.]+)", r.stdout)
+        if m and is_public_ipv4(m.group(1)):
+            ip = m.group(1)
+            _public_ip_cache["ip"] = ip
+            _public_ip_cache["time"] = now
+            return ip
+    except Exception:
+        pass
+
+    # 4. Multi-provider external query (fallback for 1:1 NAT cloud servers)
     providers = [
         "https://api.ipify.org",
         "https://icanhazip.com",

@@ -2606,7 +2606,34 @@ get_server_ip() {
     return 0
   fi
 
-  # 2. Multi-provider public IP query with fast timeouts
+  # 2. Check active SSH session (3rd token is the server IP the user connected to)
+  if [[ -n "${SSH_CONNECTION:-}" ]]; then
+    local ssh_srv_ip
+    ssh_srv_ip="$(awk '{print $3}' <<< "$SSH_CONNECTION" 2>/dev/null || true)"
+    if is_public_ipv4 "$ssh_srv_ip"; then
+      echo "$ssh_srv_ip"
+      return 0
+    fi
+  fi
+
+  # 3. Check physical network interfaces for a directly bound public IPv4 (e.g. eth0, ens3)
+  local iface_ip
+  while read -r iface_ip; do
+    if is_public_ipv4 "$iface_ip"; then
+      echo "$iface_ip"
+      return 0
+    fi
+  done < <(ip -o -4 addr show scope global 2>/dev/null | awk '$2 !~ /^(easytier|tun|tap|docker|br-|veth|wg|lo)/ {print $4}' | cut -d/ -f1)
+
+  # 4. Check kernel default route source IP
+  local route_ip
+  route_ip="$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.*src \([0-9.]*\).*/\1/p' | awk '{print $1; exit}')"
+  if is_public_ipv4 "$route_ip"; then
+    echo "$route_ip"
+    return 0
+  fi
+
+  # 5. Multi-provider public IP query (for cloud servers behind 1:1 NAT like AWS/GCP)
   local providers=(
     "https://api.ipify.org"
     "https://icanhazip.com"
@@ -2623,16 +2650,9 @@ get_server_ip() {
     fi
   done
 
-  # 3. Kernel route default interface source IP
-  candidate="$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.*src \([0-9.]*\).*/\1/p' | awk '{print $1; exit}')"
-  if is_public_ipv4 "$candidate"; then
-    echo "$candidate"
-    return 0
-  fi
-
-  # 4. Fallback if behind 1:1 NAT and provider queries failed:
-  if valid_ipv4_address "$candidate"; then
-    echo "$candidate"
+  # 6. Fallback if behind private NAT and curl failed
+  if valid_ipv4_address "$route_ip"; then
+    echo "$route_ip"
     return 0
   fi
 
