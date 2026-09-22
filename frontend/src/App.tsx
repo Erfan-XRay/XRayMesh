@@ -172,7 +172,13 @@ export default function App() {
         api.fetchVersionInfo(),
       ]);
       setStatus(statusData);
-      setPeers(peersResult.peers);
+      const localIp = peersResult.local_ip || statusData?.node?.ipv4 || '';
+      const markedPeers = peersResult.peers.map((p) => ({
+        ...p,
+        is_current: p.is_current ?? (localIp ? p.ipv4 === localIp : false),
+      }));
+      markedPeers.sort((a, b) => Number(b.is_current ?? false) - Number(a.is_current ?? false));
+      setPeers(markedPeers);
       setClusterVersionDrift(!!peersResult.clusterVersionDrift);
       setTunnels(tunnelsData);
       setVersionInfo(verData);

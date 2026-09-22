@@ -44,6 +44,8 @@ export interface PeersResult {
   clusterVersionDrift?: boolean;
   current_version?: string;
   latest_version?: string;
+  local_ip?: string;
+  local_hostname?: string;
 }
 
 export async function fetchPeersData(): Promise<PeersResult> {
@@ -58,13 +60,15 @@ export async function fetchPeersData(): Promise<PeersResult> {
     if (Array.isArray(rawPeers.peers)) list = rawPeers.peers;
     else list = Object.values(rawPeers);
   }
-  const filtered = list.filter((p) => p && p.cost !== 'Local' && p.ipv4);
+  const filtered = list.filter((p) => p && p.ipv4 && (p.cost !== 'Local' || p.is_current));
   return {
     peers: filtered,
     cluster_version_drift: d.cluster_version_drift,
     clusterVersionDrift: d.cluster_version_drift,
     current_version: d.current_version,
     latest_version: d.latest_version,
+    local_ip: d.local_ip,
+    local_hostname: d.local_hostname,
   };
 }
 

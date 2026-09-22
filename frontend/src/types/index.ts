@@ -41,6 +41,7 @@ export interface Peer {
   xraymesh_version?: string;
   update_available?: boolean;
   version_drift?: boolean;
+  is_current?: boolean;
 }
 
 export interface HaproxyTunnel {

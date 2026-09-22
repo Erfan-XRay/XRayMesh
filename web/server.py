@@ -33,7 +33,7 @@ import ssl
 from pathlib import Path
 
 # Paths & Defaults
-CURRENT_VERSION = "2.0.5"
+CURRENT_VERSION = "2.0.6"
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/xraymesh")
 BIN_DIR = os.path.join(INSTALL_DIR, "bin")
 CONFIG_FILE = os.environ.get("CONFIG_FILE", "/etc/xraymesh/config.env")
@@ -1355,12 +1355,20 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             peers_data = get_easytier_peers()
             v_info = get_version_info()
             latest_v = v_info.get("latest_version", CURRENT_VERSION)
+            node_cfg = load_env_file(CONFIG_FILE)
+            local_ip = (node_cfg.get("IPV4", "") or "").strip()
+            local_hostname = (node_cfg.get("HOSTNAME", "") or "").strip() or "local"
+            local_proto = (node_cfg.get("PROTOCOL", "") or "").strip() or "dual"
 
             peers_list = []
             if isinstance(peers_data, list):
                 peers_list = peers_data
             elif isinstance(peers_data, dict):
                 peers_list = peers_data.get("peers", []) or []
+
+            for p in peers_list:
+                if isinstance(p, dict) and p.get("ipv4"):
+                    p["is_current"] = bool(local_ip and p.get("ipv4", "").strip() == local_ip)
 
             if peers_list:
                 with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
@@ -1378,13 +1386,36 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                         p["update_available"] = is_newer_version(latest_v, p_ver)
                         p["version_drift"] = (p_ver != CURRENT_VERSION)
 
+            # Always include the current node so the Web UI can highlight it,
+            # even when it is alone in the mesh (easytier omits self from peers).
+            if local_ip and not any(isinstance(p, dict) and p.get("ipv4", "").strip() == local_ip for p in peers_list):
+                peers_list = [{
+                    "ipv4": local_ip,
+                    "hostname": local_hostname,
+                    "tunnel_proto": local_proto,
+                    "cost": "Local",
+                    "lat_ms": 0,
+                    "rx_bytes": "0 B",
+                    "tx_bytes": "0 B",
+                    "xraymesh_version": CURRENT_VERSION,
+                    "update_available": is_newer_version(latest_v, CURRENT_VERSION),
+                    "version_drift": False,
+                    "is_current": True,
+                }] + peers_list
+                if isinstance(peers_data, dict):
+                    peers_data["peers"] = peers_list
+                elif isinstance(peers_data, list):
+                    peers_data = peers_list
+
             has_drift = any(isinstance(p, dict) and p.get("version_drift") for p in peers_list)
             self.send_json({
                 "ok": True,
                 "data": peers_data,
                 "cluster_version_drift": has_drift,
                 "current_version": CURRENT_VERSION,
-                "latest_version": latest_v
+                "latest_version": latest_v,
+                "local_ip": local_ip,
+                "local_hostname": local_hostname
             })
             return
 

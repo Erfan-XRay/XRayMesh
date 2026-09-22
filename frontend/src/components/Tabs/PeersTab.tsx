@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Peer } from '../../types';
-import { Search, Copy, Check, Activity, Zap, RefreshCw, Server, ArrowUpCircle, AlertTriangle, Terminal } from 'lucide-react';
+import { Search, Copy, Check, Activity, Zap, RefreshCw, Server, ArrowUpCircle, AlertTriangle, Terminal, BadgeCheck } from 'lucide-react';
 
 interface PeersTabProps {
   peers: Peer[];
@@ -44,13 +44,16 @@ export const PeersTab: React.FC<PeersTabProps> = ({
 
   const filteredPeers = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return peers;
-    return peers.filter((p) => {
-      const ip = (p.ipv4 || '').toLowerCase();
-      const host = (p.hostname || '').toLowerCase();
-      const proto = (p.tunnel_proto || '').toLowerCase();
-      return ip.includes(q) || host.includes(q) || proto.includes(q);
-    });
+    const base = !q
+      ? peers
+      : peers.filter((p) => {
+          const ip = (p.ipv4 || '').toLowerCase();
+          const host = (p.hostname || '').toLowerCase();
+          const proto = (p.tunnel_proto || '').toLowerCase();
+          return ip.includes(q) || host.includes(q) || proto.includes(q);
+        });
+    // Always show the current node first
+    return [...base].sort((a, b) => Number(b.is_current ?? false) - Number(a.is_current ?? false));
   }, [peers, search]);
 
   return (
@@ -150,7 +153,8 @@ export const PeersTab: React.FC<PeersTabProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
           {filteredPeers.map((p) => {
             const lat = parseFloat(String(p.lat_ms || '0')) || 0;
-            const isDirect = p.cost === 1 || p.cost === '1' || Number(p.cost) <= 1;
+            const isCurrent = !!p.is_current;
+            const isDirect = isCurrent || p.cost === 1 || p.cost === '1' || p.cost === 'Local' || Number(p.cost) <= 1;
 
             let latBadgeColor = 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10';
             if (lat > 100) latBadgeColor = 'text-amber-400 border-amber-500/30 bg-amber-500/10';
@@ -159,8 +163,19 @@ export const PeersTab: React.FC<PeersTabProps> = ({
             return (
               <div
                 key={p.ipv4}
-                className="flex flex-col justify-between p-4 rounded-xl bg-slate-900/50 border border-white/10 hover:border-primary/30 interactive-card hover:shadow-lg transition-all shadow-sm"
+                className={`flex flex-col justify-between p-4 rounded-xl border interactive-card hover:shadow-lg transition-all shadow-sm ${
+                  isCurrent
+                    ? 'bg-primary/[0.06] border-primary/50 ring-1 ring-primary/30 hover:border-primary'
+                    : 'bg-slate-900/50 border-white/10 hover:border-primary/30'
+                }`}
               >
+                {/* Current-node banner */}
+                {isCurrent && (
+                  <div className="mb-2.5 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/15 border border-primary/30 text-[11px] font-bold text-primary">
+                    <BadgeCheck className="w-3.5 h-3.5" />
+                    <span>{t('peer_current_badge')}</span>
+                  </div>
+                )}
                 {/* Card Top */}
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div>
@@ -260,23 +275,29 @@ export const PeersTab: React.FC<PeersTabProps> = ({
                   </button>
                 )}
 
-                {/* Action buttons */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => onQuickPing(p.ipv4)}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-text-main border border-white/10 active:scale-95 transition-all"
-                  >
-                    <Activity className="w-3.5 h-3.5 text-text-muted" />
-                    {t('peer_card_btn_ping')}
-                  </button>
-                  <button
-                    onClick={() => onQuickSpeedtest(p.ipv4)}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-primary/15 hover:bg-primary/25 text-xs font-semibold text-primary border border-primary/30 active:scale-95 transition-all"
-                  >
-                    <Zap className="w-3.5 h-3.5" />
-                    {t('peer_card_btn_speedtest')}
-                  </button>
-                </div>
+                {/* Action buttons (ping/speedtest are meaningless against self) */}
+                {isCurrent ? (
+                  <div className="px-2.5 py-1.5 rounded-lg bg-white/[0.03] border border-white/5 text-[11px] text-text-muted text-center">
+                    {t('peer_current_desc')}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => onQuickPing(p.ipv4)}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-text-main border border-white/10 active:scale-95 transition-all"
+                    >
+                      <Activity className="w-3.5 h-3.5 text-text-muted" />
+                      {t('peer_card_btn_ping')}
+                    </button>
+                    <button
+                      onClick={() => onQuickSpeedtest(p.ipv4)}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-primary/15 hover:bg-primary/25 text-xs font-semibold text-primary border border-primary/30 active:scale-95 transition-all"
+                    >
+                      <Zap className="w-3.5 h-3.5" />
+                      {t('peer_card_btn_speedtest')}
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}

@@ -136,7 +136,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
               className="w-full px-3 py-2 bg-slate-900/80 border border-white/15 rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
             >
               <option value="">{t('speed_dest_placeholder')}</option>
-              {peers.map((p) => (
+              {peers.filter((p) => !p.is_current).map((p) => (
                 <option key={p.ipv4} value={p.ipv4}>
                   {p.ipv4} ({p.hostname || 'Peer'}) - {p.lat_ms || '0'}ms
                 </option>

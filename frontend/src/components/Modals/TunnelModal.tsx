@@ -196,7 +196,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
               className="w-full px-3.5 py-2 bg-slate-950 border border-white/15 rounded-xl font-mono text-text-main focus:outline-none focus:border-primary disabled:opacity-60"
             >
               <option value="">{t('tunnels_origin_local')}</option>
-              {peers.map((p) => (
+              {peers.filter((p) => !p.is_current).map((p) => (
                 <option key={p.ipv4} value={p.ipv4}>
                   {p.hostname || p.ipv4} ({p.ipv4})
                 </option>

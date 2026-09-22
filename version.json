@@ -1,7 +1,7 @@
 {
-  "version": "2.0.5",
-  "release_name": "XRayMesh v2.0.5 (Initial Loading Polish & CLI Update Directives)",
+  "version": "2.0.6",
+  "release_name": "XRayMesh v2.0.6 (Current Node Highlight in Peers)",
   "release_date": "2026-09-22",
-  "changelog": "Eliminated false onboarding flash with initial status loading gate, removed Web UI auto-updater in favor of one-click copyable server CLI update directives.",
+  "changelog": "Peers & Nodes now always includes the current node with a distinct highlight and 'This Node' badge; speedtest and tunnel origin selectors exclude self.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update"
 }
