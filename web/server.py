@@ -33,7 +33,7 @@ import ssl
 from pathlib import Path
 
 # Paths & Defaults
-CURRENT_VERSION = "2.0.8"
+CURRENT_VERSION = "2.1.0"
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/xraymesh")
 BIN_DIR = os.path.join(INSTALL_DIR, "bin")
 CONFIG_FILE = os.environ.get("CONFIG_FILE", "/etc/xraymesh/config.env")
@@ -93,7 +93,7 @@ def get_version_info():
         return VERSION_CACHE["data"]
 
     remote_data = None
-    branch = os.environ.get("XRAYMESH_BRANCH", "beta")
+    branch = os.environ.get("XRAYMESH_BRANCH", "main")
     url = f"https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/{branch}/version.json?t={int(now)}"
     try:
         req = urllib.request.Request(
@@ -595,7 +595,7 @@ def ensure_xraymesh_script():
     target = os.path.join(INSTALL_DIR, "xraymesh.sh")
     try:
         os.makedirs(INSTALL_DIR, exist_ok=True)
-        branch = os.environ.get("XRAYMESH_BRANCH", "beta")
+        branch = os.environ.get("XRAYMESH_BRANCH", "main")
         url = f"https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/{branch}/xraymesh.sh?t={int(time.time())}"
         import urllib.request
         req = urllib.request.Request(
@@ -729,7 +729,7 @@ def run_xraymesh_cmd(args, timeout=45):
     if not os.path.isfile(script):
         return False, (
             f"XRayMesh CLI script not found at {script}. "
-            "Please run: bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh)"
+            "Please run: bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh)"
         )
     cmd = ["bash", script] + args
     try:

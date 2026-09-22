@@ -1,7 +1,7 @@
 {
-  "version": "2.0.8",
-  "release_name": "XRayMesh v2.0.8 (Pre-Release Hardening & Security Polish)",
+  "version": "2.1.0",
+  "release_name": "XRayMesh v2.1.0 (Official Release & Web UI Evolution)",
   "release_date": "2026-09-22",
-  "changelog": "Hardened authentication with brute-force rate limiter, fixed one-click login token exchange & URL sanitization, added dynamic Secure cookie flags, and automated UFW firewall configuration.",
-  "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update"
+  "changelog": "Official v2.1.0 release featuring responsive Web UI Dashboard, SafeSync cluster synchronization, multi-protocol tunnels (HAProxy/Realm/GOST/iptables), in-mesh iperf3 speedtest, token & password authentication, and pre-release security hardening.",
+  "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh) update"
 }

@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="2.0.8"
+readonly VERSION="2.1.0"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
 readonly BIN_DIR="${INSTALL_DIR}/bin"
@@ -2347,7 +2347,7 @@ ensure_xraymesh_cli() {
       install -m 0755 "$current_source" "$target" 2>/dev/null || cp -f "$current_source" "$target" 2>/dev/null || true
     fi
   else
-    local branch="${XRAYMESH_BRANCH:-beta}" ts
+    local branch="${XRAYMESH_BRANCH:-main}" ts
     ts="$(date +%s)"
     local tmp_sh
     tmp_sh="$(mktemp)"
@@ -2370,7 +2370,7 @@ download_file_with_mirrors() {
   local target_path="$1"
   local rel_path="$2"
   local mode="${3:-0644}"
-  local branch="${XRAYMESH_BRANCH:-beta}"
+  local branch="${XRAYMESH_BRANCH:-main}"
   local ts
   ts="$(date +%s)"
 
@@ -2405,7 +2405,7 @@ download_file_with_mirrors() {
 
 update_web_assets() {
   mkdir -p "${WEB_DIR}/static" "${INSTALL_DIR}" /etc/xraymesh
-  local branch="${XRAYMESH_BRANCH:-beta}" updated=0
+  local branch="${XRAYMESH_BRANCH:-main}" updated=0
   local script_dir
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -2473,7 +2473,7 @@ update_web_assets() {
 update_node_full() {
   require_root
   require_linux
-  local branch="${XRAYMESH_BRANCH:-beta}"
+  local branch="${XRAYMESH_BRANCH:-main}"
   info "Starting node update (branch: ${branch})..."
 
   # 1. Update CLI, Web Server, frontend assets, runner and services
