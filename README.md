@@ -121,6 +121,8 @@ All forwarding tunnels (HAProxy, Realm, GOST, iptables) and SafeSync cluster act
 | `xraymesh port` | Change the Web Dashboard HTTP/HTTPS port |
 | `xraymesh ssl` | Configure free automated SSL/TLS (HTTPS) with a domain |
 | `xraymesh remove-ssl` | Revert Web Dashboard back to plain HTTP |
+| `xraymesh join` | Join an existing mesh network using invite code (`xrmesh://...`) |
+| `xraymesh invite` | Display mesh invite code to connect other servers to this mesh |
 | `xraymesh status` | Show real-time node, mesh, and Web UI status summary |
 | `xraymesh peers` | Show connected peers and live latency via EasyTier CLI |
 | `xraymesh routes` | Show the EasyTier mesh routing table |

@@ -118,6 +118,8 @@ xraymesh
 | `xraymesh port` | تغییر پورت وب پنل (HTTP یا HTTPS) |
 | `xraymesh ssl` | تنظیم گواهی رایگان امنیتی SSL/TLS (HTTPS) با دامنه |
 | `xraymesh remove-ssl` | بازگرداندن وب پنل به حالت ساده HTTP |
+| `xraymesh join` | اتصال سرور به شبکه مش با کد دعوت (`xrmesh://...`) بدون نیاز به وب |
+| `xraymesh invite` | نمایش کد دعوت مش این سرور برای اتصال سرورهای دیگر |
 | `xraymesh status` | نمایش خلاصه وضعیت سرویس مش، وب پنل و مشخصات نود |
 | `xraymesh peers` | نمایش نودهای متصل و تاخیر پینگ لحظه‌ای (EasyTier CLI) |
 | `xraymesh routes` | مشاهده جدول مسیریابی هسته شبکه مش |

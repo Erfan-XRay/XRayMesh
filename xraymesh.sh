@@ -579,6 +579,20 @@ setup_node() {
   say "  Configure Mesh Node" "$BOLD$CYAN"
   printf '\n'
 
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    say "  Choose setup method:" "$BOLD$YELLOW"
+    printf '  %b[ 1 ]%b  Join Existing Mesh Network via Invite Code (xrmesh://)\n' "$BOLD$CYAN" "$RESET"
+    printf '  %b[ 2 ]%b  Create New Mesh Network Manually\n\n' "$BOLD$GREEN" "$RESET"
+    local s_mode="1"
+    read -r -p "  Select an option [1-2, default: 1]: " s_mode
+    s_mode="${s_mode:-1}"
+    if [[ "$s_mode" == "1" ]]; then
+      join_mesh_invite
+      return $?
+    fi
+    printf '\n'
+  fi
+
   local name secret hostname ipv4 protocol port peers encryption ipv6 mtu
   local config_backup="" had_config=0 service_was_active=0
   local default_name="xraymesh" default_secret="" default_hostname default_ipv4="10.144.144.1"
@@ -714,6 +728,170 @@ setup_node() {
     info "Re-enabling the existing Realm TCP/UDP tunnels."
     apply_realm_config || warn "The mesh is online, but Realm tunnels need attention."
   fi
+}
+
+show_mesh_invite() {
+  require_root
+  require_linux
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    fail "Mesh node is not configured yet. Configure the node or join a mesh first."
+    pause
+    return 1
+  fi
+
+  header
+  section "MESH INVITE CODE"
+
+  local net secret proto port pub_ip invite_code
+  # shellcheck disable=SC1090
+  source "$CONFIG_FILE" 2>/dev/null || true
+  net="${NETWORK_NAME:-xraymesh}"
+  secret="${NETWORK_SECRET:-}"
+  proto="${PROTOCOL:-dual}"
+  port="${PORT:-11010}"
+  pub_ip="$(get_server_ip)"
+
+  if [[ -z "$secret" ]]; then
+    fail "Current node has no network secret configured."
+    pause
+    return 1
+  fi
+
+  local endpoint="${pub_ip}:${port}"
+  invite_code="$(python3 -c "import sys, json, base64
+d = {
+    'v': 1,
+    'net': sys.argv[1],
+    'secret': sys.argv[2],
+    'endpoint': sys.argv[3],
+    'proto': sys.argv[4]
+}
+token = base64.b64encode(json.dumps(d).encode('utf-8')).decode('utf-8')
+print(f'xrmesh://{token}')
+" "$net" "$secret" "$endpoint" "$proto" 2>/dev/null || true)"
+
+  ok "Generated mesh invite code for this server."
+  printf '\n'
+  say "  ┌── Mesh Invite Code ─────────────────────────────────────────" "$DIM$BLUE"
+  printf '  │  %b%s%b\n' "$BOLD$GREEN" "$invite_code" "$RESET"
+  say "  ├── Mesh Parameters ──────────────────────────────────────────" "$DIM$BLUE"
+  printf '  │  • %-16s : %s\n' "Network Name" "$net"
+  printf '  │  • %-16s : %s\n' "Protocol" "$proto"
+  printf '  │  • %-16s : %s\n' "Peer Endpoint" "$endpoint"
+  say "  └─────────────────────────────────────────────────────────────" "$DIM$BLUE"
+  printf '\n'
+  info "On another server, run 'xraymesh join' and paste this code to connect instantly."
+  pause
+}
+
+join_mesh_invite() {
+  require_root
+  require_linux
+  [[ -x "${BIN_DIR}/easytier-core" ]] || install_core
+
+  header
+  section "JOIN MESH VIA INVITE CODE"
+  info "Paste an invite code (xrmesh://...) from another server to join its mesh overlay."
+  printf '\n'
+
+  local raw_invite="${1:-}"
+  if [[ -z "$raw_invite" ]]; then
+    read -r -p "  Enter Mesh Invite Code (xrmesh://...): " raw_invite
+  fi
+  raw_invite="${raw_invite#"${raw_invite%%[![:space:]]*}"}"
+  raw_invite="${raw_invite%"${raw_invite##*[![:space:]]}"}"
+
+  if [[ -z "$raw_invite" ]]; then
+    fail "No invite code provided."
+    pause
+    return 1
+  fi
+
+  # Decode invite token using Python
+  local decoded_json
+  decoded_json="$(python3 -c '
+import sys, base64, json
+raw = sys.argv[1].strip().strip("\"\x27")
+token = raw.replace("xrmesh://", "").strip()
+try:
+    data = json.loads(base64.b64decode(token).decode("utf-8"))
+    print(json.dumps(data))
+except Exception:
+    sys.exit(1)
+' "$raw_invite" 2>/dev/null || true)"
+  if [[ -z "$decoded_json" ]]; then
+    fail "Invalid invite code format. Make sure you copied the complete 'xrmesh://...' link."
+    pause
+    return 1
+  fi
+
+  local net secret proto endpoint
+  net="$(python3 -c "import sys, json; d=json.loads(sys.argv[1]); print(d.get('net', '').strip())" "$decoded_json")"
+  secret="$(python3 -c "import sys, json; d=json.loads(sys.argv[1]); print(d.get('secret', '').strip())" "$decoded_json")"
+  proto="$(python3 -c "import sys, json; d=json.loads(sys.argv[1]); print(d.get('proto', 'dual').strip().lower())" "$decoded_json")"
+  endpoint="$(python3 -c "import sys, json; d=json.loads(sys.argv[1]); print(d.get('endpoint', '').strip())" "$decoded_json")"
+
+  if [[ -z "$net" || -z "$secret" ]]; then
+    fail "The invite code is missing essential network credentials."
+    pause
+    return 1
+  fi
+
+  printf '\n'
+  say "  ┌── Decoded Mesh Network Details ─────────────────────────────" "$DIM$BLUE"
+  printf '  │  • %-16s : %b%s%b\n' "Network Name" "$BOLD$CYAN" "$net" "$RESET"
+  printf '  │  • %-16s : %b%s%b\n' "Protocol" "$BOLD$CYAN" "$proto" "$RESET"
+  printf '  │  • %-16s : %b%s%b\n' "Peer Endpoint" "$BOLD$GREEN" "${endpoint:-Relayed Peer}" "$RESET"
+  printf '  │  • %-16s : %bVerified (Encrypted)%b\n' "Security" "$GREEN" "$RESET"
+  say "  └─────────────────────────────────────────────────────────────" "$DIM$BLUE"
+  printf '\n'
+
+  local default_hostname default_ipv4 default_port="11010"
+  default_hostname="$(hostname -s 2>/dev/null || echo "node")"
+
+  # Generate suggested random IP in 10.144.144.2 - 254
+  local rand_host=$(( (RANDOM % 240) + 10 ))
+  default_ipv4="10.144.144.${rand_host}"
+
+  if [[ -f "$CONFIG_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$CONFIG_FILE" 2>/dev/null || true
+    [[ -n "${IPV4:-}" && "$IPV4" != "10.144.144.1" ]] && default_ipv4="$IPV4"
+    [[ -n "${HOSTNAME:-}" ]] && default_hostname="$HOSTNAME"
+    [[ -n "${PORT:-}" ]] && default_port="$PORT"
+  fi
+
+  local hostname ipv4 port
+  hostname="$(prompt_default "Server Node Hostname" "$default_hostname")"
+
+  while :; do
+    ipv4="$(prompt_default "Virtual IPv4 in Mesh Overlay" "$default_ipv4")"
+    valid_ip "$ipv4" && break
+    warn "Enter a valid address from the private IP range (e.g. 10.144.144.x)."
+  done
+
+  while :; do
+    port="$(prompt_default "Mesh Listen Port" "$default_port")"
+    valid_port "$port" && break
+    warn "The port must be between 1 and 65535."
+  done
+
+  local peers_val=""
+  if [[ -n "$endpoint" ]]; then
+    peers_val="$endpoint"
+  fi
+
+  info "Applying configuration and connecting to mesh network '${net}'..."
+  write_config "$net" "$secret" "$hostname" "$ipv4" "$proto" "$port" "$peers_val" "yes" "no" "1380" "no"
+
+  if apply_node_config; then
+    systemctl restart xraymesh-web.service >/dev/null 2>&1 || true
+    ok "Successfully joined mesh '${net}' as ${hostname} (${ipv4})!"
+    info "Run 'xraymesh peers' anytime to see connected nodes and live latency."
+  else
+    fail "Failed to start mesh service. Please check logs: journalctl -u xraymesh.service -n 30"
+  fi
+  pause
 }
 
 delete_mesh_noninteractive() {
@@ -2928,11 +3106,15 @@ except Exception: pass
   printf '\n'
 
   printf '  %b[ 1 ]%b  Open XRayMesh Control Panel Menu\n' "$BOLD$GREEN" "$RESET"
-  printf '  %b[ 2 ]%b  Exit to Terminal\n\n' "$GRAY" "$RESET"
+  printf '  %b[ 2 ]%b  Join an Existing Mesh Network (Invite Code)\n' "$BOLD$CYAN" "$RESET"
+  printf '  %b[ 3 ]%b  Exit to Terminal\n\n' "$GRAY" "$RESET"
   local post_choice="1"
-  read -r -p "  Select an option [1-2, default: 1]: " post_choice
+  read -r -p "  Select an option [1-3, default: 1]: " post_choice
   post_choice="${post_choice:-1}"
-  if [[ "$post_choice" == "2" || "$post_choice" =~ ^[Qq]$ ]]; then
+  if [[ "$post_choice" == "2" ]]; then
+    join_mesh_invite
+    return 0
+  elif [[ "$post_choice" == "3" || "$post_choice" =~ ^[Qq]$ ]]; then
     printf '\n%b  ✓ Installation finished. Run %bxraymesh%b at any time to open the menu.%b\n\n' "$GREEN" "$BOLD$CYAN" "$GREEN" "$RESET"
     return 1
   fi
@@ -3374,30 +3556,39 @@ menu() {
     printf '  %b[%b 5%b]%b  Remove SSL (Revert to HTTP)\n' "$DIM$GRAY" "$BOLD$CYAN" "$DIM$GRAY" "$RESET"
     printf '\n'
 
-    say "  ── Service Management ──────────────────────────────────────" "$BOLD$CYAN"
-    printf '  %b[%b 6%b]%b  Restart All Services (Mesh, Web, Tunnels)\n' "$DIM$GRAY" "$BOLD$BLUE" "$DIM$GRAY" "$RESET"
-    printf '  %b[%b 7%b]%b  Stop All Services\n' "$DIM$GRAY" "$BOLD$RED" "$DIM$GRAY" "$RESET"
-    printf '  %b[%b 8%b]%b  Start All Services\n' "$DIM$GRAY" "$BOLD$GREEN" "$DIM$GRAY" "$RESET"
-    printf '  %b[%b 9%b]%b  View Live Logs\n' "$DIM$GRAY" "$BOLD$CYAN" "$DIM$GRAY" "$RESET"
-    printf '  %b[%b10%b]%b  Configure Mesh Node (Web UI / Advanced CLI)\n' "$DIM$GRAY" "$BOLD$YELLOW" "$DIM$GRAY" "$RESET"
+    say "  ── Mesh & Node Management ──────────────────────────────────" "$BOLD$CYAN"
+    printf '  %b[%b 6%b]%b  Join Mesh Network via Invite Code (xrmesh://)\n' "$DIM$GRAY" "$BOLD$CYAN" "$DIM$GRAY" "$RESET"
+    printf '  %b[%b 7%b]%b  Configure Mesh Node (CLI Wizard)\n' "$DIM$GRAY" "$BOLD$YELLOW" "$DIM$GRAY" "$RESET"
+    printf '  %b[%b 8%b]%b  Show Mesh Invite Code (for connecting other servers)\n' "$DIM$GRAY" "$BOLD$GREEN" "$DIM$GRAY" "$RESET"
+    printf '  %b[%b 9%b]%b  Restart All Services (Mesh, Web, Tunnels)\n' "$DIM$GRAY" "$BOLD$BLUE" "$DIM$GRAY" "$RESET"
+    printf '  %b[%b10%b]%b  Stop All Services\n' "$DIM$GRAY" "$BOLD$RED" "$DIM$GRAY" "$RESET"
+    printf '  %b[%b11%b]%b  Start All Services\n' "$DIM$GRAY" "$BOLD$GREEN" "$DIM$GRAY" "$RESET"
+    printf '  %b[%b12%b]%b  View Live Logs\n' "$DIM$GRAY" "$BOLD$CYAN" "$DIM$GRAY" "$RESET"
     printf '\n'
 
     say "  ── System & Maintenance ────────────────────────────────────" "$BOLD$CYAN"
-    printf '  %b[%b11%b]%b  Update XRayMesh to Latest Version\n' "$DIM$GRAY" "$BOLD$GREEN" "$DIM$GRAY" "$RESET"
-    printf '  %b[%b12%b]%b  Completely Uninstall XRayMesh\n' "$DIM$GRAY" "$BOLD$RED" "$DIM$GRAY" "$RESET"
+    printf '  %b[%b13%b]%b  Update XRayMesh to Latest Version\n' "$DIM$GRAY" "$BOLD$GREEN" "$DIM$GRAY" "$RESET"
+    printf '  %b[%b14%b]%b  Completely Uninstall XRayMesh\n' "$DIM$GRAY" "$BOLD$RED" "$DIM$GRAY" "$RESET"
     printf '  %b[%b 0%b]%b  Exit\n' "$DIM$GRAY" "$GRAY" "$DIM$GRAY" "$RESET"
     printf '\n'
     printf '%b  Tip: All tunnels (HAProxy, Realm, Gost, iptables), SafeSync, and diagnostics\n' "$DIM$GRAY"
     printf '       are managed 100%% from the modern Web Dashboard.%b\n\n' "$RESET"
 
-    read -r -p "  Select an option [0-12]: " choice || { choice=""; continue; }
+    read -r -p "  Select an option [0-14]: " choice || { choice=""; continue; }
     case "$choice" in
       1) run_screen generate_web_token ;;
       2) run_screen set_web_password ;;
       3) run_screen configure_web_port ;;
       4) run_screen configure_web_ssl; pause ;;
       5) run_screen remove_web_ssl ;;
-      6)
+      6) run_screen join_mesh_invite ;;
+      7)
+        IN_MAIN_MENU=0
+        run_screen setup_node
+        IN_MAIN_MENU=1
+        ;;
+      8) run_screen show_mesh_invite ;;
+      9)
         info "Restarting all XRayMesh services..."
         apply_node_config >/dev/null 2>&1 || true
         systemctl restart xraymesh-web.service 2>/dev/null || true
@@ -3405,13 +3596,13 @@ menu() {
         ok "Services restarted."
         pause
         ;;
-      7)
+      10)
         info "Stopping all XRayMesh services..."
         systemctl stop xraymesh.service xraymesh-web.service xraymesh-haproxy.service xraymesh-iptables.service xraymesh-gost.service xraymesh-realm.service xraymesh-iperf.service 2>/dev/null || true
         warn "All services stopped."
         pause
         ;;
-      8)
+      11)
         info "Starting all XRayMesh services..."
         apply_node_config >/dev/null 2>&1 || true
         systemctl start xraymesh-web.service 2>/dev/null || true
@@ -3419,7 +3610,7 @@ menu() {
         ok "Services started."
         pause
         ;;
-      9)
+      12)
         printf '\n  [1] Mesh Logs  [2] Web Logs  [3] Tunnel Logs\n'
         read -r -p "  Choice [1-3]: " l_choice
         case "$l_choice" in
@@ -3428,25 +3619,8 @@ menu() {
           3) journalctl -u xraymesh-haproxy.service -u xraymesh-gost.service -u xraymesh-realm.service -u xraymesh-iptables.service -f -n 50 ;;
         esac
         ;;
-      10)
-        IN_MAIN_MENU=0
-        if [[ ! -f "$CONFIG_FILE" ]]; then
-          header
-          say "  Configure Mesh Node" "$BOLD$CYAN"
-          info "We strongly recommend configuring your Mesh Node via the modern Web Dashboard:"
-          printf '  %b%s%b\n\n' "$BOLD$GREEN" "$web_url" "$RESET"
-          local run_cli="n"
-          read -r -p "  Do you want to run the advanced terminal node wizard anyway? [y/N]: " run_cli
-          if [[ "$run_cli" =~ ^[Yy]$ ]]; then
-            run_screen setup_node
-          fi
-        else
-          run_screen setup_node
-        fi
-        IN_MAIN_MENU=1
-        ;;
-      11) IN_MAIN_MENU=0; run_screen update_core; IN_MAIN_MENU=1 ;;
-      12)
+      13) IN_MAIN_MENU=0; run_screen update_core; IN_MAIN_MENU=1 ;;
+      14)
         IN_MAIN_MENU=0
         run_screen uninstall_app
         IN_MAIN_MENU=1
@@ -3477,6 +3651,8 @@ main() {
     fi
     ;;
   setup-node) require_linux; setup_node ;;
+  join|join-mesh) shift; require_root; require_linux; join_mesh_invite "$@" ;;
+  invite|invite-code) require_root; require_linux; show_mesh_invite ;;
   status)
     local mesh_state web_state iperf_state port pub_ip proto domain v_ip host_name url
     mesh_state="$(systemctl is-active xraymesh.service 2>/dev/null || echo inactive)"
@@ -3603,6 +3779,8 @@ main() {
     printf '  %-20s %s\n' "xraymesh port" "Change the Web Dashboard HTTP/HTTPS port"
     printf '  %-20s %s\n' "xraymesh ssl" "Configure free automated SSL/TLS (HTTPS) domain certificate"
     printf '  %-20s %s\n' "xraymesh remove-ssl" "Revert Web Dashboard back to HTTP"
+    printf '  %-20s %s\n' "xraymesh join" "Join an existing mesh network using invite code (xrmesh://)"
+    printf '  %-20s %s\n' "xraymesh invite" "Show invite code to connect other servers to this mesh"
     printf '  %-20s %s\n' "xraymesh status" "Show node, mesh, and Web UI status summary"
     printf '  %-20s %s\n' "xraymesh peers" "Show connected peers and live latency"
     printf '  %-20s %s\n' "xraymesh routes" "Show mesh routing table"
@@ -3618,7 +3796,7 @@ main() {
     printf '\n'
     ;;
   *)
-    echo "Usage: $0 [menu|token|password|port|ssl|remove-ssl|status|peers|routes|logs|self-test|start|restart|stop|update|delete|uninstall|version|help]"
+    echo "Usage: $0 [menu|join|invite|token|password|port|ssl|remove-ssl|status|peers|routes|logs|self-test|start|restart|stop|update|delete|uninstall|version|help]"
     exit 2
     ;;
   esac
