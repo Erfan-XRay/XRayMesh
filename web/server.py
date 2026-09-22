@@ -1282,6 +1282,12 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
         except Exception as e:
             self.send_error(500, f"Error reading file: {e}")
 
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Server", f"XRayMesh-Web/{CURRENT_VERSION}")
+        self.end_headers()
+
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path

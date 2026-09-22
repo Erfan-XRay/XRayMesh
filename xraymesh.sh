@@ -2578,13 +2578,65 @@ get_web_proto() {
   return 0
 }
 
+is_public_ipv4() {
+  local ip="$1" a b c d
+  valid_ipv4_address "$ip" || return 1
+  IFS='.' read -r a b c d <<< "$ip"
+  a=$((10#$a))
+  b=$((10#$b))
+  if (( a == 0 || a == 10 || a == 127 )); then return 1; fi
+  if (( a == 172 && b >= 16 && b <= 31 )); then return 1; fi
+  if (( a == 192 && b == 168 )); then return 1; fi
+  if (( a == 169 && b == 254 )); then return 1; fi
+  if (( a == 100 && b >= 64 && b <= 127 )); then return 1; fi
+  return 0
+}
+
 get_server_ip() {
-  local ip=""
-  ip="$(curl -fsS4 --connect-timeout 2 https://api.ipify.org 2>/dev/null || true)"
-  if [[ -z "$ip" ]]; then
-    ip="$( (ip -4 route get 1.1.1.1 2>/dev/null || true) | awk '{print $7; exit}' 2>/dev/null || true)"
+  # 1. Check if explicitly configured in web.env or config.env
+  local configured_ip=""
+  if [[ -f "$WEB_CONFIG_FILE" ]]; then
+    configured_ip="$(awk -F= '/^WEB_PUBLIC_IP=/ {gsub(/[" '\''\r\n]/, "", $2); print $2}' "$WEB_CONFIG_FILE" 2>/dev/null || true)"
   fi
-  echo "${ip:-127.0.0.1}"
+  if [[ -z "$configured_ip" && -f "$CONFIG_FILE" ]]; then
+    configured_ip="$(awk -F= '/^PUBLIC_IP=/ {gsub(/[" '\''\r\n]/, "", $2); print $2}' "$CONFIG_FILE" 2>/dev/null || true)"
+  fi
+  if is_public_ipv4 "$configured_ip"; then
+    echo "$configured_ip"
+    return 0
+  fi
+
+  # 2. Multi-provider public IP query with fast timeouts
+  local providers=(
+    "https://api.ipify.org"
+    "https://icanhazip.com"
+    "https://ifconfig.me/ip"
+    "https://checkip.amazonaws.com"
+    "https://ipinfo.io/ip"
+  )
+  local candidate=""
+  for url in "${providers[@]}"; do
+    candidate="$(curl -fsS4 --connect-timeout 2 --max-time 3 "$url" 2>/dev/null | tr -d '[:space:]' || true)"
+    if is_public_ipv4 "$candidate"; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+
+  # 3. Kernel route default interface source IP
+  candidate="$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.*src \([0-9.]*\).*/\1/p' | awk '{print $1; exit}')"
+  if is_public_ipv4 "$candidate"; then
+    echo "$candidate"
+    return 0
+  fi
+
+  # 4. Fallback if behind 1:1 NAT and provider queries failed:
+  if valid_ipv4_address "$candidate"; then
+    echo "$candidate"
+    return 0
+  fi
+
+  echo "127.0.0.1"
   return 0
 }
 
