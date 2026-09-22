@@ -2419,16 +2419,26 @@ update_web_assets() {
   fi
 
   # 2. Update web server and static assets
-  if [[ -f "${script_dir}/web/server.py" && -f "${script_dir}/web/static/index.html" ]]; then
-    install -m 0755 "${script_dir}/web/server.py" "${WEB_DIR}/server.py"
-    install -m 0644 "${script_dir}/web/static/index.html" "${WEB_DIR}/static/index.html"
+  # NOTE: Always prefer fresh download from mirrors. Local copy from script_dir
+  # is only a fallback (and only when source != target, otherwise install
+  # fails with "same file" and the update becomes a fake success).
+  local _dl_ok=0
+  if download_file_with_mirrors "${WEB_DIR}/server.py" "web/server.py" 0755; then
+    _dl_ok=1
     updated=1
-  else
-    if download_file_with_mirrors "${WEB_DIR}/server.py" "web/server.py" 0755; then
+  fi
+  if download_file_with_mirrors "${WEB_DIR}/static/index.html" "web/static/index.html" 0644; then
+    _dl_ok=1
+    updated=1
+  fi
+  if (( !_dl_ok )); then
+    local _src_py="${script_dir}/web/server.py" _src_html="${script_dir}/web/static/index.html"
+    if [[ -f "$_src_py" && -f "$_src_html" && "$_src_py" != "${WEB_DIR}/server.py" ]]; then
+      install -m 0755 "$_src_py" "${WEB_DIR}/server.py" 2>/dev/null || cp -f "$_src_py" "${WEB_DIR}/server.py" 2>/dev/null || true
+      install -m 0644 "$_src_html" "${WEB_DIR}/static/index.html" 2>/dev/null || cp -f "$_src_html" "${WEB_DIR}/static/index.html" 2>/dev/null || true
       updated=1
-    fi
-    if download_file_with_mirrors "${WEB_DIR}/static/index.html" "web/static/index.html" 0644; then
-      updated=1
+    elif (( !updated )); then
+      warn "Web asset download failed and no usable local fallback found."
     fi
   fi
 
@@ -2468,12 +2478,18 @@ update_node_full() {
   # 2. Check and update EasyTier binary if a new release is available
   local current_et=""
   current_et="$(cat "${INSTALL_DIR}/easytier.version" 2>/dev/null || echo "0.0.0")"
+  # Normalize leading 'v' (install_core stores tag_name like v2.6.4,
+  # while latest lookup strips it) so equal versions don't trigger re-download.
+  current_et="${current_et#v}"
+  current_et="${current_et#V}"
   local latest_et_json
   latest_et_json="$(curl -fsSL --connect-timeout 5 --max-time 12 https://api.github.com/repos/EasyTier/EasyTier/releases/latest 2>/dev/null || true)"
   local latest_et=""
   if [[ -n "$latest_et_json" ]]; then
     latest_et="$(printf '%s' "$latest_et_json" | grep -Po '"tag_name":\s*"v?\K[0-9.]+' | head -n1 || true)"
   fi
+  latest_et="${latest_et#v}"
+  latest_et="${latest_et#V}"
   if [[ -n "$latest_et" && "$latest_et" != "$current_et" ]]; then
     info "Updating EasyTier core (${current_et} → ${latest_et})..."
     install_core || true
