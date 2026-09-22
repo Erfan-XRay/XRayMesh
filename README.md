@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/Erfan-XRay/XRayMesh/releases/tag/v2.1.0"><img src="https://img.shields.io/badge/version-2.1.0-blue.svg?style=flat-square" alt="Version 2.1.0" /></a>
-  <img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="MIT License" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Source--Available-red.svg?style=flat-square" alt="Source-Available License" /></a>
   <img src="https://img.shields.io/badge/EasyTier-v2.6.4-cyan.svg?style=flat-square" alt="EasyTier core" />
   <img src="https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-orange.svg?style=flat-square" alt="Supported OS" />
   <img src="https://img.shields.io/badge/arch-x86__64%20%7C%20aarch64%20%7C%20armv7-purple.svg?style=flat-square" alt="Architecture" />
@@ -158,9 +158,15 @@ If you prefer a minimal, terminal-only manager without the Web UI daemon or back
 
 ---
 
-## License
+## License & Intellectual Property
 
-This project is licensed under the [MIT License](LICENSE).  
-EasyTier is licensed under its respective open-source license.
+Copyright (c) 2026 ErfanXRay. All Rights Reserved.
 
-Created and maintained by [ErfanXRay](https://github.com/Erfan-XRay).
+This project is protected under the **[XRayMesh Source-Available License](LICENSE)**.
+
+- **Permitted:** Free for personal, non-commercial, and internal server usage.
+- **Strictly Prohibited:** You may **not** copy, redistribute, mirror, fork, or republish this project or any derivative work under another author, developer, brand, or repository name without prior written permission from ErfanXRay.
+- Commercial monetization and white-label rebranding are strictly prohibited.
+- Third-party components (such as EasyTier) remain subject to their respective licenses.
+
+Created and maintained with passion by [ErfanXRay](https://github.com/Erfan-XRay).

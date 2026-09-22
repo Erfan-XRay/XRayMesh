@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/Erfan-XRay/XRayMesh/releases/tag/v2.1.0"><img src="https://img.shields.io/badge/version-2.1.0-blue.svg?style=flat-square" alt="Version 2.1.0" /></a>
-  <img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="MIT License" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Source--Available-red.svg?style=flat-square" alt="Source-Available License" /></a>
   <img src="https://img.shields.io/badge/EasyTier-v2.6.4-cyan.svg?style=flat-square" alt="EasyTier core" />
   <img src="https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-orange.svg?style=flat-square" alt="Supported OS" />
 </p>
@@ -154,9 +154,13 @@ xraymesh
 
 ---
 
-## مجوز (License)
+## مجوز و حق مالکیت معنوی (License)
 
-این پروژه تحت مجوز متن‌باز [MIT](LICENSE) منتشر شده است.  
-هسته EasyTier نیز تابع قوانین و لایسنس اختصاصی خود می‌باشد.
+تمامی حقوق مادی و معنوی این اثر متعلق به **ErfanXRay** می‌باشد.
 
-ساخته‌شده با ❤️ توسط [ErfanXRay](https://github.com/Erfan-XRay).
+این پروژه تحت مجوز انحصاری **[XRayMesh Source-Available License](LICENSE)** محافظت می‌شود:
+- **استفاده مجاز:** دانلود و استفاده شخصی، غیرتجاری و داخلی روی سرورها برای تمامی کاربران کاملاً رایگان و آزاد است.
+- **ممنوعیت‌های صریح قانونی:** هیچ شخص، گروه یا شرکتی بدون کسب اجازه کتبی از توسعه‌دهنده اصلی (ErfanXRay) حق **کپی‌برداری، بازنشر، ایجاد میرور، فورک و انتشار با نام خود یا برند دیگر، حذف کپی‌رایت و فروش تجاری** این سورس‌کد و اسکریپت را ندارد.
+- هسته EasyTier و سایر ابزارهای شخص ثالث تابع قوانین و لایسنس اختصاصی خود باقی می‌مانند.
+
+طراحی و توسعه‌یافته با ❤️ توسط [ErfanXRay](https://github.com/Erfan-XRay).
