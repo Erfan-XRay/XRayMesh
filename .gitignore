@@ -4,3 +4,7 @@ __pycache__/
 *.tmp
 *.log
 node_modules/
+
+# Agent / Skills Workspace Artifacts
+.agents/
+skills-lock.json
