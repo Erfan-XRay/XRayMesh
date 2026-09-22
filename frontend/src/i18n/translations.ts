@@ -291,6 +291,8 @@ export const translations = {
     modal_login_pw_placeholder: "Admin password...",
     modal_login_tk_placeholder: "Temporary token...",
     modal_login_tip_title: "# Generate instant login link on server:",
+    modal_login_disabled: "Disabled",
+    modal_login_token_only_notice: "Password login is disabled (Token-only mode). Use a token or run 'xraymesh password' on the server.",
 
     modal_delete_title: "Delete Tunnel?",
     modal_delete_desc_1: "Are you sure you want to delete tunnel",
@@ -627,6 +629,8 @@ export const translations = {
     modal_login_pw_placeholder: "رمز عبور ادمین...",
     modal_login_tk_placeholder: "توکن موقت...",
     modal_login_tip_title: "# تولید لینک ورود سریع در ترمینال سرور:",
+    modal_login_disabled: "غیرفعال",
+    modal_login_token_only_notice: "ورود با رمز عبور غیرفعال است (حالت اختصاصی توکن). از توکن استفاده کنید یا در سرور دستور xraymesh password را اجرا کنید.",
 
     modal_delete_title: "حذف تونل؟",
     modal_delete_desc_1: "آیا از حذف تونل زیر مطمئن هستید؟",

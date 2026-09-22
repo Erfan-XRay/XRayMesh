@@ -4,6 +4,7 @@ import { XRayMeshLogo } from '../XRayMeshLogo';
 
 interface LoginModalProps {
   isOpen: boolean;
+  passwordConfigured?: boolean;
   onLoginPassword: (password: string) => Promise<void>;
   onLoginToken: (token: string) => Promise<void>;
   onCopy: (text: string) => void;
@@ -13,17 +14,24 @@ interface LoginModalProps {
 
 export const LoginModal: React.FC<LoginModalProps> = ({
   isOpen,
+  passwordConfigured = true,
   onLoginPassword,
   onLoginToken,
   onCopy,
   copiedKey,
   t,
 }) => {
-  const [tab, setTab] = useState<'pw' | 'tk'>('pw');
+  const [tab, setTab] = useState<'pw' | 'tk'>(passwordConfigured ? 'pw' : 'tk');
   const [password, setPassword] = useState('');
   const [token, setToken] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!passwordConfigured) {
+      setTab('tk');
+    }
+  }, [passwordConfigured]);
 
   if (!isOpen) return null;
 
@@ -44,7 +52,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     }
   };
 
-  const tipCmd = 'sudo ./xraymesh.sh token';
+  const tipCmd = 'sudo xraymesh token';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-modal-in">
@@ -62,16 +70,23 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           <button
             type="button"
             onClick={() => {
-              setTab('pw');
-              setError(null);
+              if (passwordConfigured) {
+                setTab('pw');
+                setError(null);
+              } else {
+                setError(t('modal_login_token_only_notice'));
+              }
             }}
             className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-all ${
               tab === 'pw'
                 ? 'bg-primary text-black font-semibold shadow'
-                : 'text-text-muted hover:text-text-main'
+                : passwordConfigured
+                ? 'text-text-muted hover:text-text-main'
+                : 'text-text-muted/40 opacity-60'
             }`}
           >
             {t('modal_login_tab_pw')}
+            {!passwordConfigured && <span className="ms-1 text-[10px] opacity-75">({t('modal_login_disabled')})</span>}
           </button>
           <button
             type="button"

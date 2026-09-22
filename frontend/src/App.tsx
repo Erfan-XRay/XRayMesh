@@ -54,6 +54,7 @@ export default function App() {
   // Auth state
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [showLogin, setShowLogin] = useState(false);
+  const [passwordConfigured, setPasswordConfigured] = useState<boolean>(true);
 
   // Dashboard data
   const [status, setStatus] = useState<StatusResponse>(EMPTY_STATUS);
@@ -196,6 +197,9 @@ export default function App() {
       .then((res) => {
         setIsAuthenticated(res.authenticated);
         setShowLogin(!res.authenticated);
+        if (typeof res.password_configured === 'boolean') {
+          setPasswordConfigured(res.password_configured);
+        }
       })
       .catch(() => {
         setIsAuthenticated(false);
@@ -495,6 +499,7 @@ export default function App() {
       {/* Login Modal */}
       <LoginModal
         isOpen={showLogin}
+        passwordConfigured={passwordConfigured}
         onLoginPassword={handleLoginPassword}
         onLoginToken={handleLoginToken}
         onCopy={handleCopy}

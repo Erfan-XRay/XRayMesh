@@ -2699,22 +2699,32 @@ configure_web_ui_interactive() {
   fi
 
   printf '\n'
+  local want_static_pw="y"
+  read -r -p "  Do you want to set a fixed Web Admin Password? [y/N]: " want_static_pw
   local admin_pw=""
-  read -r -p "  Set Web Admin Password [Press Enter to auto-generate]: " admin_pw
-  if [[ -z "$admin_pw" ]]; then
-    admin_pw="$(openssl rand -base64 9 | tr -dc 'a-zA-Z0-9' | head -c 10)"
-  fi
-  local hash
-  hash="$(python3 -c "import secrets, hashlib, sys
+  if [[ "$want_static_pw" =~ ^[Yy]$ ]]; then
+    read -r -p "  Set Web Admin Password [Press Enter to auto-generate]: " admin_pw
+    if [[ -z "$admin_pw" ]]; then
+      admin_pw="$(openssl rand -base64 9 | tr -dc 'a-zA-Z0-9' | head -c 10)"
+    fi
+    local hash
+    hash="$(python3 -c "import secrets, hashlib, sys
 pw = sys.argv[1]
 salt = secrets.token_hex(16)
 h = hashlib.sha256((salt + pw).encode('utf-8')).hexdigest()
 print(f'sha256\${salt}\${h}')
 " "$admin_pw")"
-  if grep -q '^WEB_PASSWORD_HASH=' "$WEB_CONFIG_FILE" 2>/dev/null; then
-    sed -i "s|^WEB_PASSWORD_HASH=.*|WEB_PASSWORD_HASH=\"${hash}\"|" "$WEB_CONFIG_FILE"
+    if grep -q '^WEB_PASSWORD_HASH=' "$WEB_CONFIG_FILE" 2>/dev/null; then
+      sed -i "s|^WEB_PASSWORD_HASH=.*|WEB_PASSWORD_HASH=\"${hash}\"|" "$WEB_CONFIG_FILE"
+    else
+      printf 'WEB_PASSWORD_HASH=%q\n' "$hash" >> "$WEB_CONFIG_FILE"
+    fi
+    ok "Admin password configured."
   else
-    printf 'WEB_PASSWORD_HASH=%q\n' "$hash" >> "$WEB_CONFIG_FILE"
+    if grep -q '^WEB_PASSWORD_HASH=' "$WEB_CONFIG_FILE" 2>/dev/null; then
+      sed -i '/^WEB_PASSWORD_HASH=/d' "$WEB_CONFIG_FILE"
+    fi
+    ok "Token-Only login enabled (Highest security — password brute-force immune)."
   fi
   chmod 600 "$WEB_CONFIG_FILE" 2>/dev/null || true
 
@@ -2757,15 +2767,32 @@ except Exception: pass
   say "    🎉 XRayMesh v2.0 Setup Completed Successfully!" "$BOLD$GREEN"
   say "  ============================================================" "$BOLD$GREEN"
   printf '    Web Dashboard URL:   %b%s%b\n' "$BOLD$CYAN" "$web_url" "$RESET"
-  printf '    Admin Password:      %b%s%b\n' "$BOLD$YELLOW" "$admin_pw" "$RESET"
+  if [[ -n "$admin_pw" ]]; then
+    printf '    Admin Password:      %b%s%b\n' "$BOLD$YELLOW" "$admin_pw" "$RESET"
+  else
+    printf '    Admin Password:      %bDisabled (Token-Only Mode — Highest Security)%b\n' "$BOLD$GREEN" "$RESET"
+  fi
   printf '    One-Click Login:     %b%s/?token=%s%b\n' "$BOLD$GREEN" "$web_url" "$token" "$RESET"
+  printf '    New Token Command:   %bsudo xraymesh token%b\n' "$BOLD$CYAN" "$RESET"
   say "  ------------------------------------------------------------" "$DIM$BLUE"
-  say "  Tip: All tunnels (HAProxy, Realm, Gost, iptables), SafeSync," "$DIM$GRAY"
-  say "       and cluster updates are managed 100% in the Web Dashboard." "$DIM$GRAY"
-  say "       To access the CLI management tool at any time, run: xraymesh" "$DIM$GRAY"
+  say "  💡 All tunnels (HAProxy, Realm, Gost, iptables), SafeSync," "$DIM$GRAY"
+  say "     and cluster updates are managed 100% in the Web Dashboard." "$DIM$GRAY"
+  say "  ------------------------------------------------------------" "$DIM$BLUE"
+  say "  ⭐ Management Menu Command:" "$BOLD$YELLOW"
+  printf '     Type %bxraymesh%b in your terminal anytime to open the menu.\n' "$BOLD$CYAN" "$RESET"
   say "  ============================================================" "$BOLD$GREEN"
   printf '\n'
-  pause
+
+  printf '  %b[1]%b  Open XRayMesh Control Panel Menu Now\n' "$GREEN" "$RESET"
+  printf '  %b[2]%b  Exit to Terminal\n\n' "$GRAY" "$RESET"
+  local post_choice="1"
+  read -r -p "  Select an option [1/2, default: 1]: " post_choice
+  post_choice="${post_choice:-1}"
+  if [[ "$post_choice" == "2" || "$post_choice" =~ ^[Qq]$ ]]; then
+    printf '\n%b  ✓ Installation finished. Run %bxraymesh%b at any time to open the menu.%b\n\n' "$GREEN" "$BOLD$CYAN" "$GREEN" "$RESET"
+    return 1
+  fi
+  return 0
 }
 
 generate_web_token() {
@@ -2829,7 +2856,43 @@ except Exception: pass
 set_web_password() {
   install_web_runtime
   header
-  section "SET ADMIN PASSWORD"
+  section "ADMIN PASSWORD & AUTHENTICATION"
+
+  local current_hash=""
+  if grep -q '^WEB_PASSWORD_HASH=' "$WEB_CONFIG_FILE" 2>/dev/null; then
+    current_hash="$(grep -E '^WEB_PASSWORD_HASH=' "$WEB_CONFIG_FILE" | cut -d= -f2- | tr -d '"'\'' ')"
+  fi
+
+  if [[ -n "$current_hash" ]]; then
+    printf '  Current Status: %bFixed Password Enabled%b\n\n' "$GREEN" "$RESET"
+    printf '  %b[1]%b  Change Fixed Admin Password\n' "$GREEN" "$RESET"
+    printf '  %b[2]%b  Remove Password (Switch to Token-Only Mode — Highest Security)\n' "$YELLOW" "$RESET"
+    printf '  %b[0]%b  Back\n\n' "$GRAY" "$RESET"
+    local pw_choice="1"
+    read -r -p "  Choice [0-2, default: 1]: " pw_choice
+    pw_choice="${pw_choice:-1}"
+    if [[ "$pw_choice" == "0" ]]; then
+      return 0
+    elif [[ "$pw_choice" == "2" ]]; then
+      sed -i '/^WEB_PASSWORD_HASH=/d' "$WEB_CONFIG_FILE"
+      systemctl restart xraymesh-web.service 2>/dev/null || true
+      ok "Password removed. Web UI is now in Token-Only mode."
+      pause
+      return 0
+    fi
+  else
+    printf '  Current Status: %bToken-Only Mode (No Fixed Password)%b\n\n' "$YELLOW" "$RESET"
+    printf '  %b[1]%b  Set a Fixed Admin Password\n' "$GREEN" "$RESET"
+    printf '  %b[0]%b  Keep Token-Only Mode (Back)\n\n' "$GRAY" "$RESET"
+    local pw_choice="1"
+    read -r -p "  Choice [0-1, default: 1]: " pw_choice
+    pw_choice="${pw_choice:-1}"
+    if [[ "$pw_choice" == "0" ]]; then
+      return 0
+    fi
+  fi
+
+  printf '\n'
   local pass1 pass2 hash
   read -r -s -p "  Enter new admin password: " pass1
   printf '\n'
@@ -3064,7 +3127,11 @@ bootstrap_web_first() {
   install_core
   ensure_xraymesh_cli >/dev/null 2>&1 || true
 
-  configure_web_ui_interactive
+  if configure_web_ui_interactive; then
+    return 0
+  else
+    return 1
+  fi
 }
 
 menu() {
@@ -3077,8 +3144,9 @@ menu() {
 
   # If Web UI is not installed / configured, start Web-First setup immediately
   if [[ ! -f "$WEB_CONFIG_FILE" || ! -f "$WEB_SERVICE_FILE" ]]; then
-    bootstrap_web_first
-    return
+    if ! bootstrap_web_first; then
+      return 0
+    fi
   fi
 
   if [[ -d "$WEB_DIR" || -f "$WEB_SERVICE_FILE" ]]; then
@@ -3130,13 +3198,18 @@ menu() {
     printf '  Web Dashboard:    %b%s%b | %b%s%b\n' \
       "$BOLD$CYAN" "$web_url" "$RESET" \
       "$([ "$web_state" == "active" ] && echo "$GREEN" || echo "$RED")" "$web_state" "$RESET"
+    local auth_info="Password + Token"
+    if ! grep -q '^WEB_PASSWORD_HASH=' "$WEB_CONFIG_FILE" 2>/dev/null; then
+      auth_info="Token-Only (Highest Security)"
+    fi
+    printf '  Web Auth Mode:    %s\n' "$auth_info"
     printf '  SSL / HTTPS:      %s\n' "$ssl_info"
     printf '  Speedtest Server: %s (in-mesh port 5201)\n' "$iperf_state"
     printf '\n'
 
     section "ACTIONS & MANAGEMENT"
     printf '  %b[1]%b  Show Web Dashboard URL & One-Click Login Link\n' "$GREEN" "$RESET"
-    printf '  %b[2]%b  Reset / Change Admin Password\n' "$PURPLE" "$RESET"
+    printf '  %b[2]%b  Admin Password & Authentication Settings\n' "$PURPLE" "$RESET"
     printf '  %b[3]%b  Change Web Dashboard Port\n' "$YELLOW" "$RESET"
     printf '  %b[4]%b  Configure Custom Domain & Free SSL (Let'\''s Encrypt HTTPS)\n' "$GREEN" "$RESET"
     printf '  %b[5]%b  Remove SSL (Revert to HTTP)\n' "$RED" "$RESET"
@@ -3231,7 +3304,12 @@ main() {
 
   case "${1:-menu}" in
   menu) menu ;;
-  install|setup) require_linux; bootstrap_web_first ;;
+  install|setup)
+    require_linux
+    if bootstrap_web_first; then
+      menu
+    fi
+    ;;
   setup-node) require_linux; setup_node ;;
   status)
     if [[ -f "$CONFIG_FILE" ]]; then
