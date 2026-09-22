@@ -99,11 +99,15 @@ export async function fetchInterfaces(node?: string): Promise<string[]> {
   }
 }
 
-export async function runPing(target: string, count: number): Promise<PingResult> {
+export async function runPing(
+  target: string,
+  count: number,
+  source?: string
+): Promise<PingResult> {
   const res = await fetch('/api/ping', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target, count }),
+    body: JSON.stringify({ target, count, source }),
   });
   const d = await res.json();
   if (!res.ok || !d.ok) throw new Error(d.error || 'Ping failed');

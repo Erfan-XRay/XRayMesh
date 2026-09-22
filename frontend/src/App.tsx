@@ -352,11 +352,11 @@ export default function App() {
 
   // ─── Ping ───────────────────────────────────────────────
   const handleRunPing = useCallback(
-    async (target: string, count: number) => {
+    async (target: string, count: number, source?: string) => {
       setIsPinging(true);
       setPingResult(null);
       try {
-        const data = await api.runPing(target, count);
+        const data = await api.runPing(target, count, source);
         setPingResult(data);
         addToast(`Ping: avg ${data.avg_ms} ms`, 'success');
       } catch (e: any) {
@@ -740,6 +740,7 @@ export default function App() {
             )}
             {activeTab === 'ping' && (
               <PingTab
+                peers={peers}
                 targetIp={pingTarget}
                 onTargetChange={setPingTarget}
                 isRunning={isPinging}

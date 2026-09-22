@@ -33,7 +33,7 @@ import ssl
 from pathlib import Path
 
 # Paths & Defaults
-CURRENT_VERSION = "2.1.1"
+CURRENT_VERSION = "2.1.2"
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/xraymesh")
 BIN_DIR = os.path.join(INSTALL_DIR, "bin")
 CONFIG_FILE = os.environ.get("CONFIG_FILE", "/etc/xraymesh/config.env")
@@ -1358,6 +1358,52 @@ def execute_iperf_benchmark(target, protocol="tcp", duration=5, bandwidth="50M",
         return False, str(e), 500
 
 
+def execute_ping_benchmark(target, count=4, source_ip=None):
+    if not re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", target):
+        return False, "Invalid target IP", 400
+
+    count = min(max(int(count), 1), 10)
+    try:
+        cmd = ["ping", "-c", str(count), "-W", "2", target]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=count * 2 + 5)
+        output = res.stdout
+
+        stats = {
+            "source": source_ip or "local",
+            "target": target,
+            "count": count,
+            "raw": output,
+            "packets_sent": count,
+            "packets_received": 0,
+            "packet_loss_percent": 100.0,
+            "min_ms": 0.0,
+            "avg_ms": 0.0,
+            "max_ms": 0.0,
+            "mdev_ms": 0.0
+        }
+
+        loss_match = re.search(r"(\d+)% packet loss", output)
+        if loss_match:
+            stats["packet_loss_percent"] = float(loss_match.group(1))
+
+        rx_match = re.search(r"(\d+)\s+(?:packets\s+)?received", output)
+        if rx_match:
+            stats["packets_received"] = int(rx_match.group(1))
+
+        rtt_match = re.search(r"(?:rtt|round-trip)\s+min/avg/max/(?:mdev|stddev)\s*=\s*([0-9.]+)/([0-9.]+)/([0-9.]+)/([0-9.]+)", output)
+        if rtt_match:
+            stats["min_ms"] = float(rtt_match.group(1))
+            stats["avg_ms"] = float(rtt_match.group(2))
+            stats["max_ms"] = float(rtt_match.group(3))
+            stats["mdev_ms"] = float(rtt_match.group(4))
+
+        return True, stats, 200
+    except subprocess.TimeoutExpired:
+        return False, "Ping request timed out", 504
+    except Exception as e:
+        return False, str(e), 500
+
+
 class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
     """Custom HTTP handler with REST API and Single Page Application routing."""
 
@@ -1857,7 +1903,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
         if path in (
             "/api/cluster/prepare", "/api/cluster/commit", "/api/cluster/confirm", "/api/cluster/rollback",
             "/api/cluster/tunnels", "/api/cluster/tunnel/create", "/api/cluster/tunnel/edit", "/api/cluster/tunnel/delete",
-            "/api/cluster/node/update", "/api/cluster/interfaces", "/api/cluster/iperf/run"
+            "/api/cluster/node/update", "/api/cluster/interfaces", "/api/cluster/iperf/run", "/api/cluster/ping/run"
         ):
             valid, err_msg = verify_cluster_hmac(self.headers, body)
             if not valid:
@@ -2045,6 +2091,18 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                     self.send_json({"ok": False, "error": res}, status=status)
                 return
 
+            elif path == "/api/cluster/ping/run":
+                target = data.get("target", "").strip()
+                count = min(max(int(data.get("count", 4)), 1), 10)
+                cur_cfg = load_env_file(CONFIG_FILE)
+                local_ip = cur_cfg.get("IPV4", "")
+                ok, res, status = execute_ping_benchmark(target, count=count, source_ip=local_ip)
+                if ok:
+                    self.send_json({"ok": True, "data": res})
+                else:
+                    self.send_json({"ok": False, "error": res}, status=status)
+                return
+
         # Authenticated Endpoints
         auth_ok, _ = is_authenticated(self.headers)
         if not auth_ok:
@@ -2060,54 +2118,50 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/ping":
             target = data.get("target", "").strip()
+            source = data.get("source", "").strip()
             count = min(max(int(data.get("count", 4)), 1), 10)
 
-            # Security: Validate target is IPv4
             if not re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", target):
                 self.send_json({"ok": False, "error": "Invalid target IP"}, status=400)
                 return
 
-            try:
-                cmd = ["ping", "-c", str(count), "-W", "2", target]
-                res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=12)
-                output = res.stdout
+            cfg = load_env_file(CONFIG_FILE)
+            local_ip = cfg.get("IPV4", "").strip()
 
-                # Parse ping stats
-                # Example: 4 packets transmitted, 4 received, 0% packet loss, time 3004ms
-                # rtt min/avg/max/mdev = 12.34/15.67/18.90/2.12 ms
-                stats = {
+            if source and target == source:
+                self.send_json({"ok": False, "error": "Source and target cannot be the same node"}, status=400)
+                return
+
+            # If source is remote node, forward via HMAC-signed cluster request
+            if source and source not in ("local", "127.0.0.1", local_ip):
+                secret = cfg.get("NETWORK_SECRET", "").strip()
+                if not secret:
+                    self.send_json({"ok": False, "error": "Cluster secret not configured on this node"}, status=500)
+                    return
+                cached_peer = PEER_VERSION_CACHE.get(source, {})
+                peer_port = cached_peer.get("port", PORT)
+                payload = {
                     "target": target,
-                    "count": count,
-                    "raw": output,
-                    "packets_sent": count,
-                    "packets_received": 0,
-                    "packet_loss_percent": 100.0,
-                    "min_ms": 0.0,
-                    "avg_ms": 0.0,
-                    "max_ms": 0.0,
-                    "mdev_ms": 0.0
+                    "count": count
                 }
+                timeout = count * 2 + 10
+                ok, res = send_cluster_http(source, peer_port, "/api/cluster/ping/run", secret, payload, timeout=timeout)
+                if ok and isinstance(res, dict) and res.get("ok"):
+                    ping_data = res.get("data", {})
+                    ping_data["source"] = source
+                    ping_data["target"] = target
+                    self.send_json({"ok": True, "data": ping_data})
+                else:
+                    err = res.get("error") if isinstance(res, dict) else str(res)
+                    self.send_json({"ok": False, "error": f"Remote node {source} error: {err}"}, status=400)
+                return
 
-                loss_match = re.search(r"(\d+)% packet loss", output)
-                if loss_match:
-                    stats["packet_loss_percent"] = float(loss_match.group(1))
-
-                rx_match = re.search(r"(\d+)\s+(?:packets\s+)?received", output)
-                if rx_match:
-                    stats["packets_received"] = int(rx_match.group(1))
-
-                rtt_match = re.search(r"(?:rtt|round-trip)\s+min/avg/max/(?:mdev|stddev)\s*=\s*([0-9.]+)/([0-9.]+)/([0-9.]+)/([0-9.]+)", output)
-                if rtt_match:
-                    stats["min_ms"] = float(rtt_match.group(1))
-                    stats["avg_ms"] = float(rtt_match.group(2))
-                    stats["max_ms"] = float(rtt_match.group(3))
-                    stats["mdev_ms"] = float(rtt_match.group(4))
-
-                self.send_json({"ok": True, "data": stats})
-            except subprocess.TimeoutExpired:
-                self.send_json({"ok": False, "error": "Ping request timed out"}, status=504)
-            except Exception as e:
-                self.send_json({"ok": False, "error": str(e)}, status=500)
+            # Otherwise execute locally
+            ok, res, status = execute_ping_benchmark(target, count=count, source_ip=local_ip)
+            if ok:
+                self.send_json({"ok": True, "data": res})
+            else:
+                self.send_json({"ok": False, "error": res}, status=status)
             return
 
         elif path == "/api/iperf/run":

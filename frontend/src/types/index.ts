@@ -133,6 +133,8 @@ export interface SpeedtestData {
 }
 
 export interface PingResult {
+  source?: string;
+  target?: string;
   min_ms: number;
   avg_ms: number;
   max_ms: number;

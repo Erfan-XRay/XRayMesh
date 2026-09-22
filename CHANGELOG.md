@@ -2,6 +2,14 @@
 
 All notable XRayMesh changes are documented here.
 
+## [2.1.2] - 2026-09-22
+
+### Added
+- Multi-node in-mesh ping and latency diagnostics: select any mesh node as source (packet runner) and any other node or IP as destination directly from Web UI.
+- Inter-node HMAC-authenticated ping execution proxying (`/api/cluster/ping/run`).
+- Quick swap button and dynamic route visual chips in Ping tab.
+- Diagnostic route header showing origin execution node and cluster proxy badges.
+
 ## [2.1.1] - 2026-09-22
 
 ### Added

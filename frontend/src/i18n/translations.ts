@@ -251,7 +251,14 @@ export const translations = {
 
     // Ping Tab
     ping_panel_title: "Live Ping & Latency Diagnostics",
-    ping_dest_label: "Target Mesh Node IP",
+    ping_source_label: "Source Node (Runner)",
+    ping_source_placeholder: "-- Select Source Node --",
+    ping_source_chip_prefix: "Source",
+    ping_dest_chip_prefix: "Destination",
+    ping_swap_nodes: "Swap Source & Target",
+    ping_route_display: "Diagnostic Route",
+    ping_dest_select_placeholder: "-- Select Mesh Node or Enter IP Below --",
+    ping_dest_label: "Target IP / Node",
     ping_count_label: "Ping Count",
     ping_count_4: "4 Packets",
     ping_count_8: "8 Packets",
@@ -611,7 +618,14 @@ export const translations = {
 
     // Ping Tab
     ping_panel_title: "سنجش زنده پینگ و پایداری شبکه",
-    ping_dest_label: "آدرس آی‌پی مجازی سرور مقصد",
+    ping_source_label: "سرور مبدا (ارسال‌کننده پینگ)",
+    ping_source_placeholder: "-- انتخاب سرور مبدا --",
+    ping_source_chip_prefix: "مبدا",
+    ping_dest_chip_prefix: "مقصد",
+    ping_swap_nodes: "جابجایی مبدا و مقصد",
+    ping_route_display: "مسیر پینگ",
+    ping_dest_select_placeholder: "-- انتخاب نود مش یا ورود دستی آی‌پی --",
+    ping_dest_label: "آدرس آی‌پی یا نود مقصد",
     ping_count_label: "تعداد بسته‌ها",
     ping_count_4: "۴ بسته",
     ping_count_8: "۸ بسته",

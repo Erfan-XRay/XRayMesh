@@ -1,7 +1,7 @@
 {
-  "version": "2.1.1",
-  "release_name": "XRayMesh v2.1.1 (Multi-Node Speedtest & Setup Mode)",
+  "version": "2.1.2",
+  "release_name": "XRayMesh v2.1.2 (Multi-Node Diagnostics & Speedtest)",
   "release_date": "2026-09-22",
-  "changelog": "Multi-node in-mesh speedtest benchmarking (any node to any node), setup wizard lockdown mode for fresh installations, invite-based mesh joining via CLI (xraymesh join), and polished post-install CLI experience.",
+  "changelog": "Multi-node in-mesh ping & latency diagnostics (any node to any node), multi-node iperf3 speedtest suite, setup wizard lockdown mode, and invite-based CLI mesh joining.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh) update"
 }
