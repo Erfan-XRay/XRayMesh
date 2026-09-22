@@ -111,24 +111,29 @@ xraymesh
 
 ## CLI Commands Reference
 
+All forwarding tunnels (HAProxy, Realm, GOST, iptables) and SafeSync cluster actions are managed directly from the Web UI Dashboard. The terminal CLI provides the following core operational commands:
+
 | Command | Description |
 | :--- | :--- |
-| `xraymesh` | Open the interactive terminal manager |
-| `xraymesh menu` | Open the interactive terminal manager |
+| `xraymesh` | Open the interactive terminal manager menu |
 | `xraymesh token` | Generate a fresh 1-hour one-click Web UI login URL |
-| `xraymesh status` | Show real-time node, peer, and service status |
-| `xraymesh peers` | Show connected peers and live latency |
-| `xraymesh routes` | Show EasyTier mesh routing table |
+| `xraymesh password` | Configure or update the Web Admin password |
+| `xraymesh port` | Change the Web Dashboard HTTP/HTTPS port |
+| `xraymesh ssl` | Configure free automated SSL/TLS (HTTPS) with a domain |
+| `xraymesh remove-ssl` | Revert Web Dashboard back to plain HTTP |
+| `xraymesh status` | Show real-time node, mesh, and Web UI status summary |
+| `xraymesh peers` | Show connected peers and live latency via EasyTier CLI |
+| `xraymesh routes` | Show the EasyTier mesh routing table |
 | `xraymesh logs` | View live systemd logs for the mesh daemon |
-| `xraymesh web` | Manage Web UI service, ports, and SSL certificates |
-| `xraymesh haproxy` | Manage HAProxy TCP forwarding tunnels |
-| `xraymesh realm` | Manage Realm TCP/UDP forwarding tunnels |
-| `xraymesh gost` | Manage GOST v3 forwarding tunnels |
-| `xraymesh iptables`| Manage Linux kernel iptables forwarding tunnels |
+| `xraymesh self-test` | Run diagnostic tests on local services and connectivity |
+| `xraymesh start` | Start or apply node configuration and start all services |
+| `xraymesh restart` | Restart all XRayMesh services |
+| `xraymesh stop` | Stop all XRayMesh services |
 | `xraymesh update` | Update core CLI, Web UI assets, and EasyTier binaries |
-| `xraymesh restart` | Restart XRayMesh daemon |
-| `xraymesh stop` | Stop XRayMesh daemon |
+| `xraymesh delete` | Delete node configuration while preserving binaries |
 | `xraymesh uninstall` | Completely remove XRayMesh, configs, and binaries |
+| `xraymesh version` | Display installed XRayMesh version |
+| `xraymesh help` | Display CLI commands reference and usage |
 
 ---
 

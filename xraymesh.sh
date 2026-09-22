@@ -3485,8 +3485,31 @@ main() {
     warn "All services stopped."
     ;;
   version|-v|--version) echo "${APP} ${VERSION} - © ${OWNER}" ;;
+  help|-h|--help)
+    printf '\n'
+    say "  ${APP} v${VERSION} — CLI Commands Reference" "$BOLD$CYAN"
+    printf '  %-20s %s\n' "xraymesh" "Open the interactive terminal manager"
+    printf '  %-20s %s\n' "xraymesh token" "Generate a 1-hour one-click Web UI login URL"
+    printf '  %-20s %s\n' "xraymesh password" "Configure or change Web Admin password"
+    printf '  %-20s %s\n' "xraymesh port" "Change the Web Dashboard HTTP/HTTPS port"
+    printf '  %-20s %s\n' "xraymesh ssl" "Configure free automated SSL/TLS (HTTPS) domain certificate"
+    printf '  %-20s %s\n' "xraymesh remove-ssl" "Revert Web Dashboard back to HTTP"
+    printf '  %-20s %s\n' "xraymesh status" "Show node, mesh, and Web UI status summary"
+    printf '  %-20s %s\n' "xraymesh peers" "Show connected peers and live latency"
+    printf '  %-20s %s\n' "xraymesh routes" "Show mesh routing table"
+    printf '  %-20s %s\n' "xraymesh logs" "Stream live systemd service logs"
+    printf '  %-20s %s\n' "xraymesh self-test" "Run installation and service health self-tests"
+    printf '  %-20s %s\n' "xraymesh start" "Start or apply node and start all services"
+    printf '  %-20s %s\n' "xraymesh restart" "Restart all XRayMesh services"
+    printf '  %-20s %s\n' "xraymesh stop" "Stop all XRayMesh services"
+    printf '  %-20s %s\n' "xraymesh update" "Update core CLI, Web UI assets, and EasyTier binaries"
+    printf '  %-20s %s\n' "xraymesh delete" "Delete node configuration while keeping binaries"
+    printf '  %-20s %s\n' "xraymesh uninstall" "Completely remove XRayMesh, services, and binaries"
+    printf '  %-20s %s\n' "xraymesh version" "Print version information"
+    printf '\n'
+    ;;
   *)
-    echo "Usage: $0 [menu|install|status|web|password|port|ssl|remove-ssl|peers|routes|logs|start|stop|restart|update|uninstall|version]"
+    echo "Usage: $0 [menu|token|password|port|ssl|remove-ssl|status|peers|routes|logs|self-test|start|restart|stop|update|delete|uninstall|version|help]"
     exit 2
     ;;
   esac
