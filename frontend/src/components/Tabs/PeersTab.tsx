@@ -274,7 +274,7 @@ export const PeersTab: React.FC<PeersTabProps> = ({
                 </div>
 
                 {/* Per-node update button */}
-                {p.update_available && onUpdateNode && (
+                {(p.update_available || p.version_drift) && onUpdateNode && (
                   <button
                     onClick={() => handleUpdateSingle(p.ipv4, p.hostname)}
                     disabled={updatingIps.includes(p.ipv4)}
@@ -310,6 +310,20 @@ export const PeersTab: React.FC<PeersTabProps> = ({
                     <Zap className="w-3.5 h-3.5" />
                     {t('peer_card_btn_speedtest')}
                   </button>
+                  {onUpdateNode && !p.update_available && !p.version_drift && (
+                    <button
+                      onClick={() => handleUpdateSingle(p.ipv4, p.hostname)}
+                      disabled={updatingIps.includes(p.ipv4)}
+                      title={t('version_update_btn')}
+                      className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-text-muted hover:text-amber-400 border border-white/10 active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      {updatingIps.includes(p.ipv4) ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                      ) : (
+                        <RefreshCw className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
             );

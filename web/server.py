@@ -134,34 +134,51 @@ def get_version_info():
     return result
 
 
-def get_peer_version(peer_ip, port=PORT, timeout=1.5):
-    """Probe peer's /api/cluster/info or cached version."""
+def get_peer_version(peer_ip, port=None, timeout=2.0):
+    """Probe peer's /api/cluster/info or cached version across candidate ports."""
     now = time.time()
     cached = PEER_VERSION_CACHE.get(peer_ip)
-    if cached and (now - cached.get("timestamp", 0) < 60.0):
+    if cached and (now - cached.get("timestamp", 0) < 60.0) and cached.get("version"):
         return cached.get("version", "unknown")
 
     insecure_ssl_ctx = ssl.create_default_context()
     insecure_ssl_ctx.check_hostname = False
     insecure_ssl_ctx.verify_mode = ssl.CERT_NONE
 
+    ports_to_try = []
+    if port:
+        ports_to_try.append(port)
+    for p in (PORT, 11080, 8080, 8443, 443, 80):
+        if p not in ports_to_try:
+            ports_to_try.append(p)
+
     version_found = None
-    for scheme in ("http", "https"):
-        url = f"{scheme}://{peer_ip}:{port}/api/cluster/info"
-        req = urllib.request.Request(url, headers={"User-Agent": f"XRayMesh-Cluster/{CURRENT_VERSION}"})
-        try:
-            ctx = insecure_ssl_ctx if scheme == "https" else None
-            with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                version_found = data.get("version")
-                break
-        except Exception:
-            pass
+    responsive_port = None
+
+    for p in ports_to_try:
+        for scheme in ("http", "https"):
+            url = f"{scheme}://{peer_ip}:{p}/api/cluster/info"
+            req = urllib.request.Request(url, headers={"User-Agent": f"XRayMesh-Cluster/{CURRENT_VERSION}"})
+            try:
+                ctx = insecure_ssl_ctx if scheme == "https" else None
+                with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    version_found = data.get("version")
+                    responsive_port = p
+                    break
+            except Exception:
+                pass
+        if version_found:
+            break
 
     if not version_found:
         version_found = "legacy (< 2.0.0)"
 
-    PEER_VERSION_CACHE[peer_ip] = {"version": version_found, "timestamp": now}
+    PEER_VERSION_CACHE[peer_ip] = {
+        "version": version_found,
+        "port": responsive_port or port or PORT,
+        "timestamp": now
+    }
     return version_found
 
 
@@ -686,6 +703,55 @@ def run_xraymesh_cmd(args, timeout=45):
         return False, str(e)
 
 
+def spawn_detached_node_update():
+    """Execute node update completely detached from xraymesh-web.service cgroup.
+    This prevents systemd from killing the updater process mid-execution when
+    xraymesh-web restarts, avoiding self-restart deadlock.
+    """
+    ensure_cli_and_runner_fixed()
+    script = get_xraymesh_script()
+    if not os.path.isfile(script):
+        return False, f"XRayMesh CLI script not found at {script}"
+
+    # 1. Try systemd-run so update executes in its own transient unit
+    if shutil.which("systemd-run"):
+        try:
+            subprocess.run(["systemctl", "stop", "xraymesh-updater-temp.service"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+            cmd = [
+                "systemd-run",
+                "--unit=xraymesh-updater-temp",
+                "--description=XRayMesh Background Node Updater",
+                "--remain-after-exit=no",
+                "bash", script, "node-update"
+            ]
+            r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5)
+            if r.returncode == 0:
+                return True, "Update initiated via detached systemd-run unit."
+        except Exception:
+            pass
+
+    # 2. Fallback: double-forked setsid detached process with output logging
+    try:
+        log_file = "/var/log/xraymesh-update.log"
+        fallback_cmd = f"nohup bash {script} node-update >{log_file} 2>&1 &"
+        subprocess.Popen(
+            ["bash", "-c", fallback_cmd],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+            close_fds=True
+        )
+        return True, f"Update initiated in background (log: {log_file})."
+    except Exception as e:
+        def run_thread():
+            time.sleep(0.5)
+            run_xraymesh_cmd(["node-update"])
+        threading.Thread(target=run_thread, daemon=True).start()
+        return True, "Update initiated in fallback thread."
+
+
 _public_ip_cache = {"ip": "", "time": 0.0}
 
 def is_public_ipv4(ip_str):
@@ -874,11 +940,27 @@ def cleanup_nonce_cache():
 
 
 def verify_cluster_hmac(headers, raw_body):
-    """Verify HMAC-SHA256 signature on inter-node cluster commands."""
+    """Verify HMAC-SHA256 signature on inter-node cluster commands with clock-skew tolerance and secret fallback."""
     cleanup_nonce_cache()
     sig = headers.get("X-Cluster-Signature", "").strip()
     ts_str = headers.get("X-Cluster-Timestamp", "").strip()
     nonce = headers.get("X-Cluster-Nonce", "").strip()
+    direct_secret = headers.get("X-Cluster-Secret", "").strip()
+
+    cfg = load_env_file(CONFIG_FILE)
+    secret = cfg.get("NETWORK_SECRET", "").strip()
+    secrets_to_try = [secret]
+    if os.path.isfile(CONFIG_BACKUP_FILE):
+        bak_cfg = load_env_file(CONFIG_BACKUP_FILE)
+        bak_secret = bak_cfg.get("NETWORK_SECRET", "").strip()
+        if bak_secret and bak_secret not in secrets_to_try:
+            secrets_to_try.append(bak_secret)
+
+    # 1. If direct secret matches, authenticate immediately (safeguard against clock skew or proxy header loss)
+    if direct_secret and any(s and secrets.compare_digest(direct_secret, s) for s in secrets_to_try):
+        if nonce:
+            CLUSTER_NONCE_CACHE[nonce] = time.time()
+        return True, ""
 
     if not sig or not ts_str or not nonce:
         return False, "Missing cluster authentication headers"
@@ -889,22 +971,11 @@ def verify_cluster_hmac(headers, raw_body):
         return False, "Invalid timestamp"
 
     now = time.time()
-    if abs(now - ts) > 35.0:
+    if abs(now - ts) > 300.0:
         return False, f"Request expired or clock skew (drift: {round(abs(now - ts), 1)}s)"
 
     if nonce in CLUSTER_NONCE_CACHE:
         return False, "Replay attack detected (nonce already processed)"
-
-    cfg = load_env_file(CONFIG_FILE)
-    secret = cfg.get("NETWORK_SECRET", "").strip()
-
-    # Also verify against staged secret or backup secret if recently committed
-    secrets_to_try = [secret]
-    if os.path.isfile(CONFIG_BACKUP_FILE):
-        bak_cfg = load_env_file(CONFIG_BACKUP_FILE)
-        bak_secret = bak_cfg.get("NETWORK_SECRET", "").strip()
-        if bak_secret and bak_secret not in secrets_to_try:
-            secrets_to_try.append(bak_secret)
 
     body_hash = hashlib.sha256(raw_body if raw_body else b"{}").hexdigest()
     msg = f"{ts_str}\n{nonce}\n{body_hash}".encode("utf-8")
@@ -926,7 +997,7 @@ def verify_cluster_hmac(headers, raw_body):
 
 
 def sign_cluster_request(secret, payload_dict):
-    """Sign inter-node cluster request using HMAC-SHA256."""
+    """Sign inter-node cluster request using HMAC-SHA256 and include direct secret fallback."""
     body_bytes = json.dumps(payload_dict, ensure_ascii=False).encode("utf-8")
     ts_str = str(int(time.time()))
     nonce = secrets.token_hex(16)
@@ -938,6 +1009,7 @@ def sign_cluster_request(secret, payload_dict):
         "X-Cluster-Signature": sig,
         "X-Cluster-Timestamp": ts_str,
         "X-Cluster-Nonce": nonce,
+        "X-Cluster-Secret": secret,
         "User-Agent": f"XRayMesh-Cluster/{CURRENT_VERSION}"
     }
     return body_bytes, headers
@@ -1059,34 +1131,53 @@ def apply_staged_cluster_config():
 
 
 def send_cluster_http(target_ip, target_port, endpoint, secret, payload, timeout=6):
-    """Send signed HTTP/HTTPS POST request to a cluster peer over mesh network."""
+    """Send signed HTTP/HTTPS POST request to a cluster peer over mesh network,
+    probing candidate ports if connection to target_port fails."""
     body_bytes, headers = sign_cluster_request(secret, payload)
 
     insecure_ssl_ctx = ssl.create_default_context()
     insecure_ssl_ctx.check_hostname = False
     insecure_ssl_ctx.verify_mode = ssl.CERT_NONE
 
+    ports_to_try = []
+    if target_port:
+        ports_to_try.append(target_port)
+    cached_peer = PEER_VERSION_CACHE.get(target_ip)
+    if cached_peer and cached_peer.get("port"):
+        cp = cached_peer["port"]
+        if cp not in ports_to_try:
+            ports_to_try.append(cp)
+    for p in (PORT, 11080, 8080, 8443, 443, 80):
+        if p not in ports_to_try:
+            ports_to_try.append(p)
+
     schemes = ("https", "http") if is_ssl_enabled() else ("http", "https")
     last_err = "Failed to connect to cluster peer"
-    for scheme in schemes:
-        url = f"{scheme}://{target_ip}:{target_port}{endpoint}"
-        req = urllib.request.Request(url, data=body_bytes, headers=headers, method="POST")
-        try:
-            ctx = insecure_ssl_ctx if scheme == "https" else None
-            with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                return True, data
-        except urllib.error.HTTPError as e:
+
+    for port in ports_to_try:
+        for scheme in schemes:
+            url = f"{scheme}://{target_ip}:{port}{endpoint}"
+            req = urllib.request.Request(url, data=body_bytes, headers=headers, method="POST")
             try:
-                err_data = json.loads(e.read().decode("utf-8"))
-                last_err = err_data.get("error", str(e))
-            except Exception:
+                ctx = insecure_ssl_ctx if scheme == "https" else None
+                with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    if target_ip in PEER_VERSION_CACHE:
+                        PEER_VERSION_CACHE[target_ip]["port"] = port
+                    return True, data
+            except urllib.error.HTTPError as e:
+                try:
+                    err_data = json.loads(e.read().decode("utf-8"))
+                    last_err = err_data.get("error", str(e))
+                except Exception:
+                    last_err = str(e)
+                # If peer responded with 403, we definitely reached the right port/server
+                if e.code == 403:
+                    return False, last_err
+                continue
+            except Exception as e:
                 last_err = str(e)
-            # If 400 Bad Request or 404, the peer might use the other scheme or port
-            continue
-        except Exception as e:
-            last_err = str(e)
-            continue
+                continue
     return False, last_err
 
 
@@ -1710,14 +1801,11 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 return
 
             elif path == "/api/cluster/node/update":
-                def run_bg_node_update():
-                    time.sleep(0.5)
-                    run_xraymesh_cmd(["node-update"])
-                threading.Thread(target=run_bg_node_update, daemon=True).start()
+                ok, msg = spawn_detached_node_update()
                 cur_cfg = load_env_file(CONFIG_FILE)
                 self.send_json({
-                    "ok": True,
-                    "message": f"Update initiated on node '{cur_cfg.get('HOSTNAME', 'node')}'.",
+                    "ok": ok,
+                    "message": f"Update initiated on node '{cur_cfg.get('HOSTNAME', 'node')}': {msg}",
                     "node": cur_cfg.get("HOSTNAME", "node")
                 })
                 return
@@ -2439,11 +2527,8 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             return
 
         elif path == "/api/node/update":
-            def run_bg_node_update():
-                time.sleep(0.5)
-                run_xraymesh_cmd(["node-update"])
-            threading.Thread(target=run_bg_node_update, daemon=True).start()
-            self.send_json({"ok": True, "message": "Local node update initiated. Web UI and services will reload shortly."})
+            ok, msg = spawn_detached_node_update()
+            self.send_json({"ok": ok, "message": "Local node update initiated. Web UI and services will reload shortly."})
             return
 
         elif path == "/api/cluster/update":
@@ -2457,11 +2542,8 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 return
 
             if target_ip in ("local", "127.0.0.1", local_ip):
-                def run_bg_node_update():
-                    time.sleep(0.5)
-                    run_xraymesh_cmd(["node-update"])
-                threading.Thread(target=run_bg_node_update, daemon=True).start()
-                self.send_json({"ok": True, "message": f"Local node ({local_ip}) update initiated."})
+                ok, msg = spawn_detached_node_update()
+                self.send_json({"ok": ok, "message": f"Local node ({local_ip}) update initiated."})
                 return
 
             if target_ip == "all":
@@ -2476,12 +2558,14 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                     vip = p.get("ipv4", "").strip()
                     cost = str(p.get("cost", "0"))
                     if vip and vip != local_ip and cost not in ("0", "Local", "none", ""):
-                        active_peers.append({"ipv4": vip, "hostname": p.get("hostname", vip)})
+                        cached_peer = PEER_VERSION_CACHE.get(vip, {})
+                        peer_port = cached_peer.get("port", PORT)
+                        active_peers.append({"ipv4": vip, "hostname": p.get("hostname", vip), "port": peer_port})
 
                 results = {}
                 with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
                     futures = {
-                        executor.submit(send_cluster_http, p["ipv4"], PORT, "/api/cluster/node/update", secret, {}, 5): p
+                        executor.submit(send_cluster_http, p["ipv4"], p["port"], "/api/cluster/node/update", secret, {}, 8): p
                         for p in active_peers
                     }
                     for fut in concurrent.futures.as_completed(futures):
@@ -2492,22 +2576,24 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                         except Exception as e:
                             results[p["ipv4"]] = {"ok": False, "hostname": p["hostname"], "error": str(e)}
 
-                def run_bg_local_update():
-                    time.sleep(1.0)
-                    run_xraymesh_cmd(["node-update"])
-                threading.Thread(target=run_bg_local_update, daemon=True).start()
+                # Also initiate local update detached
+                spawn_detached_node_update()
                 results[local_ip] = {"ok": True, "hostname": cfg.get("HOSTNAME", "local"), "response": "Local update initiated"}
 
+                successful_count = sum(1 for r in results.values() if r.get("ok"))
                 self.send_json({
                     "ok": True,
-                    "message": f"Cluster update initiated across {len(results)} node(s).",
+                    "message": f"Cluster update initiated across {successful_count}/{len(results)} node(s).",
                     "results": results
                 })
                 return
 
-            ok, res = send_cluster_http(target_ip, PORT, "/api/cluster/node/update", secret, {}, 6)
+            cached_peer = PEER_VERSION_CACHE.get(target_ip, {})
+            target_port = cached_peer.get("port", PORT)
+            ok, res = send_cluster_http(target_ip, target_port, "/api/cluster/node/update", secret, {}, 8)
             if ok:
-                self.send_json({"ok": True, "message": f"Update triggered on node {target_ip}."})
+                msg = res.get("message", f"Update triggered on node {target_ip}.") if isinstance(res, dict) else f"Update triggered on node {target_ip}."
+                self.send_json({"ok": True, "message": msg, "target": target_ip})
             else:
                 self.send_json({"ok": False, "error": f"Failed to trigger update on {target_ip}: {res}"}, status=400)
             return

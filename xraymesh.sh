@@ -2362,6 +2362,43 @@ ensure_xraymesh_cli() {
   fi
 }
 
+download_file_with_mirrors() {
+  local target_path="$1"
+  local rel_path="$2"
+  local mode="${3:-0644}"
+  local branch="${XRAYMESH_BRANCH:-beta}"
+  local ts
+  ts="$(date +%s)"
+
+  local urls=(
+    "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/${branch}/${rel_path}?t=${ts}"
+    "https://cdn.jsdelivr.net/gh/Erfan-XRay/XRayMesh@${branch}/${rel_path}"
+    "https://fastly.jsdelivr.net/gh/Erfan-XRay/XRayMesh@${branch}/${rel_path}"
+    "https://raw.gitmirror.com/Erfan-XRay/XRayMesh/${branch}/${rel_path}"
+  )
+
+  local tmp
+  tmp="$(mktemp)"
+  local success=0
+
+  for url in "${urls[@]}"; do
+    if curl -fsSL -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+      --connect-timeout 6 --max-time 35 --retry 1 \
+      "$url" -o "$tmp" 2>/dev/null && [[ -s "$tmp" ]]; then
+      # Sanity check: Ensure we didn't download an HTML error page when expecting python/bash/script
+      if grep -qi "<html" "$tmp" 2>/dev/null && [[ "$rel_path" != *"index.html"* ]]; then
+        continue
+      fi
+      install -m "$mode" "$tmp" "$target_path" 2>/dev/null || cp -f "$tmp" "$target_path" 2>/dev/null || true
+      chmod "$mode" "$target_path" 2>/dev/null || true
+      success=1
+      break
+    fi
+  done
+  rm -f "$tmp"
+  return $(( 1 - success ))
+}
+
 update_web_assets() {
   mkdir -p "${WEB_DIR}/static" "${INSTALL_DIR}" /etc/xraymesh
   local branch="${XRAYMESH_BRANCH:-beta}" updated=0
@@ -2375,18 +2412,10 @@ update_web_assets() {
     ln -sf "$target_sh" /usr/local/bin/xraymesh 2>/dev/null || true
     updated=1
   else
-    local tmp_sh ts
-    ts="$(date +%s)"
-    tmp_sh="$(mktemp)"
-    if curl -fsSL -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' --connect-timeout 8 --max-time 30 --retry 2 \
-      "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/${branch}/xraymesh.sh?t=${ts}" \
-      -o "$tmp_sh" 2>/dev/null && [[ -s "$tmp_sh" ]]; then
-      install -m 0755 "$tmp_sh" "$target_sh" 2>/dev/null || cp -f "$tmp_sh" "$target_sh" 2>/dev/null || true
-      chmod 0755 "$target_sh" 2>/dev/null || true
+    if download_file_with_mirrors "$target_sh" "xraymesh.sh" 0755; then
       ln -sf "$target_sh" /usr/local/bin/xraymesh 2>/dev/null || true
       updated=1
     fi
-    rm -f "$tmp_sh"
   fi
 
   # 2. Update web server and static assets
@@ -2395,25 +2424,12 @@ update_web_assets() {
     install -m 0644 "${script_dir}/web/static/index.html" "${WEB_DIR}/static/index.html"
     updated=1
   else
-    local tmp_srv tmp_idx ts
-    ts="$(date +%s)"
-    tmp_srv="$(mktemp)"
-    tmp_idx="$(mktemp)"
-    if curl -fsSL -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' --connect-timeout 10 --max-time 45 --retry 2 \
-      "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/${branch}/web/server.py?t=${ts}" \
-      -o "$tmp_srv" 2>/dev/null && [[ -s "$tmp_srv" ]]; then
-      install -m 0755 "$tmp_srv" "${WEB_DIR}/server.py"
+    if download_file_with_mirrors "${WEB_DIR}/server.py" "web/server.py" 0755; then
       updated=1
     fi
-    rm -f "$tmp_srv"
-
-    if curl -fsSL -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' --connect-timeout 10 --max-time 60 --retry 2 \
-      "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/${branch}/web/static/index.html?t=${ts}" \
-      -o "$tmp_idx" 2>/dev/null && [[ -s "$tmp_idx" ]]; then
-      install -m 0644 "$tmp_idx" "${WEB_DIR}/static/index.html"
+    if download_file_with_mirrors "${WEB_DIR}/static/index.html" "web/static/index.html" 0644; then
       updated=1
     fi
-    rm -f "$tmp_idx"
   fi
 
   # 3. Always regenerate runner and services
@@ -2429,18 +2445,44 @@ update_web_assets() {
     ok "Core CLI, runner, and Web UI assets updated successfully."
   fi
 
-  # 4. Restart mesh service if active to execute updated runner
+  # 4. Restart mesh service asynchronously if active to execute updated runner
   if systemctl is-active --quiet xraymesh.service 2>/dev/null; then
-    systemctl restart xraymesh.service 2>/dev/null || true
+    ( sleep 1 && systemctl restart xraymesh.service ) >/dev/null 2>&1 &
   fi
 
-  # 5. Restart web service
+  # 5. Restart web service asynchronously to avoid killing the updater process mid-execution (prevents deadlock)
   if (( updated )) && systemctl is-active --quiet xraymesh-web.service 2>/dev/null; then
-    if systemctl status xraymesh-web.service 2>/dev/null | grep -q "deactivating"; then
-      systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null || true
-    fi
-    systemctl restart xraymesh-web.service 2>/dev/null || (systemctl kill -s SIGKILL xraymesh-web.service 2>/dev/null && systemctl start xraymesh-web.service 2>/dev/null) || true
+    ( sleep 2 && systemctl restart xraymesh-web.service ) >/dev/null 2>&1 &
   fi
+}
+
+update_node_full() {
+  require_root
+  require_linux
+  local branch="${XRAYMESH_BRANCH:-beta}"
+  info "Starting node update (branch: ${branch})..."
+
+  # 1. Update CLI, Web Server, frontend assets, runner and services
+  update_web_assets
+
+  # 2. Check and update EasyTier binary if a new release is available
+  local current_et=""
+  current_et="$(cat "${INSTALL_DIR}/easytier.version" 2>/dev/null || echo "0.0.0")"
+  local latest_et_json
+  latest_et_json="$(curl -fsSL --connect-timeout 5 --max-time 12 https://api.github.com/repos/EasyTier/EasyTier/releases/latest 2>/dev/null || true)"
+  local latest_et=""
+  if [[ -n "$latest_et_json" ]]; then
+    latest_et="$(printf '%s' "$latest_et_json" | grep -Po '"tag_name":\s*"v?\K[0-9.]+' | head -n1 || true)"
+  fi
+  if [[ -n "$latest_et" && "$latest_et" != "$current_et" ]]; then
+    info "Updating EasyTier core (${current_et} → ${latest_et})..."
+    install_core || true
+    if systemctl is-active --quiet xraymesh.service 2>/dev/null; then
+      ( sleep 1 && systemctl restart xraymesh.service ) >/dev/null 2>&1 &
+    fi
+  fi
+
+  ok "Node update completed successfully."
 }
 
 install_web_runtime() {
@@ -2958,12 +3000,12 @@ update_core() {
   before="$(cat "${INSTALL_DIR}/easytier.version" 2>/dev/null || echo "not installed")"
   install_core
   after="$(cat "${INSTALL_DIR}/easytier.version")"
-  [[ -f "$SERVICE_FILE" ]] && systemctl restart xraymesh.service
+  [[ -f "$SERVICE_FILE" ]] && ( sleep 1 && systemctl restart xraymesh.service ) >/dev/null 2>&1 &
   if [[ -d "$WEB_DIR" || -f "$WEB_SERVICE_FILE" ]]; then
     update_web_assets
   fi
   ok "EasyTier: ${before} → ${after}"
-  pause
+  [[ -t 0 ]] && pause || true
 }
 
 control_service() {
@@ -3390,7 +3432,7 @@ main() {
   iperf-restart) require_root; require_linux; write_iperf_service; systemctl restart xraymesh-iperf.service ;;
   write-runner) require_root; require_linux; write_runner; write_iperf_service; systemctl daemon-reload ;;
   node-restart|node-apply) require_root; require_linux; apply_node_config ;;
-  web-update|update-all-assets|node-update) require_root; require_linux; update_web_assets ;;
+  web-update|update-all-assets|node-update) require_root; require_linux; update_node_full ;;
   ssl|web-ssl) require_root; require_linux; configure_web_ssl ;;
   remove-ssl|web-ssl-remove) require_root; require_linux; remove_web_ssl ;;
   self-test|doctor) require_linux; self_test ;;

@@ -434,17 +434,18 @@ export default function App() {
   // ─── Remote Node & Cluster Updating ─────────────────────
   const handleUpdateNode = useCallback(
     async (ip: string, hostname?: string) => {
-      addToast(`${t('version_updating')} (${hostname || ip})...`, 'info');
+      const displayName = hostname && hostname !== ip ? `${hostname} (${ip})` : ip;
+      addToast(`${t('version_updating')} (${displayName})...`, 'info');
       try {
         const res = await api.updateNode(ip);
         if (res.ok) {
-          addToast(res.message || '✓ Update initiated', 'success');
+          addToast(res.message || `✓ Update initiated on ${displayName}`, 'success');
         } else {
-          addToast(res.message || 'Update failed', 'error');
+          addToast(res.message || `Update failed on ${displayName}`, 'error');
         }
-        setTimeout(handleRefresh, 3000);
+        setTimeout(handleRefresh, 4000);
       } catch (e: any) {
-        addToast(e.message || 'Update failed', 'error');
+        addToast(e.message || `Update failed on ${displayName}`, 'error');
       }
     },
     [addToast, handleRefresh, t]
