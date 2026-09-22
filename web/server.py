@@ -33,7 +33,7 @@ import ssl
 from pathlib import Path
 
 # Paths & Defaults
-CURRENT_VERSION = "2.0.7"
+CURRENT_VERSION = "2.0.8"
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/xraymesh")
 BIN_DIR = os.path.join(INSTALL_DIR, "bin")
 CONFIG_FILE = os.environ.get("CONFIG_FILE", "/etc/xraymesh/config.env")
@@ -309,6 +309,46 @@ def create_session():
         "user": "admin"
     }
     return session_id
+
+
+def get_session_cookie(session_id):
+    """Generate Set-Cookie header value with security attributes."""
+    secure_flag = "; Secure" if is_ssl_enabled() else ""
+    return f"{SESSION_COOKIE_NAME}={session_id}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_DURATION_SEC}{secure_flag}"
+
+
+# Login Rate Limiting (In-Memory IP tracking)
+LOGIN_ATTEMPTS = {}  # ip -> [timestamp, ...]
+LOGIN_RATE_LIMIT = 5  # max failed attempts
+LOGIN_RATE_WINDOW = 60  # window in seconds
+LOGIN_ATTEMPTS_LOCK = threading.Lock()
+
+
+def check_login_rate_limit(ip):
+    """Return (allowed: bool, retry_after: int) for IP address."""
+    now = time.time()
+    with LOGIN_ATTEMPTS_LOCK:
+        attempts = [ts for ts in LOGIN_ATTEMPTS.get(ip, []) if now - ts < LOGIN_RATE_WINDOW]
+        LOGIN_ATTEMPTS[ip] = attempts
+        if len(attempts) >= LOGIN_RATE_LIMIT:
+            retry_after = max(1, int(LOGIN_RATE_WINDOW - (now - attempts[0])))
+            return False, retry_after
+        return True, 0
+
+
+def record_failed_login(ip):
+    """Record a failed login attempt for rate limiting."""
+    now = time.time()
+    with LOGIN_ATTEMPTS_LOCK:
+        attempts = [ts for ts in LOGIN_ATTEMPTS.get(ip, []) if now - ts < LOGIN_RATE_WINDOW]
+        attempts.append(now)
+        LOGIN_ATTEMPTS[ip] = attempts
+
+
+def reset_login_attempts(ip):
+    """Clear failed login records for IP upon successful authentication."""
+    with LOGIN_ATTEMPTS_LOCK:
+        LOGIN_ATTEMPTS.pop(ip, None)
 
 
 _last_cpu_sample = {"total": 0.0, "idle": 0.0, "time": 0.0}
@@ -1247,13 +1287,13 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
         path = parsed.path
         query = dict(urllib.parse.parse_qsl(parsed.query))
 
-        # Check token parameter in URL for one-click browser entry
-        if "token" in query:
+        # Check token parameter in URL for one-click browser entry (scope to web dashboard root)
+        if path in ("/", "/index.html") and "token" in query:
             token = query["token"]
             if validate_token(token):
                 session_id = create_session()
                 # Redirect to clean URL '/' with Set-Cookie
-                cookie_val = f"{SESSION_COOKIE_NAME}={session_id}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_DURATION_SEC}"
+                cookie_val = get_session_cookie(session_id)
                 self.send_response(302)
                 self.send_header("Location", "/")
                 self.send_header("Set-Cookie", cookie_val)
@@ -1639,6 +1679,15 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
 
         # Public Auth Endpoints
         if path == "/api/auth/login":
+            client_ip = self.client_address[0]
+            allowed, retry_after = check_login_rate_limit(client_ip)
+            if not allowed:
+                self.send_json({
+                    "ok": False,
+                    "error": f"Too many failed login attempts. Please wait {retry_after} seconds."
+                }, status=429, headers={"Retry-After": str(retry_after)})
+                return
+
             password = data.get("password", "")
             token = data.get("token", "")
 
@@ -1647,18 +1696,21 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
 
             # 1. Try Token
             if token and validate_token(token):
+                reset_login_attempts(client_ip)
                 session_id = create_session()
-                cookie_val = f"{SESSION_COOKIE_NAME}={session_id}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_DURATION_SEC}"
+                cookie_val = get_session_cookie(session_id)
                 self.send_json({"ok": True, "method": "token"}, headers={"Set-Cookie": cookie_val})
                 return
 
             # 2. Try Password
             if password and stored_hash and verify_password(password, stored_hash):
+                reset_login_attempts(client_ip)
                 session_id = create_session()
-                cookie_val = f"{SESSION_COOKIE_NAME}={session_id}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_DURATION_SEC}"
+                cookie_val = get_session_cookie(session_id)
                 self.send_json({"ok": True, "method": "password"}, headers={"Set-Cookie": cookie_val})
                 return
 
+            record_failed_login(client_ip)
             self.send_json({"ok": False, "error": "Invalid password or access token"}, status=401)
             return
 
@@ -1670,7 +1722,8 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                         sid = item.strip().split("=", 1)[1]
                         if sid in SESSIONS:
                             del SESSIONS[sid]
-            clear_cookie = f"{SESSION_COOKIE_NAME}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT"
+            secure_flag = "; Secure" if is_ssl_enabled() else ""
+            clear_cookie = f"{SESSION_COOKIE_NAME}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT{secure_flag}"
             self.send_json({"ok": True}, headers={"Set-Cookie": clear_cookie})
             return
 

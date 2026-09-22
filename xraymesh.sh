@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="2.0.7"
+readonly VERSION="2.0.8"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
 readonly BIN_DIR="${INSTALL_DIR}/bin"
@@ -1474,9 +1474,12 @@ write_ip_forwarding_config() {
   cat > "$IPTABLES_SYSCTL_FILE" <<'EOF_SYSCTL'
 # Managed by XRayMesh iptables tunnels.
 net.ipv4.ip_forward=1
+net.ipv6.conf.all.forwarding=1
 EOF_SYSCTL
   chmod 644 "$IPTABLES_SYSCTL_FILE"
-  sysctl -w net.ipv4.ip_forward=1 >/dev/null
+  sysctl -p "$IPTABLES_SYSCTL_FILE" >/dev/null 2>&1 || true
+  sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+  sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null 2>&1 || true
 }
 
 save_iptables_tunnel() {
@@ -1558,6 +1561,7 @@ remove_rules() {
 }
 
 apply_rules() {
+  sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
   remove_rules
   "$IPT" -w -t nat -N "$DNAT_CHAIN"
   "$IPT" -w -t nat -N "$SNAT_CHAIN"
@@ -2788,6 +2792,22 @@ print(f'sha256\${salt}\${h}')
 
   systemctl enable --now xraymesh-web.service >/dev/null 2>&1 || true
   systemctl enable --now xraymesh-iperf.service >/dev/null 2>&1 || true
+
+  # Automatically permit Web & Mesh ports if UFW firewall is active
+  if command -v ufw >/dev/null 2>&1; then
+    if ufw status 2>/dev/null | grep -qi "Status: active"; then
+      local ufw_wport="$(get_web_port)"
+      ufw allow "${ufw_wport}/tcp" >/dev/null 2>&1 || true
+      local ufw_mport="11010"
+      if [[ -f "$CONFIG_FILE" ]]; then
+        ufw_mport="$(grep '^PORT=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2 | tr -d '\"'\'' ')"
+        ufw_mport="${ufw_mport:-11010}"
+      fi
+      ufw allow "${ufw_mport}/tcp" >/dev/null 2>&1 || true
+      ufw allow "${ufw_mport}/udp" >/dev/null 2>&1 || true
+      ok "Firewall (UFW): Allowed Web (${ufw_wport}/tcp) and Mesh (${ufw_mport}/tcp+udp) ports."
+    fi
+  fi
 
   # Generate 1-hour access link
   local token now expiry_ts pub_ip port proto domain web_url

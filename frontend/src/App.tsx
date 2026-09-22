@@ -203,6 +203,45 @@ export default function App() {
 
   // ─── Auth ───────────────────────────────────────────────
   useEffect(() => {
+    // Check if a one-click token is present in the URL query string
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenParam = urlParams.get('token');
+
+    if (tokenParam) {
+      // Strip token from browser address bar history immediately for security
+      urlParams.delete('token');
+      const cleanSearch = urlParams.toString();
+      const cleanUrl =
+        window.location.pathname + (cleanSearch ? `?${cleanSearch}` : '') + window.location.hash;
+      window.history.replaceState({}, '', cleanUrl);
+
+      // Exchange token for active session
+      api
+        .loginWithToken(tokenParam)
+        .then(() => {
+          setIsAuthenticated(true);
+          setShowLogin(false);
+          addToast('✓ Logged in via access token', 'success');
+        })
+        .catch(() => {
+          // Token exchange failed or was already consumed by server 302, check status
+          api
+            .fetchAuthStatus()
+            .then((res) => {
+              setIsAuthenticated(res.authenticated);
+              setShowLogin(!res.authenticated);
+              if (typeof res.password_configured === 'boolean') {
+                setPasswordConfigured(res.password_configured);
+              }
+            })
+            .catch(() => {
+              setIsAuthenticated(false);
+              setShowLogin(true);
+            });
+        });
+      return;
+    }
+
     api
       .fetchAuthStatus()
       .then((res) => {
@@ -216,7 +255,7 @@ export default function App() {
         setIsAuthenticated(false);
         setShowLogin(true);
       });
-  }, []);
+  }, [addToast]);
 
   // Start polling once authenticated
   useEffect(() => {

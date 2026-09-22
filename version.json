@@ -1,7 +1,7 @@
 {
-  "version": "2.0.7",
-  "release_name": "XRayMesh v2.0.7 (Streamlined Node Config UI & Sub-Tabs)",
+  "version": "2.0.8",
+  "release_name": "XRayMesh v2.0.8 (Pre-Release Hardening & Security Polish)",
   "release_date": "2026-09-22",
-  "changelog": "Completely revamped Node Config tab into lightweight, segmented sub-tabs (Identity, Protocol, Invite & Peers, Maintenance), eliminating clutter and duplicate controls.",
+  "changelog": "Hardened authentication with brute-force rate limiter, fixed one-click login token exchange & URL sanitization, added dynamic Secure cookie flags, and automated UFW firewall configuration.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update"
 }
