@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Peer, SpeedtestData } from '../../types';
 import {
   AreaChart,
@@ -8,14 +8,14 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { ShieldCheck, Zap, Rocket, Target, Loader2 } from 'lucide-react';
+import { ShieldCheck, Zap, Rocket, Target, Loader2, ArrowLeftRight, ArrowRight, Server } from 'lucide-react';
 
 interface SpeedtestTabProps {
   peers: Peer[];
   targetIp: string;
   onTargetChange: (ip: string) => void;
   isRunning: boolean;
-  onRun: (target: string, protocol: 'tcp' | 'udp', duration: number, bandwidth: string) => void;
+  onRun: (target: string, protocol: 'tcp' | 'udp', duration: number, bandwidth: string, source?: string) => void;
   lastResult: SpeedtestData | null;
   t: (key: any) => string;
 }
@@ -33,8 +33,62 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
   const [duration, setDuration] = useState<number>(5);
   const [bandwidth, setBandwidth] = useState<string>('50M');
 
-  // Selected peer preview
+  // Find default local node
+  const currentPeer = peers.find((p) => p.is_current);
+  const [sourceIp, setSourceIp] = useState<string>(() => {
+    return currentPeer?.ipv4 || (peers.length > 0 ? peers[0].ipv4 : '');
+  });
+
+  // Synchronize sourceIp when peers list updates
+  useEffect(() => {
+    if (!sourceIp && peers.length > 0) {
+      const cur = peers.find((p) => p.is_current) || peers[0];
+      if (cur) setSourceIp(cur.ipv4);
+    }
+  }, [peers, sourceIp]);
+
+  // If targetIp is empty or identical to sourceIp, auto-pick another candidate peer
+  useEffect(() => {
+    if (peers.length > 1) {
+      if (!targetIp || targetIp === sourceIp) {
+        const candidate = peers.find((p) => p.ipv4 !== sourceIp);
+        if (candidate) {
+          onTargetChange(candidate.ipv4);
+        }
+      }
+    }
+  }, [peers, sourceIp, targetIp, onTargetChange]);
+
+  const sourcePeer = peers.find((p) => p.ipv4 === sourceIp);
   const selectedPeer = peers.find((p) => p.ipv4 === targetIp);
+
+  const handleSourceChange = (newSource: string) => {
+    setSourceIp(newSource);
+    if (targetIp === newSource) {
+      const nextTarget = peers.find((p) => p.ipv4 !== newSource);
+      if (nextTarget) {
+        onTargetChange(nextTarget.ipv4);
+      }
+    }
+  };
+
+  const handleTargetChange = (newTarget: string) => {
+    onTargetChange(newTarget);
+    if (sourceIp === newTarget) {
+      const nextSource = peers.find((p) => p.ipv4 !== newTarget);
+      if (nextSource) {
+        setSourceIp(nextSource.ipv4);
+      }
+    }
+  };
+
+  const handleSwap = () => {
+    if (!targetIp || !sourceIp) return;
+    const oldSource = sourceIp;
+    const oldTarget = targetIp;
+    setSourceIp(oldTarget);
+    onTargetChange(oldSource);
+  };
 
   const applyPreset = (preset: 'quick' | 'max' | 'udp') => {
     if (preset === 'quick') {
@@ -52,7 +106,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
 
   const handleStart = () => {
     if (!targetIp) return;
-    onRun(targetIp, protocol, duration, bandwidth);
+    onRun(targetIp, protocol, duration, bandwidth, sourceIp);
   };
 
   const formatBytes = (bytes?: number) => {
@@ -62,6 +116,8 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
   };
+
+  const isRemoteRunner = sourcePeer && !sourcePeer.is_current;
 
   return (
     <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
@@ -125,33 +181,96 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
             </div>
           </div>
 
-          {/* Target Selector */}
-          <div>
-            <label className="block text-xs font-medium text-text-muted mb-1.5">
-              {t('speed_dest_label')}
-            </label>
-            <select
-              value={targetIp}
-              onChange={(e) => onTargetChange(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-900/80 border border-white/15 rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
-            >
-              <option value="">{t('speed_dest_placeholder')}</option>
-              {peers.filter((p) => !p.is_current).map((p) => (
-                <option key={p.ipv4} value={p.ipv4}>
-                  {p.ipv4} ({p.hostname || 'Peer'}) - {p.lat_ms || '0'}ms
-                </option>
-              ))}
-            </select>
+          {/* Node Selectors (Source & Destination with Swap) */}
+          <div className="space-y-2.5 p-3 rounded-xl bg-white/5 border border-white/10">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-text-muted flex items-center gap-1.5">
+                <Server className="w-3.5 h-3.5 text-primary" />
+                {t('speed_route_display')}
+              </label>
+              {peers.length > 1 && (
+                <button
+                  type="button"
+                  onClick={handleSwap}
+                  title={t('speed_swap_nodes')}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-[11px] font-medium transition-all"
+                >
+                  <ArrowLeftRight className="w-3 h-3" />
+                  <span>{t('speed_swap_nodes')}</span>
+                </button>
+              )}
+            </div>
 
-            {/* Target Preview Chip */}
-            {selectedPeer && (
-              <div className="flex items-center gap-2 mt-2 p-2.5 rounded-lg bg-primary/10 border border-primary/20 text-xs text-text-muted">
-                <Target className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-                <span className="truncate">
-                  {t('speed_target_chip_prefix')}: <strong className="text-text-main font-mono">{selectedPeer.ipv4}</strong> ({selectedPeer.hostname || 'Node'}) &bull;{' '}
-                  <span className="text-primary font-mono">{selectedPeer.lat_ms ? `${selectedPeer.lat_ms} ms` : '< 1ms'}</span> &bull;{' '}
-                  <span className="text-emerald-400">{selectedPeer.cost === 1 || selectedPeer.cost === '1' ? t('peer_direct_badge') : `${t('peer_relayed_badge')} (${selectedPeer.cost})`}</span>
-                </span>
+            {/* Source Node Selector */}
+            <div>
+              <label className="block text-[11px] font-medium text-text-muted mb-1">
+                {t('speed_source_label')}
+              </label>
+              <select
+                value={sourceIp}
+                onChange={(e) => handleSourceChange(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-900/80 border border-white/15 rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
+              >
+                <option value="">{t('speed_source_placeholder')}</option>
+                {peers.map((p) => (
+                  <option key={p.ipv4} value={p.ipv4}>
+                    {p.hostname || p.ipv4} ({p.ipv4}){p.is_current ? ' ★ Local' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Destination Node Selector */}
+            <div>
+              <label className="block text-[11px] font-medium text-text-muted mb-1">
+                {t('speed_dest_label')}
+              </label>
+              <select
+                value={targetIp}
+                onChange={(e) => handleTargetChange(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-900/80 border border-white/15 rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
+              >
+                <option value="">{t('speed_dest_placeholder')}</option>
+                {peers.filter((p) => p.ipv4 !== sourceIp).map((p) => (
+                  <option key={p.ipv4} value={p.ipv4}>
+                    {p.hostname || p.ipv4} ({p.ipv4}){p.is_current ? ' ★ Local' : ''} - {p.lat_ms || '0'}ms
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Active Route Visual Chip */}
+            {sourceIp && targetIp && (
+              <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-primary/10 border border-primary/20 text-xs">
+                <div className="flex items-center gap-1.5 truncate">
+                  <span className="text-[10px] uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-white/10">
+                    {t('speed_source_chip_prefix')}
+                  </span>
+                  <span className="font-mono font-semibold text-text-main truncate">
+                    {sourcePeer?.hostname || sourceIp}
+                  </span>
+                  {sourcePeer?.is_current && (
+                    <span className="text-[10px] text-primary font-bold">(Local)</span>
+                  )}
+                </div>
+
+                <div className="flex items-center px-1 text-primary font-bold">
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </div>
+
+                <div className="flex items-center gap-1.5 truncate">
+                  <span className="text-[10px] uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-white/10">
+                    {t('speed_target_chip_prefix')}
+                  </span>
+                  <span className="font-mono font-semibold text-text-main truncate">
+                    {selectedPeer?.hostname || targetIp}
+                  </span>
+                  {selectedPeer?.lat_ms !== undefined && (
+                    <span className="text-primary font-mono text-[10px] font-bold">
+                      {selectedPeer.lat_ms}ms
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -230,7 +349,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
           {/* Run Button */}
           <button
             onClick={handleStart}
-            disabled={!targetIp || isRunning}
+            disabled={!targetIp || !sourceIp || targetIp === sourceIp || isRunning}
             className="w-full py-3 px-4 rounded-xl bg-primary text-black font-semibold text-sm hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg transition-all"
           >
             {isRunning ? (
@@ -258,16 +377,43 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
             <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center p-6 text-center">
               <Loader2 className="w-10 h-10 text-primary animate-spin mb-3" />
               <p className="text-sm font-medium text-primary">{t('speed_running')}</p>
+              <p className="text-xs font-mono text-text-muted mt-2">
+                {sourcePeer?.hostname || sourceIp} ──► {selectedPeer?.hostname || targetIp}
+              </p>
+              {isRemoteRunner && (
+                <span className="mt-2 text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  Remote Runner via Node {sourceIp}
+                </span>
+              )}
             </div>
           )}
 
-          {/* Speed Number Display */}
-          <div className="text-center my-auto py-4">
-            <div className="text-5xl md:text-6xl font-black font-mono text-primary tracking-tight tabular-nums">
+          {/* Speed Value & Live Gauge Indicator */}
+          <div className="flex flex-col items-center justify-center text-center my-auto py-4">
+            {/* Route indicator chip */}
+            {(lastResult?.source || sourceIp) && (lastResult?.target || targetIp) && (
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-mono text-text-muted mb-4">
+                <span className="text-text-main font-semibold">
+                  {peers.find((p) => p.ipv4 === (lastResult?.source || sourceIp))?.hostname || (lastResult?.source || sourceIp)}
+                </span>
+                <ArrowRight className="w-3 h-3 text-primary" />
+                <span className="text-text-main font-semibold">
+                  {peers.find((p) => p.ipv4 === (lastResult?.target || targetIp))?.hostname || (lastResult?.target || targetIp)}
+                </span>
+                {lastResult?.source && !peers.find((p) => p.ipv4 === lastResult?.source)?.is_current && (
+                  <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300">
+                    Cluster
+                  </span>
+                )}
+              </div>
+            )}
+
+            <div className="text-5xl md:text-6xl font-black font-mono tracking-tight text-primary drop-shadow-[0_0_25px_rgba(var(--primary-rgb),0.3)]">
               {lastResult
-                ? protocol === 'tcp'
-                  ? lastResult.summary.received_mbps || lastResult.summary.sent_mbps || '0.00'
-                  : lastResult.summary.mbps || '0.00'
+                ? lastResult.summary.sent_mbps ||
+                  lastResult.summary.received_mbps ||
+                  lastResult.summary.mbps ||
+                  '0.00'
                 : '0.00'}
             </div>
             <div className="text-xs md:text-sm font-mono text-text-muted mt-1 uppercase tracking-wider">
@@ -275,7 +421,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
             </div>
 
             {/* Metrics Chips Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-6 w-full">
               <div className="p-2.5 rounded-xl bg-black/30 border border-white/5 text-center">
                 <div className="text-[10px] text-text-muted">{t('speed_metric_transferred')}</div>
                 <div className="text-sm font-bold font-mono text-text-main mt-0.5 tabular-nums">

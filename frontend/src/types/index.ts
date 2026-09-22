@@ -124,6 +124,10 @@ export interface SpeedtestSummary {
 }
 
 export interface SpeedtestData {
+  source?: string;
+  target?: string;
+  protocol?: string;
+  duration?: number;
   summary: SpeedtestSummary;
   intervals: SpeedtestInterval[];
 }

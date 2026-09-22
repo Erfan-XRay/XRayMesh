@@ -2,6 +2,24 @@
 
 All notable XRayMesh changes are documented here.
 
+## [2.1.1] - 2026-09-22
+
+### Added
+- Multi-node in-mesh speedtest benchmarking: select any mesh node as source (benchmark runner) and any other node as destination (iperf3 target) directly from Web UI.
+- Inter-node HMAC-authenticated speedtest execution proxying (`/api/cluster/iperf/run`).
+- Quick swap button for instant switching between source and destination benchmark endpoints.
+- Active route visual indicator chips with remote benchmark execution badge.
+- CLI mesh join and invite commands (`xraymesh join` and `xraymesh invite`) for joining networks directly from terminal.
+- Setup Mode lock for freshly installed nodes: hides operational tabs and blocks unauthorized endpoints until node is configured.
+
+## [2.1.0] - 2026-09-22
+
+### Added
+- Complete modern Web UI dashboard with multi-protocol support (HAProxy, Realm, GOST, iptables).
+- SafeSync transactional cluster synchronizer with 2-phase commit, rollback watchdog, and HMAC verification.
+- Peer health monitoring with cluster version drift detection.
+- Polished post-install CLI interface with structured card layouts and status badges.
+
 ## [1.8.0] - 2026-09-20
 
 ### Added

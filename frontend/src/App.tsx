@@ -330,12 +330,13 @@ export default function App() {
       target: string,
       protocol: 'tcp' | 'udp',
       duration: number,
-      bandwidth: string
+      bandwidth: string,
+      source?: string
     ) => {
       setIsSpeedtesting(true);
       setSpeedResult(null);
       try {
-        const data = await api.runSpeedtest(target, protocol, duration, bandwidth);
+        const data = await api.runSpeedtest(target, protocol, duration, bandwidth, source);
         setSpeedResult(data);
         const mbps =
           data.summary?.sent_mbps || data.summary?.received_mbps || data.summary?.mbps || '?';

@@ -33,7 +33,7 @@ import ssl
 from pathlib import Path
 
 # Paths & Defaults
-CURRENT_VERSION = "2.1.0"
+CURRENT_VERSION = "2.1.1"
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/xraymesh")
 BIN_DIR = os.path.join(INSTALL_DIR, "bin")
 CONFIG_FILE = os.environ.get("CONFIG_FILE", "/etc/xraymesh/config.env")
@@ -1279,6 +1279,85 @@ def proxy_tunnel_if_remote(handler, data, tunnel_type, action):
     return False
 
 
+def execute_iperf_benchmark(target, protocol="tcp", duration=5, bandwidth="50M", port=5201, source_ip=None):
+    if not re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", target):
+        return False, "Invalid target IP", 400
+
+    if protocol not in ("tcp", "udp"):
+        protocol = "tcp"
+
+    # Check iperf3 command available
+    try:
+        subprocess.run(["iperf3", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+    except Exception:
+        return False, "iperf3 is not installed on this server. Run sudo ./xraymesh.sh web to install.", 500
+
+    cmd = ["iperf3", "-c", target, "-p", str(port), "-t", str(duration), "-J"]
+    if protocol == "udp":
+        cmd.extend(["-u", "-b", bandwidth])
+
+    try:
+        # Add 8s grace period to timeout
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=duration + 8)
+        raw_json = res.stdout.strip()
+        if not raw_json:
+            err_msg = res.stderr.strip() or "No output from iperf3 test"
+            return False, err_msg, 500
+
+        parsed_res = json.loads(raw_json)
+
+        if "error" in parsed_res:
+            return False, parsed_res["error"], 500
+
+        benchmark = {
+            "source": source_ip or "local",
+            "target": target,
+            "protocol": protocol,
+            "duration": duration,
+            "error": None,
+            "intervals": [],
+            "summary": {}
+        }
+
+        end_data = parsed_res.get("end", {})
+        if protocol == "tcp":
+            sum_sent = end_data.get("sum_sent", {})
+            sum_received = end_data.get("sum_received", {})
+            benchmark["summary"] = {
+                "sent_mbps": round(sum_sent.get("bits_per_second", 0) / 1e6, 2),
+                "received_mbps": round(sum_received.get("bits_per_second", 0) / 1e6, 2),
+                "total_bytes_sent": sum_sent.get("bytes", 0),
+                "total_bytes_received": sum_received.get("bytes", 0),
+                "retransmits": sum_sent.get("retransmits", 0)
+            }
+        else:
+            sum_udp = end_data.get("sum", {})
+            benchmark["summary"] = {
+                "mbps": round(sum_udp.get("bits_per_second", 0) / 1e6, 2),
+                "total_bytes": sum_udp.get("bytes", 0),
+                "jitter_ms": round(sum_udp.get("jitter_ms", 0), 3),
+                "lost_packets": sum_udp.get("lost_packets", 0),
+                "total_packets": sum_udp.get("packets", 0),
+                "loss_percent": round(sum_udp.get("lost_percent", 0), 2)
+            }
+
+        # Add interval data for charting
+        for interval in parsed_res.get("intervals", []):
+            sum_int = interval.get("sum", {})
+            benchmark["intervals"].append({
+                "start": sum_int.get("start", 0),
+                "end": sum_int.get("end", 0),
+                "interval": sum_int.get("start", 0),
+                "mbps": round(sum_int.get("bits_per_second", 0) / 1e6, 2)
+            })
+
+        return True, benchmark, 200
+    except subprocess.TimeoutExpired:
+        return False, "iperf3 test timed out. Ensure the target node is running an iperf3 server on port 5201.", 504
+    except Exception as e:
+        return False, str(e), 500
+
+
 class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
     """Custom HTTP handler with REST API and Single Page Application routing."""
 
@@ -1778,7 +1857,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
         if path in (
             "/api/cluster/prepare", "/api/cluster/commit", "/api/cluster/confirm", "/api/cluster/rollback",
             "/api/cluster/tunnels", "/api/cluster/tunnel/create", "/api/cluster/tunnel/edit", "/api/cluster/tunnel/delete",
-            "/api/cluster/node/update", "/api/cluster/interfaces"
+            "/api/cluster/node/update", "/api/cluster/interfaces", "/api/cluster/iperf/run"
         ):
             valid, err_msg = verify_cluster_hmac(self.headers, body)
             if not valid:
@@ -1950,6 +2029,22 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 })
                 return
 
+            elif path == "/api/cluster/iperf/run":
+                target = data.get("target", "").strip()
+                protocol = data.get("protocol", "tcp").lower()
+                duration = min(max(int(data.get("duration", 5)), 1), 30)
+                bandwidth = data.get("bandwidth", "50M").strip()
+                port = int(data.get("port", 5201))
+
+                cur_cfg = load_env_file(CONFIG_FILE)
+                local_ip = cur_cfg.get("IPV4", "")
+                ok, res, status = execute_iperf_benchmark(target, protocol, duration, bandwidth, port, source_ip=local_ip)
+                if ok:
+                    self.send_json({"ok": True, "data": res})
+                else:
+                    self.send_json({"ok": False, "error": res}, status=status)
+                return
+
         # Authenticated Endpoints
         auth_ok, _ = is_authenticated(self.headers)
         if not auth_ok:
@@ -1957,7 +2052,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             return
 
         # Ensure mesh node is configured before allowing operational endpoints
-        if path.startswith(("/api/tunnels/", "/api/ping", "/api/speedtest")):
+        if path.startswith(("/api/tunnels/", "/api/ping", "/api/speedtest", "/api/iperf")):
             node_cfg = load_env_file(CONFIG_FILE)
             if not os.path.isfile(CONFIG_FILE) or not node_cfg.get("IPV4"):
                 self.send_json({"ok": False, "error": "Mesh node is not configured yet. Please complete node setup first."}, status=400)
@@ -2017,6 +2112,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
 
         elif path == "/api/iperf/run":
             target = data.get("target", "").strip()
+            source = data.get("source", "").strip()
             protocol = data.get("protocol", "tcp").lower()
             duration = min(max(int(data.get("duration", 5)), 1), 30)
             bandwidth = data.get("bandwidth", "50M").strip()
@@ -2026,81 +2122,46 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": "Invalid target IP"}, status=400)
                 return
 
-            if protocol not in ("tcp", "udp"):
-                protocol = "tcp"
+            cfg = load_env_file(CONFIG_FILE)
+            local_ip = cfg.get("IPV4", "").strip()
 
-            # Check iperf3 command available
-            try:
-                subprocess.run(["iperf3", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-            except Exception:
-                self.send_json({"ok": False, "error": "iperf3 is not installed on this server. Run sudo ./xraymesh.sh web to install."}, status=500)
+            if source and target == source:
+                self.send_json({"ok": False, "error": "Source and target cannot be the same node"}, status=400)
                 return
 
-            cmd = ["iperf3", "-c", target, "-p", str(port), "-t", str(duration), "-J"]
-            if protocol == "udp":
-                cmd.extend(["-u", "-b", bandwidth])
-
-            try:
-                # Add 5s grace period to timeout
-                res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=duration + 8)
-                raw_json = res.stdout.strip()
-                if not raw_json:
-                    err_msg = res.stderr.strip() or "No output from iperf3 test"
-                    self.send_json({"ok": False, "error": err_msg}, status=500)
+            # If source is remote node, forward via HMAC-signed cluster request
+            if source and source not in ("local", "127.0.0.1", local_ip):
+                secret = cfg.get("NETWORK_SECRET", "").strip()
+                if not secret:
+                    self.send_json({"ok": False, "error": "Cluster secret not configured on this node"}, status=500)
                     return
-
-                parsed_res = json.loads(raw_json)
-
-                # Extract key benchmark figures
-                benchmark = {
+                cached_peer = PEER_VERSION_CACHE.get(source, {})
+                peer_port = cached_peer.get("port", PORT)
+                payload = {
                     "target": target,
                     "protocol": protocol,
                     "duration": duration,
-                    "error": parsed_res.get("error", None),
-                    "intervals": [],
-                    "summary": {}
+                    "bandwidth": bandwidth,
+                    "port": port
                 }
-
-                if "error" in parsed_res:
-                    self.send_json({"ok": False, "error": parsed_res["error"]}, status=500)
-                    return
-
-                end_data = parsed_res.get("end", {})
-                if protocol == "tcp":
-                    sum_sent = end_data.get("sum_sent", {})
-                    sum_received = end_data.get("sum_received", {})
-                    benchmark["summary"] = {
-                        "sent_mbps": round(sum_sent.get("bits_per_second", 0) / 1e6, 2),
-                        "received_mbps": round(sum_received.get("bits_per_second", 0) / 1e6, 2),
-                        "total_bytes_sent": sum_sent.get("bytes", 0),
-                        "total_bytes_received": sum_received.get("bytes", 0),
-                        "retransmits": sum_sent.get("retransmits", 0)
-                    }
+                timeout = duration + 15
+                ok, res = send_cluster_http(source, peer_port, "/api/cluster/iperf/run", secret, payload, timeout=timeout)
+                if ok and isinstance(res, dict) and res.get("ok"):
+                    bench_data = res.get("data", {})
+                    bench_data["source"] = source
+                    bench_data["target"] = target
+                    self.send_json({"ok": True, "data": bench_data})
                 else:
-                    sum_udp = end_data.get("sum", {})
-                    benchmark["summary"] = {
-                        "mbps": round(sum_udp.get("bits_per_second", 0) / 1e6, 2),
-                        "total_bytes": sum_udp.get("bytes", 0),
-                        "jitter_ms": round(sum_udp.get("jitter_ms", 0), 3),
-                        "lost_packets": sum_udp.get("lost_packets", 0),
-                        "total_packets": sum_udp.get("packets", 0),
-                        "loss_percent": round(sum_udp.get("lost_percent", 0), 2)
-                    }
+                    err = res.get("error") if isinstance(res, dict) else str(res)
+                    self.send_json({"ok": False, "error": f"Remote node {source} error: {err}"}, status=400)
+                return
 
-                # Add interval data for charting
-                for interval in parsed_res.get("intervals", []):
-                    sum_int = interval.get("sum", {})
-                    benchmark["intervals"].append({
-                        "start": sum_int.get("start", 0),
-                        "end": sum_int.get("end", 0),
-                        "mbps": round(sum_int.get("bits_per_second", 0) / 1e6, 2)
-                    })
-
-                self.send_json({"ok": True, "data": benchmark})
-            except subprocess.TimeoutExpired:
-                self.send_json({"ok": False, "error": "iperf3 test timed out. Ensure the target node is running an iperf3 server on port 5201."}, status=504)
-            except Exception as e:
-                self.send_json({"ok": False, "error": str(e)}, status=500)
+            # Otherwise execute locally
+            ok, res, status = execute_iperf_benchmark(target, protocol, duration, bandwidth, port, source_ip=local_ip)
+            if ok:
+                self.send_json({"ok": True, "data": res})
+            else:
+                self.send_json({"ok": False, "error": res}, status=status)
             return
 
         elif path == "/api/tunnels/haproxy/create":

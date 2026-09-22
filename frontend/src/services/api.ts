@@ -114,12 +114,13 @@ export async function runSpeedtest(
   target: string,
   protocol: 'tcp' | 'udp',
   duration: number,
-  bandwidth: string
+  bandwidth: string,
+  source?: string
 ): Promise<SpeedtestData> {
   const res = await fetch('/api/iperf/run', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target, protocol, duration, bandwidth }),
+    body: JSON.stringify({ target, protocol, duration, bandwidth, source }),
   });
   const d = await res.json();
   if (!res.ok || !d.ok) throw new Error(d.error || 'Speedtest failed');
