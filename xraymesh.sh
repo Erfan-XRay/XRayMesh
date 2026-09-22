@@ -72,8 +72,8 @@ info() { say "  > $*" "$BLUE"; }
 pause() { read -r -p "  Press Enter to continue..." _ || true; }
 
 section() {
-  printf '\n%b  %s%b\n' "$BOLD$PURPLE" "$1" "$RESET"
-  printf '%b  ------------------------------------------------------------%b\n' "$DIM$BLUE" "$RESET"
+  printf '\n%b  %s%b\n' "$BOLD$CYAN" "$1" "$RESET"
+  printf '%b  ────────────────────────────────────────────────────────────%b\n' "$DIM$BLUE" "$RESET"
 }
 
 run_screen() {
@@ -110,9 +110,9 @@ header() {
 ART
   fi
   printf '%b' "$RESET"
-  printf '%b  EasyTier Mesh Manager%b  %b|%b  v%s  %b|%b  Developed by %s\n' \
+  printf '%b  EasyTier Mesh Manager%b  %b│%b  v%s  %b│%b  Developed by %s\n' \
     "$BOLD$PINK" "$RESET" "$GRAY" "$RESET" "$VERSION" "$GRAY" "$RESET" "$OWNER"
-  printf '%b  ============================================================%b\n\n' "$DIM$BLUE" "$RESET"
+  printf '%b  ────────────────────────────────────────────────────────────%b\n\n' "$DIM$BLUE" "$RESET"
 }
 
 require_root() {
@@ -623,10 +623,9 @@ setup_node() {
   secret="${_secret:-$secret}"
   if [[ -z "$default_secret" && -z "$_secret" ]]; then
     printf '\n'
-    say "  +----------------------------------------------------------+" "$YELLOW"
-    say "  |  SAVE THIS GENERATED NETWORK SECRET                     |" "$BOLD$YELLOW"
-    printf '  |  %b%-56s%b|\n' "$BOLD$CYAN" "$secret" "$RESET$YELLOW"
-    say "  +----------------------------------------------------------+" "$YELLOW"
+    say "  ┌── GENERATED NETWORK SECRET ─────────────────────────────────" "$YELLOW"
+    printf '  │  %b%s%b\n' "$BOLD$CYAN" "$secret" "$RESET"
+    say "  └─────────────────────────────────────────────────────────────" "$YELLOW"
     warn "You must enter this exact secret on every other mesh node."
     read -r -p "  Press Enter after you have saved the secret..." _
   fi
@@ -2802,10 +2801,9 @@ remove_web_ssl() {
 configure_web_ui_interactive() {
   install_web_runtime
   header
-  say "  +----------------------------------------------------------+" "$GREEN"
-  say "  |  WEB DASHBOARD & REMOTE MANAGEMENT (XRayMesh v2.0)       |" "$BOLD$GREEN"
-  say "  +----------------------------------------------------------+" "$GREEN"
-  info "XRayMesh v2.0 is Web-First: all tunnels, routing & cluster sync are managed here."
+  say "  ┌── Web Dashboard & Remote Setup (v${VERSION}) ────────────────" "$DIM$BLUE"
+  printf '  │  All tunnels, routing & cluster sync are managed here.\n'
+  say "  └─────────────────────────────────────────────────────────────" "$DIM$BLUE"
   printf '\n'
 
   local current_port
@@ -2913,30 +2911,26 @@ except Exception: pass
   fi
 
   printf '\n'
-  say "  ============================================================" "$BOLD$GREEN"
-  say "    🎉 XRayMesh v2.0 Setup Completed Successfully!" "$BOLD$GREEN"
-  say "  ============================================================" "$BOLD$GREEN"
-  printf '    Web Dashboard URL:   %b%s%b\n' "$BOLD$CYAN" "$web_url" "$RESET"
+  say "  ┌── XRayMesh v${VERSION} — Setup Completed Successfully! ───────────" "$GREEN"
+  printf '  │  • %bWeb Dashboard URL%b : %b%s%b\n' "$BOLD$CYAN" "$RESET" "$BOLD$CYAN" "$web_url" "$RESET"
   if [[ -n "$admin_pw" ]]; then
-    printf '    Admin Password:      %b%s%b\n' "$BOLD$YELLOW" "$admin_pw" "$RESET"
+    printf '  │  • %bAdmin Password%b    : %b%s%b\n' "$BOLD$YELLOW" "$RESET" "$BOLD$YELLOW" "$admin_pw" "$RESET"
   else
-    printf '    Admin Password:      %bDisabled (Token-Only Mode — Highest Security)%b\n' "$BOLD$GREEN" "$RESET"
+    printf '  │  • %bAdmin Auth%b        : %bToken-Only Mode (Highest Security)%b\n' "$BOLD$GREEN" "$RESET" "$GREEN" "$RESET"
   fi
-  printf '    One-Click Login:     %b%s/?token=%s%b\n' "$BOLD$GREEN" "$web_url" "$token" "$RESET"
-  printf '    New Token Command:   %bsudo xraymesh token%b\n' "$BOLD$CYAN" "$RESET"
-  say "  ------------------------------------------------------------" "$DIM$BLUE"
-  say "  💡 All tunnels (HAProxy, Realm, Gost, iptables), SafeSync," "$DIM$GRAY"
-  say "     and cluster updates are managed 100% in the Web Dashboard." "$DIM$GRAY"
-  say "  ------------------------------------------------------------" "$DIM$BLUE"
-  say "  ⭐ Management Menu Command:" "$BOLD$YELLOW"
-  printf '     Type %bxraymesh%b in your terminal anytime to open the menu.\n' "$BOLD$CYAN" "$RESET"
-  say "  ============================================================" "$BOLD$GREEN"
+  printf '  │  • %bOne-Click Login%b   : %b%s/?token=%s%b\n' "$BOLD$GREEN" "$RESET" "$BOLD$GREEN" "$web_url" "$token" "$RESET"
+  printf '  │  • %bNew Token Command%b : %bsudo xraymesh token%b\n' "$GRAY" "$RESET" "$BOLD$CYAN" "$RESET"
+  say "  ├── Quick Guide ──────────────────────────────────────────────" "$DIM$BLUE"
+  printf '  │  • All tunnels (HAProxy, Realm, Gost, iptables), SafeSync\n'
+  printf '  │    and cluster updates are managed 100%% in the Web Dashboard.\n'
+  printf '  │  • Run %bxraymesh%b at any time in terminal to open the menu.\n' "$BOLD$CYAN" "$RESET"
+  say "  └─────────────────────────────────────────────────────────────" "$DIM$BLUE"
   printf '\n'
 
-  printf '  %b[1]%b  Open XRayMesh Control Panel Menu Now\n' "$GREEN" "$RESET"
-  printf '  %b[2]%b  Exit to Terminal\n\n' "$GRAY" "$RESET"
+  printf '  %b[ 1 ]%b  Open XRayMesh Control Panel Menu\n' "$BOLD$GREEN" "$RESET"
+  printf '  %b[ 2 ]%b  Exit to Terminal\n\n' "$GRAY" "$RESET"
   local post_choice="1"
-  read -r -p "  Select an option [1/2, default: 1]: " post_choice
+  read -r -p "  Select an option [1-2, default: 1]: " post_choice
   post_choice="${post_choice:-1}"
   if [[ "$post_choice" == "2" || "$post_choice" =~ ^[Qq]$ ]]; then
     printf '\n%b  ✓ Installation finished. Run %bxraymesh%b at any time to open the menu.%b\n\n' "$GREEN" "$BOLD$CYAN" "$GREEN" "$RESET"
@@ -2984,21 +2978,20 @@ except Exception: pass
   section "ONE-CLICK WEB DASHBOARD LOGIN"
   ok "A temporary login token was generated (valid for 60 minutes)."
   printf '\n'
+  say "  ┌── Web Dashboard Access ─────────────────────────────────────" "$DIM$BLUE"
   if [[ "$proto" == "https" && -n "$domain" ]]; then
-    say "  Direct Browser Link (SSL Domain):" "$BOLD$CYAN"
-    printf '  %bhttps://%s:%s/?token=%s%b\n\n' "$BOLD$GREEN" "$domain" "$port" "$token" "$RESET"
+    printf '  │  • %bDirect Browser Link (SSL)%b : %bhttps://%s:%s/?token=%s%b\n' "$BOLD$CYAN" "$RESET" "$BOLD$GREEN" "$domain" "$port" "$token" "$RESET"
   else
-    say "  Direct Browser Link (Public IP):" "$BOLD$CYAN"
-    printf '  %bhttp://%s:%s/?token=%s%b\n\n' "$BOLD$GREEN" "$pub_ip" "$port" "$token" "$RESET"
+    printf '  │  • %bDirect Browser Link (IP)%b  : %bhttp://%s:%s/?token=%s%b\n' "$BOLD$CYAN" "$RESET" "$BOLD$GREEN" "$pub_ip" "$port" "$token" "$RESET"
   fi
 
   if [[ -n "$mesh_ip" ]]; then
-    say "  Internal Mesh Link (Virtual IP):" "$BOLD$PURPLE"
-    printf '  %bhttp://%s:%s/?token=%s%b\n\n' "$BLUE" "$mesh_ip" "$port" "$token" "$RESET"
+    printf '  │  • %bMesh Virtual IP Link%b     : %bhttp://%s:%s/?token=%s%b\n' "$BOLD$PURPLE" "$RESET" "$BLUE" "$mesh_ip" "$port" "$token" "$RESET"
   fi
 
-  say "  Token string:" "$BOLD$YELLOW"
-  printf '  %b%s%b\n\n' "$BOLD" "$token" "$RESET"
+  printf '  │  • %bToken String%b             : %b%s%b\n' "$BOLD$YELLOW" "$RESET" "$BOLD$YELLOW" "$token" "$RESET"
+  say "  └─────────────────────────────────────────────────────────────" "$DIM$BLUE"
+  printf '\n'
   info "Opening the URL in your browser logs you in instantly."
   pause
 }
@@ -3267,10 +3260,9 @@ bootstrap_web_first() {
   trap - ERR
 
   header
-  say "  ============================================================" "$BOLD$GREEN"
-  say "    🎉 XRayMesh v${VERSION} - Fast Web Setup" "$BOLD$GREEN"
-  say "  ============================================================" "$BOLD$GREEN"
-  info "Installing system dependencies, EasyTier core, and Web Dashboard..."
+  say "  ┌── XRayMesh v${VERSION} — Fast Web Setup ─────────────────────────" "$GREEN"
+  printf '  │  Installing system dependencies, EasyTier core, and Web Dashboard...\n'
+  say "  └─────────────────────────────────────────────────────────────" "$DIM$BLUE"
   printf '\n'
 
   install_dependencies
@@ -3306,7 +3298,6 @@ menu() {
   IN_MAIN_MENU=1
   while true; do
     header
-    section "XRAYMESH v2.0 - CONTROL PANEL"
 
     local mesh_state web_state iperf_state port pub_ip proto domain ssl_info v_ip host_name web_url
     mesh_state="$(systemctl is-active xraymesh.service 2>/dev/null || true)"
@@ -3331,46 +3322,71 @@ menu() {
     fi
 
     if [[ "$proto" == "https" && -n "$domain" ]]; then
-      ssl_info="Enabled (HTTPS)"
+      ssl_info="Enabled (HTTPS — ${domain})"
       web_url="https://${domain}:${port}"
     else
       ssl_info="Disabled (HTTP)"
       web_url="http://${pub_ip}:${port}"
     fi
 
-    if [[ ! -f "$CONFIG_FILE" ]]; then
-      printf '  Mesh Node:        %bNot Configured%b (Open Web Dashboard to initialize)\n' "$YELLOW" "$RESET"
-    else
-      printf '  Mesh Node:        %b%s%b (%s) | %b%s%b\n' \
-        "$BOLD$CYAN" "$host_name" "$RESET" "$v_ip" \
-        "$([ "$mesh_state" == "active" ] && echo "$GREEN" || echo "$RED")" "$mesh_state" "$RESET"
-    fi
-    printf '  Web Dashboard:    %b%s%b | %b%s%b\n' \
-      "$BOLD$CYAN" "$web_url" "$RESET" \
-      "$([ "$web_state" == "active" ] && echo "$GREEN" || echo "$RED")" "$web_state" "$RESET"
     local auth_info="Password + Token"
     if ! grep -q '^WEB_PASSWORD_HASH=' "$WEB_CONFIG_FILE" 2>/dev/null; then
       auth_info="Token-Only (Highest Security)"
     fi
-    printf '  Web Auth Mode:    %s\n' "$auth_info"
-    printf '  SSL / HTTPS:      %s\n' "$ssl_info"
-    printf '  Speedtest Server: %s (in-mesh port 5201)\n' "$iperf_state"
+
+    local mesh_badge web_badge iperf_badge
+    if [[ "$mesh_state" == "active" ]]; then
+      mesh_badge="${GREEN}● Active${RESET}"
+    else
+      mesh_badge="${RED}○ Inactive${RESET}"
+    fi
+
+    if [[ "$web_state" == "active" ]]; then
+      web_badge="${GREEN}● Active${RESET}"
+    else
+      web_badge="${RED}○ Inactive${RESET}"
+    fi
+
+    if [[ "$iperf_state" == "active" ]]; then
+      iperf_badge="${GREEN}● Active${RESET}"
+    else
+      iperf_badge="${GRAY}○ Inactive${RESET}"
+    fi
+
+    say "  ┌── System Status ──────────────────────────────────────────" "$DIM$BLUE"
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+      printf '  │  • %-16s : %bNot Configured%b (Open Web Dashboard to initialize)\n' "Mesh Node" "$YELLOW" "$RESET"
+    else
+      printf '  │  • %-16s : %b%s%b (%s) — %b\n' "Mesh Node" "$BOLD$CYAN" "$host_name" "$RESET" "$v_ip" "$mesh_badge"
+    fi
+    printf '  │  • %-16s : %b%s%b — %b\n' "Web Dashboard" "$BOLD$CYAN" "$web_url" "$RESET" "$web_badge"
+    printf '  │  • %-16s : %s\n' "Auth Mode" "$auth_info"
+    printf '  │  • %-16s : %s\n' "SSL / HTTPS" "$ssl_info"
+    printf '  │  • %-16s : Port 5201 (In-Mesh) — %b\n' "Speedtest Server" "$iperf_badge"
+    say "  └───────────────────────────────────────────────────────────" "$DIM$BLUE"
     printf '\n'
 
-    section "ACTIONS & MANAGEMENT"
-    printf '  %b[1]%b  Show Web Dashboard URL & One-Click Login Link\n' "$GREEN" "$RESET"
-    printf '  %b[2]%b  Admin Password & Authentication Settings\n' "$PURPLE" "$RESET"
-    printf '  %b[3]%b  Change Web Dashboard Port\n' "$YELLOW" "$RESET"
-    printf '  %b[4]%b  Configure Custom Domain & Free SSL (Let'\''s Encrypt HTTPS)\n' "$GREEN" "$RESET"
-    printf '  %b[5]%b  Remove SSL (Revert to HTTP)\n' "$RED" "$RESET"
-    printf '  %b[6]%b  Restart All Services (Mesh, Web, Tunnels)\n' "$BLUE" "$RESET"
-    printf '  %b[7]%b  Stop All Services\n' "$RED" "$RESET"
-    printf '  %b[8]%b  Start All Services\n' "$GREEN" "$RESET"
-    printf '  %b[9]%b  View Live Logs\n' "$CYAN" "$RESET"
-    printf '  %b[10]%b Configure Mesh Node (Web UI / Advanced CLI)\n' "$YELLOW" "$RESET"
-    printf '  %b[11]%b Update XRayMesh to Latest Version\n' "$GREEN" "$RESET"
-    printf '  %b[12]%b Completely Uninstall XRayMesh\n' "$RED" "$RESET"
-    printf '  %b[0]%b  Exit\n\n' "$GRAY" "$RESET"
+    say "  ── Web Dashboard & Security ────────────────────────────────" "$BOLD$CYAN"
+    printf '  %b[%b 1%b]%b  Show Web Dashboard URL & One-Click Login Link\n' "$DIM$GRAY" "$BOLD$CYAN" "$DIM$GRAY" "$RESET"
+    printf '  %b[%b 2%b]%b  Admin Password & Authentication Settings\n' "$DIM$GRAY" "$BOLD$CYAN" "$DIM$GRAY" "$RESET"
+    printf '  %b[%b 3%b]%b  Change Web Dashboard Port\n' "$DIM$GRAY" "$BOLD$CYAN" "$DIM$GRAY" "$RESET"
+    printf '  %b[%b 4%b]%b  Configure Custom Domain & Free SSL (Let'\''s Encrypt HTTPS)\n' "$DIM$GRAY" "$BOLD$CYAN" "$DIM$GRAY" "$RESET"
+    printf '  %b[%b 5%b]%b  Remove SSL (Revert to HTTP)\n' "$DIM$GRAY" "$BOLD$CYAN" "$DIM$GRAY" "$RESET"
+    printf '\n'
+
+    say "  ── Service Management ──────────────────────────────────────" "$BOLD$CYAN"
+    printf '  %b[%b 6%b]%b  Restart All Services (Mesh, Web, Tunnels)\n' "$DIM$GRAY" "$BOLD$BLUE" "$DIM$GRAY" "$RESET"
+    printf '  %b[%b 7%b]%b  Stop All Services\n' "$DIM$GRAY" "$BOLD$RED" "$DIM$GRAY" "$RESET"
+    printf '  %b[%b 8%b]%b  Start All Services\n' "$DIM$GRAY" "$BOLD$GREEN" "$DIM$GRAY" "$RESET"
+    printf '  %b[%b 9%b]%b  View Live Logs\n' "$DIM$GRAY" "$BOLD$CYAN" "$DIM$GRAY" "$RESET"
+    printf '  %b[%b10%b]%b  Configure Mesh Node (Web UI / Advanced CLI)\n' "$DIM$GRAY" "$BOLD$YELLOW" "$DIM$GRAY" "$RESET"
+    printf '\n'
+
+    say "  ── System & Maintenance ────────────────────────────────────" "$BOLD$CYAN"
+    printf '  %b[%b11%b]%b  Update XRayMesh to Latest Version\n' "$DIM$GRAY" "$BOLD$GREEN" "$DIM$GRAY" "$RESET"
+    printf '  %b[%b12%b]%b  Completely Uninstall XRayMesh\n' "$DIM$GRAY" "$BOLD$RED" "$DIM$GRAY" "$RESET"
+    printf '  %b[%b 0%b]%b  Exit\n' "$DIM$GRAY" "$GRAY" "$DIM$GRAY" "$RESET"
+    printf '\n'
     printf '%b  Tip: All tunnels (HAProxy, Realm, Gost, iptables), SafeSync, and diagnostics\n' "$DIM$GRAY"
     printf '       are managed 100%% from the modern Web Dashboard.%b\n\n' "$RESET"
 
@@ -3462,29 +3478,50 @@ main() {
     ;;
   setup-node) require_linux; setup_node ;;
   status)
+    local mesh_state web_state iperf_state port pub_ip proto domain v_ip host_name url
+    mesh_state="$(systemctl is-active xraymesh.service 2>/dev/null || echo inactive)"
+    web_state="$(systemctl is-active xraymesh-web.service 2>/dev/null || echo inactive)"
+    iperf_state="$(systemctl is-active xraymesh-iperf.service 2>/dev/null || echo inactive)"
+    port="$(get_web_port 2>/dev/null || echo "$DEFAULT_WEB_PORT")"
+    pub_ip="$(get_server_ip 2>/dev/null || echo "127.0.0.1")"
+    proto="$(get_web_proto 2>/dev/null || echo "http")"
+    domain="$(get_web_domain 2>/dev/null || true)"
     if [[ -f "$CONFIG_FILE" ]]; then
-      local mesh_state web_state port pub_ip proto domain v_ip host_name
-      mesh_state="$(systemctl is-active xraymesh.service 2>/dev/null || echo inactive)"
-      web_state="$(systemctl is-active xraymesh-web.service 2>/dev/null || echo inactive)"
-      port="$(get_web_port 2>/dev/null || echo "$DEFAULT_WEB_PORT")"
-      pub_ip="$(get_server_ip 2>/dev/null || echo "127.0.0.1")"
-      proto="$(get_web_proto 2>/dev/null || echo "http")"
-      domain="$(get_web_domain 2>/dev/null || true)"
       # shellcheck disable=SC1090
-      source "$CONFIG_FILE"
+      source "$CONFIG_FILE" 2>/dev/null || true
       v_ip="${IPV4:-unknown}"
-      host_name="${HOSTNAME:-$(hostname -s)}"
-      local url="http://${pub_ip}:${port}"
-      [[ "$proto" == "https" && -n "$domain" ]] && url="https://${domain}:${port}"
-      printf '\n'
-      say "  XRayMesh Status Summary" "$BOLD$CYAN"
-      printf '  Node:      %s (%s)\n' "$host_name" "$v_ip"
-      printf '  Mesh:      %s\n' "$mesh_state"
-      printf '  Web UI:    %s (%s)\n' "$web_state" "$url"
-      printf '\n'
+      host_name="${HOSTNAME:-$(hostname -s 2>/dev/null || echo node)}"
     else
-      warn "XRayMesh is not configured yet. Run 'xraymesh setup' to install."
+      v_ip="Not Configured"
+      host_name="$(hostname -s 2>/dev/null || echo node)"
     fi
+    url="http://${pub_ip}:${port}"
+    [[ "$proto" == "https" && -n "$domain" ]] && url="https://${domain}:${port}"
+
+    local mesh_badge web_badge iperf_badge
+    if [[ "$mesh_state" == "active" ]]; then
+      mesh_badge="${GREEN}● Active${RESET}"
+    else
+      mesh_badge="${RED}○ Inactive${RESET}"
+    fi
+    if [[ "$web_state" == "active" ]]; then
+      web_badge="${GREEN}● Active${RESET}"
+    else
+      web_badge="${RED}○ Inactive${RESET}"
+    fi
+    if [[ "$iperf_state" == "active" ]]; then
+      iperf_badge="${GREEN}● Active${RESET}"
+    else
+      iperf_badge="${GRAY}○ Inactive${RESET}"
+    fi
+
+    printf '\n'
+    say "  ┌── XRayMesh Status Summary ──────────────────────────────────" "$DIM$BLUE"
+    printf '  │  • %-16s : %b%s%b (%s) — %b\n' "Mesh Node" "$BOLD$CYAN" "$host_name" "$RESET" "$v_ip" "$mesh_badge"
+    printf '  │  • %-16s : %b%s%b — %b\n' "Web Dashboard" "$BOLD$CYAN" "$url" "$RESET" "$web_badge"
+    printf '  │  • %-16s : Port 5201 (In-Mesh) — %b\n' "Speedtest Server" "$iperf_badge"
+    say "  └─────────────────────────────────────────────────────────────" "$DIM$BLUE"
+    printf '\n'
     ;;
   peers) "${BIN_DIR}/easytier-cli" peer ;;
   routes) "${BIN_DIR}/easytier-cli" route ;;
