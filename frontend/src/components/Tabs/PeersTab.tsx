@@ -1,17 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import { Peer } from '../../types';
-import { Search, Copy, Check, Activity, Zap, RefreshCw, Server, ArrowUpCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { Search, Copy, Check, Activity, Zap, RefreshCw, Server, ArrowUpCircle, AlertTriangle, Terminal } from 'lucide-react';
 
 interface PeersTabProps {
   peers: Peer[];
   clusterVersionDrift?: boolean;
+  updateCommand?: string;
   onRefresh: () => void;
   onQuickPing: (ip: string) => void;
   onQuickSpeedtest: (ip: string) => void;
   onCopy: (text: string) => void;
   copiedKey: string | null;
-  onUpdateNode?: (ip: string, hostname?: string) => Promise<void>;
-  onUpdateAllNodes?: () => Promise<void>;
   t: (key: any) => string;
 }
 
@@ -28,53 +27,20 @@ function formatTunnelProto(proto?: string): string {
 export const PeersTab: React.FC<PeersTabProps> = ({
   peers,
   clusterVersionDrift,
+  updateCommand,
   onRefresh,
   onQuickPing,
   onQuickSpeedtest,
   onCopy,
   copiedKey,
-  onUpdateNode,
-  onUpdateAllNodes,
   t,
 }) => {
   const [search, setSearch] = useState('');
-  const [updatingIps, setUpdatingIps] = useState<string[]>([]);
-  const [isUpdatingAll, setIsUpdatingAll] = useState(false);
+
+  const defaultUpdateCmd = 'bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update';
+  const effectiveUpdateCmd = updateCommand || defaultUpdateCmd;
 
   const hasDrift = clusterVersionDrift || peers.some((p) => p.update_available || p.version_drift);
-
-  const handleUpdateSingle = async (ip: string, hostname?: string) => {
-    if (!onUpdateNode) return;
-    const confirmMsg = t('version_update_node_confirm')
-      .replace('{hostname}', hostname || ip)
-      .replace('{ip}', ip);
-    if (!window.confirm(confirmMsg)) return;
-
-    setUpdatingIps((prev) => [...prev, ip]);
-    try {
-      await onUpdateNode(ip, hostname);
-    } finally {
-      setTimeout(() => {
-        setUpdatingIps((prev) => prev.filter((x) => x !== ip));
-        onRefresh();
-      }, 3500);
-    }
-  };
-
-  const handleUpdateAll = async () => {
-    if (!onUpdateAllNodes) return;
-    if (!window.confirm(t('version_update_all_confirm'))) return;
-
-    setIsUpdatingAll(true);
-    try {
-      await onUpdateAllNodes();
-    } finally {
-      setTimeout(() => {
-        setIsUpdatingAll(false);
-        onRefresh();
-      }, 4500);
-    }
-  };
 
   const filteredPeers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -124,21 +90,21 @@ export const PeersTab: React.FC<PeersTabProps> = ({
               <p className="text-[11px] text-text-muted mt-0.5">{t('version_drift_warning_desc')}</p>
             </div>
           </div>
-          {onUpdateAllNodes && (
+          {effectiveUpdateCmd && (
             <button
-              onClick={handleUpdateAll}
-              disabled={isUpdatingAll}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-amber-500 text-black hover:bg-amber-400 text-xs font-bold transition-all shadow-sm disabled:opacity-50 active:scale-95"
+              onClick={() => onCopy(effectiveUpdateCmd)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-amber-500 text-black hover:bg-amber-400 text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
+              title={effectiveUpdateCmd}
             >
-              {isUpdatingAll ? (
+              {copiedKey === effectiveUpdateCmd ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>{t('version_updating')}</span>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{t('version_cmd_copied')}</span>
                 </>
               ) : (
                 <>
-                  <ArrowUpCircle className="w-3.5 h-3.5" />
-                  <span>{t('version_update_all_btn')}</span>
+                  <Terminal className="w-3.5 h-3.5" />
+                  <span>{t('version_copy_update_cmd')}</span>
                 </>
               )}
             </button>
@@ -273,22 +239,22 @@ export const PeersTab: React.FC<PeersTabProps> = ({
                   )}
                 </div>
 
-                {/* Per-node update button */}
-                {(p.update_available || p.version_drift) && onUpdateNode && (
+                {/* Per-node copy update command if outdated or drift */}
+                {(p.update_available || p.version_drift) && effectiveUpdateCmd && (
                   <button
-                    onClick={() => handleUpdateSingle(p.ipv4, p.hostname)}
-                    disabled={updatingIps.includes(p.ipv4)}
-                    className="w-full mb-2.5 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-xs font-semibold text-amber-300 border border-amber-500/35 transition-all disabled:opacity-50 active:scale-95"
+                    onClick={() => onCopy(effectiveUpdateCmd)}
+                    className="w-full mb-2.5 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-xs font-semibold text-amber-300 border border-amber-500/35 transition-all active:scale-95 cursor-pointer"
+                    title={effectiveUpdateCmd}
                   >
-                    {updatingIps.includes(p.ipv4) ? (
+                    {copiedKey === effectiveUpdateCmd ? (
                       <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>{t('version_updating')}</span>
+                        <Check className="w-3 h-3 text-emerald-400" />
+                        <span>{t('version_cmd_copied')}</span>
                       </>
                     ) : (
                       <>
-                        <ArrowUpCircle className="w-3.5 h-3.5" />
-                        <span>{t('version_update_btn')}</span>
+                        <Terminal className="w-3 h-3" />
+                        <span>{t('version_copy_update_cmd')}</span>
                       </>
                     )}
                   </button>
@@ -310,20 +276,6 @@ export const PeersTab: React.FC<PeersTabProps> = ({
                     <Zap className="w-3.5 h-3.5" />
                     {t('peer_card_btn_speedtest')}
                   </button>
-                  {onUpdateNode && !p.update_available && !p.version_drift && (
-                    <button
-                      onClick={() => handleUpdateSingle(p.ipv4, p.hostname)}
-                      disabled={updatingIps.includes(p.ipv4)}
-                      title={t('version_update_btn')}
-                      className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-text-muted hover:text-amber-400 border border-white/10 active:scale-95 transition-all disabled:opacity-50"
-                    >
-                      {updatingIps.includes(p.ipv4) ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
-                      ) : (
-                        <RefreshCw className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                  )}
                 </div>
               </div>
             );

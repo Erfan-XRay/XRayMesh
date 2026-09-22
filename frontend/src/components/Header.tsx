@@ -46,7 +46,7 @@ export const Header: React.FC<HeaderProps> = ({
               {t('brand_title')}
             </h1>
             <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20 shrink-0">
-              v{node.xraymesh_version || '2.0.2'}
+              v{node.xraymesh_version || '2.0.5'}
             </span>
             {node.ssl_enabled && (
               <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0" title="SSL/TLS Active">

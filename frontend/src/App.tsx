@@ -127,6 +127,7 @@ export default function App() {
   );
 
   // UI state
+  const [initialLoaded, setInitialLoaded] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -177,6 +178,8 @@ export default function App() {
       setVersionInfo(verData);
     } catch {
       // Silent fail on periodic poll
+    } finally {
+      setInitialLoaded(true);
     }
   }, []);
 
@@ -430,40 +433,6 @@ export default function App() {
     }
   }, [deleteTarget, addToast]);
 
-  // ─── Remote Node & Cluster Updating ─────────────────────
-  const handleUpdateNode = useCallback(
-    async (ip: string, hostname?: string) => {
-      const displayName = hostname && hostname !== ip ? `${hostname} (${ip})` : ip;
-      addToast(`${t('version_updating')} (${displayName})...`, 'info');
-      try {
-        const res = await api.updateNode(ip);
-        if (res.ok) {
-          addToast(res.message || `✓ Update initiated on ${displayName}`, 'success');
-        } else {
-          addToast(res.message || `Update failed on ${displayName}`, 'error');
-        }
-        setTimeout(handleRefresh, 4000);
-      } catch (e: any) {
-        addToast(e.message || `Update failed on ${displayName}`, 'error');
-      }
-    },
-    [addToast, handleRefresh, t]
-  );
-
-  const handleUpdateAllNodes = useCallback(async () => {
-    addToast(`${t('version_updating')} (Mesh)...`, 'info');
-    try {
-      const res = await api.updateAllNodes();
-      if (res.ok) {
-        addToast(res.message || '✓ Mesh update initiated', 'success');
-      } else {
-        addToast(res.message || 'Mesh update failed', 'error');
-      }
-      setTimeout(handleRefresh, 5000);
-    } catch (e: any) {
-      addToast(e.message || 'Mesh update failed', 'error');
-    }
-  }, [addToast, handleRefresh, t]);
 
   // ─── Computed Values ────────────────────────────────────
   const avgLatency = (() => {
@@ -494,10 +463,20 @@ export default function App() {
   ];
 
   // ─── Loading / Auth Gate ────────────────────────────────
-  if (isAuthenticated === null) {
+  if (isAuthenticated === null || (isAuthenticated && !initialLoaded)) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin" />
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4 bg-canvas">
+        <div className="relative flex items-center justify-center">
+          <div className="w-10 h-10 border-3 border-primary/20 border-t-primary rounded-full animate-spin" />
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-semibold text-text-main">
+            {lang === 'fa' ? 'در حال بارگذاری و بررسی وضعیت نود...' : 'Connecting to XRayMesh Node...'}
+          </p>
+          <p className="text-xs text-text-muted mt-1">
+            {lang === 'fa' ? 'دریافت مشخصات شبکه و وضعیت نودها' : 'Synchronizing node status and mesh topology'}
+          </p>
+        </div>
       </div>
     );
   }
@@ -573,7 +552,7 @@ export default function App() {
           )}
 
           {/* Welcome / First-Run Onboarding Banner (When node is not configured) */}
-          {status.node && (!status.node.configured || !status.node.ipv4) && (
+          {initialLoaded && status.node && (!status.node.configured || !status.node.ipv4) && (
             <div className="relative z-20 mb-4 sm:mb-6 p-3.5 sm:p-5 rounded-2xl bg-gradient-to-r from-teal-950/40 via-emerald-900/30 to-slate-900/50 border border-emerald-500/30 backdrop-blur-xl shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4 animate-fade-in">
               <div className="flex items-start md:items-center gap-3">
                 <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center shrink-0 mt-0.5 md:mt-0">
@@ -664,11 +643,10 @@ export default function App() {
               <PeersTab
                 peers={peers}
                 clusterVersionDrift={clusterVersionDrift}
+                updateCommand={versionInfo?.update_command}
                 onRefresh={handleRefresh}
                 onQuickPing={handleQuickPing}
                 onQuickSpeedtest={handleQuickSpeedtest}
-                onUpdateNode={handleUpdateNode}
-                onUpdateAllNodes={handleUpdateAllNodes}
                 onCopy={handleCopy}
                 copiedKey={copiedKey}
                 t={t}

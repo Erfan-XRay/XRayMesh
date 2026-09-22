@@ -99,7 +99,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className="font-bold text-sm text-text-main tracking-tight truncate">XRayMesh</span>
                   <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-primary/15 text-primary border border-primary/25 shrink-0">
-                    v{node.xraymesh_version || '2.0.2'}
+                    v{node.xraymesh_version || '2.0.5'}
                   </span>
                 </div>
                 <div className="text-[10px] text-text-muted font-mono truncate max-w-[170px]">

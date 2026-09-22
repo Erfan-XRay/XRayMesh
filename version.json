@@ -1,7 +1,7 @@
 {
-  "version": "2.0.2",
-  "release_name": "XRayMesh v2.0.2 (Lightweight Mobile UI & Cluster Update Fix)",
+  "version": "2.0.5",
+  "release_name": "XRayMesh v2.0.5 (Initial Loading Polish & CLI Update Directives)",
   "release_date": "2026-09-22",
-  "changelog": "Streamlined lightweight mobile UI, fixed menu text overflows, detached cluster background update, and multi-mirror failover support.",
+  "changelog": "Eliminated false onboarding flash with initial status loading gate, removed Web UI auto-updater in favor of one-click copyable server CLI update directives.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update"
 }
