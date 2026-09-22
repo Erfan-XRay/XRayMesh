@@ -38,18 +38,15 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="relative z-50 flex items-center justify-between gap-3 p-3.5 md:p-5 mb-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg transition-all">
       {/* Brand & Custom Logo */}
-      <div className="flex items-center gap-3 min-w-0">
-        <XRayMeshLogo className="w-10 h-10 md:w-11 md:h-11 shrink-0" size={44} glow={true} />
+      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+        <XRayMeshLogo className="w-9 h-9 sm:w-10 sm:h-10 md:w-11 md:h-11 shrink-0" size={40} glow={true} />
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5 md:gap-2 flex-wrap">
-            <h1 className="text-base md:text-lg font-bold text-text-main tracking-tight leading-tight truncate">
+          <div className="flex items-center gap-1.5 md:gap-2 flex-wrap min-w-0">
+            <h1 className="text-sm sm:text-base md:text-lg font-bold text-text-main tracking-tight leading-tight truncate">
               {t('brand_title')}
             </h1>
-            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-primary/10 text-primary border border-primary/20 shrink-0">
-              MESH
-            </span>
-            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20 shrink-0">
-              v{node.xraymesh_version || '2.0.1'}
+            <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20 shrink-0">
+              v{node.xraymesh_version || '2.0.2'}
             </span>
             {node.ssl_enabled && (
               <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0" title="SSL/TLS Active">
@@ -58,7 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             )}
           </div>
-          <p className="text-[11px] md:text-xs text-text-muted mt-0.5 truncate">
+          <p className="text-[10px] sm:text-[11px] md:text-xs text-text-muted mt-0.5 truncate">
             {t('network_prefix')}: <span className="font-mono text-primary font-medium">{node.network_name || 'XRayMesh'}</span>
             {node.easytier_version && ` | v${node.easytier_version}`}
           </p>
@@ -66,23 +63,24 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Mobile Controls (< md) */}
-      <div className="flex md:hidden items-center gap-2 shrink-0">
+      <div className="flex md:hidden items-center gap-1.5 shrink-0">
         <button
           onClick={onRefresh}
           disabled={isRefreshing}
           className="p-2 rounded-xl bg-white/5 border border-white/10 text-text-muted hover:text-text-main active:scale-95 transition-all disabled:opacity-50"
           title={t('btn_refresh')}
+          aria-label={t('btn_refresh')}
         >
           <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-primary' : ''}`} />
         </button>
 
         <button
           onClick={onOpenDrawer}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary/10 border border-primary/25 text-primary font-semibold text-xs hover:bg-primary/20 active:scale-95 transition-all"
+          className="p-2 rounded-xl bg-primary text-black font-semibold text-xs shadow-md shadow-primary/20 hover:opacity-90 active:scale-95 transition-all"
           aria-label={t('nav_menu') || 'Menu'}
+          title={t('nav_menu') || 'Menu'}
         >
           <Menu className="w-4 h-4" />
-          <span className="font-medium text-xs">{t('nav_menu') || 'Menu'}</span>
         </button>
       </div>
 

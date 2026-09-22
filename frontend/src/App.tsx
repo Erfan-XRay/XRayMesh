@@ -21,7 +21,6 @@ import * as api from './services/api';
 import { Header } from './components/Header';
 import { OverviewCards } from './components/OverviewCards';
 import { MobileDrawer } from './components/MobileDrawer';
-import { MobileBottomNav } from './components/MobileBottomNav';
 import { ToastContainer } from './components/Toast';
 import { LoginModal } from './components/Modals/LoginModal';
 import { TunnelModal, TunnelModalType } from './components/Modals/TunnelModal';
@@ -505,7 +504,7 @@ export default function App() {
 
   // ─── Render ─────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-canvas px-3.5 py-4 md:px-6 md:py-6 lg:px-8 max-w-7xl mx-auto pb-24 md:pb-8">
+    <div className="min-h-screen bg-canvas px-3 sm:px-6 py-3.5 sm:py-6 lg:px-8 max-w-7xl mx-auto pb-8 sm:pb-12">
       {/* Login Modal */}
       <LoginModal
         isOpen={showLogin}
@@ -540,21 +539,21 @@ export default function App() {
 
           {/* Version Update Notification Banner */}
           {versionInfo?.update_available && (
-            <div className="relative z-20 mb-6 p-4 md:p-5 rounded-2xl bg-gradient-to-r from-purple-950/40 via-purple-900/30 to-slate-900/50 border border-purple-500/30 backdrop-blur-xl shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-fade-in">
-              <div className="flex items-start md:items-center gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center justify-center shrink-0 mt-0.5 md:mt-0">
+            <div className="relative z-20 mb-4 sm:mb-6 p-3.5 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-950/40 via-purple-900/30 to-slate-900/50 border border-purple-500/30 backdrop-blur-xl shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4 animate-fade-in">
+              <div className="flex items-start md:items-center gap-3">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center justify-center shrink-0 mt-0.5 md:mt-0">
                   <ArrowUpCircle className="w-5 h-5 animate-pulse" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className="text-sm font-bold text-text-main">
+                    <h4 className="text-xs sm:text-sm font-bold text-text-main">
                       {t('version_update_available')}: v{versionInfo.latest_version}
                     </h4>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-primary/20 text-primary border border-primary/30">
                       Current: v{versionInfo.current_version}
                     </span>
                   </div>
-                  <p className="text-xs text-text-muted mt-1 max-w-2xl leading-relaxed">
+                  <p className="text-[11px] sm:text-xs text-text-muted mt-1 max-w-2xl leading-relaxed">
                     {versionInfo.release_notes || 'A new update is available for XRayMesh.'}
                   </p>
                 </div>
@@ -563,7 +562,7 @@ export default function App() {
                 {versionInfo.update_command && (
                   <button
                     onClick={() => handleCopy(versionInfo.update_command!)}
-                    className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-primary text-black font-semibold text-xs shadow-md shadow-primary/20 hover:opacity-90 active:scale-95 transition-all cursor-pointer"
+                    className="w-full md:w-auto flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-primary text-black font-semibold text-xs shadow-md shadow-primary/20 hover:opacity-90 active:scale-95 transition-all cursor-pointer"
                     title={versionInfo.update_command}
                   >
                     <span>{t('version_copy_update_cmd')}</span>
@@ -575,16 +574,16 @@ export default function App() {
 
           {/* Welcome / First-Run Onboarding Banner (When node is not configured) */}
           {status.node && (!status.node.configured || !status.node.ipv4) && (
-            <div className="relative z-20 mb-6 p-4 md:p-5 rounded-2xl bg-gradient-to-r from-teal-950/40 via-emerald-900/30 to-slate-900/50 border border-emerald-500/30 backdrop-blur-xl shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-fade-in">
-              <div className="flex items-start md:items-center gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center shrink-0 mt-0.5 md:mt-0">
+            <div className="relative z-20 mb-4 sm:mb-6 p-3.5 sm:p-5 rounded-2xl bg-gradient-to-r from-teal-950/40 via-emerald-900/30 to-slate-900/50 border border-emerald-500/30 backdrop-blur-xl shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4 animate-fade-in">
+              <div className="flex items-start md:items-center gap-3">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center shrink-0 mt-0.5 md:mt-0">
                   <Sparkles className="w-5 h-5 animate-pulse" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-text-main">
+                  <h4 className="text-xs sm:text-sm font-bold text-text-main">
                     {t('onboarding_banner_title')}
                   </h4>
-                  <p className="text-xs text-text-muted mt-1 max-w-2xl leading-relaxed">
+                  <p className="text-[11px] sm:text-xs text-text-muted mt-1 max-w-2xl leading-relaxed">
                     {t('onboarding_banner_desc')}
                   </p>
                 </div>
@@ -592,7 +591,7 @@ export default function App() {
               <div className="flex items-center gap-2 w-full md:w-auto shrink-0">
                 <button
                   onClick={() => setActiveTab('node')}
-                  className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-primary text-black font-semibold text-xs shadow-md shadow-primary/20 hover:opacity-90 active:scale-95 transition-all cursor-pointer"
+                  className="w-full md:w-auto flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-primary text-black font-semibold text-xs shadow-md shadow-primary/20 hover:opacity-90 active:scale-95 transition-all cursor-pointer"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>{t('wizard_switch_wizard')}</span>
@@ -614,25 +613,25 @@ export default function App() {
             />
           </div>
 
-          {/* Desktop Tab Navigation (Hidden on Mobile) */}
-          <div className="hidden md:flex flex-wrap gap-1.5 mb-6 p-1.5 rounded-2xl bg-card/60 border border-card-border backdrop-blur-md shadow-sm">
+          {/* Tab Navigation (Pill row: swipeable on mobile, flex-wrap on desktop) */}
+          <div className="flex overflow-x-auto no-scrollbar md:flex-wrap gap-1.5 mb-4 sm:mb-6 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl bg-card/60 border border-card-border backdrop-blur-md shadow-sm">
             {tabs.map((tab) => {
               const isActive = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 active:scale-95 cursor-pointer ${
+                  className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 active:scale-95 cursor-pointer whitespace-nowrap shrink-0 ${
                     isActive
-                      ? 'bg-primary text-black shadow-md shadow-primary/20 font-bold scale-[1.01]'
+                      ? 'bg-primary text-black shadow-md shadow-primary/20 font-bold'
                       : 'text-text-muted hover:text-text-main hover:bg-white/5'
                   }`}
                 >
-                  {tab.icon}
+                  <span className="shrink-0">{tab.icon}</span>
                   <span>{tab.label}</span>
                   {tab.badge !== undefined && (
                     <span
-                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold leading-none ${
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold leading-none shrink-0 ${
                         isActive
                           ? 'bg-black/25 text-black'
                           : 'bg-primary/20 text-primary border border-primary/30'
@@ -753,13 +752,6 @@ export default function App() {
               isRtl={isRtl}
             />
           )}
-
-          {/* Mobile Bottom Navigation Bar (Thumb-friendly dock) */}
-          <MobileBottomNav
-            activeTab={activeTab}
-            onSelectTab={setActiveTab}
-            items={tabs}
-          />
 
           {/* Mobile Navigation & Settings Drawer */}
           <MobileDrawer

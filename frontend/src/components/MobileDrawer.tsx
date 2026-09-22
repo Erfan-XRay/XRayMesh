@@ -84,7 +84,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
 
       {/* Drawer Panel */}
       <div
-        className={`relative z-10 w-[82vw] max-w-xs h-full bg-slate-950/95 border-white/15 backdrop-blur-2xl flex flex-col justify-between shadow-2xl transition-transform duration-300 ease-out overflow-y-auto ${
+        className={`relative z-10 w-[85vw] max-w-sm h-full bg-slate-950/95 border-white/15 backdrop-blur-2xl flex flex-col justify-between shadow-2xl transition-transform duration-300 ease-out overflow-y-auto ${
           isRtl
             ? 'ms-auto border-s animate-slide-in-right'
             : 'me-auto border-e animate-slide-in-left'
@@ -93,16 +93,16 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
         {/* Top Header */}
         <div className="p-4 border-b border-white/10">
           <div className="flex items-center justify-between gap-2 mb-3">
-            <div className="flex items-center gap-2.5">
-              <XRayMeshLogo className="w-8 h-8" size={32} glow={true} />
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-bold text-sm text-text-main tracking-tight">XRayMesh</span>
-                  <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-primary/15 text-primary border border-primary/25">
-                    v{node.xraymesh_version || '2.0.1'}
+            <div className="flex items-center gap-2.5 min-w-0">
+              <XRayMeshLogo className="w-8 h-8 shrink-0" size={32} glow={true} />
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="font-bold text-sm text-text-main tracking-tight truncate">XRayMesh</span>
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-primary/15 text-primary border border-primary/25 shrink-0">
+                    v{node.xraymesh_version || '2.0.2'}
                   </span>
                 </div>
-                <div className="text-[10px] text-text-muted font-mono truncate max-w-[140px]">
+                <div className="text-[10px] text-text-muted font-mono truncate max-w-[170px]">
                   {node.network_name || 'XRayMesh Network'}
                 </div>
               </div>
@@ -110,7 +110,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
 
             <button
               onClick={onClose}
-              className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-text-muted hover:text-text-main border border-white/10 active:scale-90 transition-all"
+              className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-text-muted hover:text-text-main border border-white/10 active:scale-90 transition-all shrink-0"
               aria-label={t('nav_close') || 'Close'}
             >
               <X className="w-5 h-5" />
@@ -118,15 +118,15 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
           </div>
 
           {/* Node Status Banner */}
-          <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2">
+          <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between text-xs gap-2 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
               <div className="badge-pulse shrink-0" />
               <div className="font-mono font-semibold text-text-main text-[11px] truncate">
                 {node.ipv4 || node.hostname || t('mesh_active')}
               </div>
             </div>
             {node.ssl_enabled && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
                 <ShieldCheck className="w-3 h-3 text-emerald-400" />
                 <span>SSL</span>
               </span>
@@ -149,19 +149,19 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
                   onSelectTab(tab.id);
                   onClose();
                 }}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 ${
+                className={`w-full flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 ${
                   isActive
                     ? 'bg-primary text-black font-bold shadow-md shadow-primary/20'
                     : 'text-text-muted hover:text-text-main hover:bg-white/5'
                 }`}
               >
-                <div className="flex items-center gap-2.5">
-                  <span className={isActive ? 'text-black' : 'text-primary'}>{tab.icon}</span>
-                  <span>{tab.label}</span>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className={`shrink-0 ${isActive ? 'text-black' : 'text-primary'}`}>{tab.icon}</span>
+                  <span className="truncate text-start">{tab.label}</span>
                 </div>
                 {tab.badge !== undefined && (
                   <span
-                    className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                    className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
                       isActive
                         ? 'bg-black/20 text-black'
                         : 'bg-white/10 text-text-muted border border-white/10'
@@ -183,11 +183,11 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
 
           {/* Language Switcher */}
           <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-white/5 border border-white/10">
-            <div className="flex items-center gap-2 text-xs font-medium text-text-muted">
-              <Globe className="w-3.5 h-3.5 text-primary" />
-              <span>Language</span>
+            <div className="flex items-center gap-2 text-xs font-medium text-text-muted min-w-0">
+              <Globe className="w-3.5 h-3.5 text-primary shrink-0" />
+              <span className="truncate">Language</span>
             </div>
-            <div className="inline-flex rounded-lg bg-black/40 border border-white/10 p-0.5 text-xs font-medium">
+            <div className="inline-flex rounded-lg bg-black/40 border border-white/10 p-0.5 text-xs font-medium shrink-0">
               <button
                 onClick={() => onSelectLang('en')}
                 className={`px-2.5 py-1 rounded-md transition-all ${
@@ -213,12 +213,12 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
 
           {/* Theme Palette Swatches */}
           <div className="p-2 rounded-xl bg-white/5 border border-white/10 space-y-1.5">
-            <div className="flex items-center justify-between text-xs font-medium text-text-muted px-1">
-              <div className="flex items-center gap-1.5">
-                <Palette className="w-3.5 h-3.5 text-primary" />
-                <span>{t('theme_selector')}</span>
+            <div className="flex items-center justify-between gap-2 text-xs font-medium text-text-muted px-1">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Palette className="w-3.5 h-3.5 text-primary shrink-0" />
+                <span className="truncate">{t('theme_selector')}</span>
               </div>
-              <span className="text-[10px] font-mono text-primary font-semibold">
+              <span className="text-[10px] font-mono text-primary font-semibold shrink-0">
                 {lang === 'fa'
                   ? availablePalettes.find((p) => p.id === paletteId)?.nameFa
                   : availablePalettes.find((p) => p.id === paletteId)?.nameEn}
@@ -248,10 +248,10 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
                 onRefresh();
               }}
               disabled={isRefreshing}
-              className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-text-main transition-colors disabled:opacity-50"
+              className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-text-main transition-colors disabled:opacity-50 min-w-0"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-primary' : ''}`} />
-              <span>{t('btn_refresh')}</span>
+              <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${isRefreshing ? 'animate-spin text-primary' : ''}`} />
+              <span className="truncate">{t('btn_refresh')}</span>
             </button>
 
             <button
@@ -259,10 +259,10 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
                 onClose();
                 onLogout();
               }}
-              className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-xs font-medium text-rose-400 transition-colors"
+              className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-xs font-medium text-rose-400 transition-colors min-w-0"
             >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>{t('btn_signout')}</span>
+              <LogOut className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">{t('btn_signout')}</span>
             </button>
           </div>
         </div>

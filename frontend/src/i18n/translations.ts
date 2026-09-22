@@ -32,11 +32,11 @@ export const translations = {
     load_prefix: "Load",
 
     // Tabs
-    tab_peers: "Peers & Mesh Nodes",
-    tab_node: "Node & Mesh Config",
-    tab_speedtest: "In-Mesh Speedtest (iperf3)",
-    tab_ping: "Live Ping & Latency",
-    tab_tunnels: "Tunnels Manager",
+    tab_node: "Node Config",
+    tab_peers: "Peers & Nodes",
+    tab_tunnels: "Tunnels",
+    tab_speedtest: "Speedtest",
+    tab_ping: "Ping & Latency",
 
     // Node & Mesh Tab
     node_panel_title: "Mesh Node & Network Configuration",
@@ -375,11 +375,11 @@ export const translations = {
     load_prefix: "لود سیستم",
 
     // Tabs
-    tab_peers: "پیرها و سرورهای مش",
-    tab_node: "تنظیمات نود و شبکه مش",
-    tab_speedtest: "تست سرعت درون‌مش (iperf3)",
-    tab_ping: "پینگ زنده و عیب‌یابی",
-    tab_tunnels: "مدیریت تانل‌ها",
+    tab_node: "تنظیمات نود",
+    tab_peers: "پیرها و نودها",
+    tab_tunnels: "تانل‌ها",
+    tab_speedtest: "تست سرعت",
+    tab_ping: "پینگ و تاخیر",
 
     // Node & Mesh Tab
     node_panel_title: "پیکربندی نود و شبکه مش",
