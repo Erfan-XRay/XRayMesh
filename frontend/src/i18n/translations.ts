@@ -41,6 +41,11 @@ export const translations = {
     // Node & Mesh Tab
     node_panel_title: "Mesh Node & Network Configuration",
     node_panel_desc: "Manage EasyTier mesh identity, transport protocols, accelerators, and multi-server meshing",
+    node_subtab_identity: "Identity & IP",
+    node_subtab_protocol: "Protocol & Speed",
+    node_subtab_cluster: "Invite & Peers",
+    node_subtab_danger: "Maintenance & Reset",
+    node_save_card_hint: "Saving configuration will update parameters and reload the mesh daemon.",
     node_identity_title: "Network Identity",
     node_net_name: "Network Name",
     node_net_secret: "Network Secret",
@@ -386,6 +391,11 @@ export const translations = {
     // Node & Mesh Tab
     node_panel_title: "پیکربندی نود و شبکه مش",
     node_panel_desc: "مدیریت مشخصات شبکه EasyTier، پروتکل‌های انتقال، شتاب‌دهنده‌ها و اتصال سرورها به یکدیگر",
+    node_subtab_identity: "شناسه و شبکه",
+    node_subtab_protocol: "پروتکل و سرعت",
+    node_subtab_cluster: "اتصال نودها و دعوت",
+    node_subtab_danger: "نگهداری و پاک‌سازی",
+    node_save_card_hint: "ذخیره تنظیمات سرویس نود را مجدداً بارگذاری خواهد کرد.",
     node_identity_title: "مشخصات و هویت شبکه",
     node_net_name: "نام شبکه (Network Name)",
     node_net_secret: "رمز عبور شبکه (Network Secret)",

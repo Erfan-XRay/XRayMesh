@@ -193,8 +193,9 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
   const [joinInput, setJoinInput] = useState('');
   const [joining, setJoining] = useState(false);
 
-  // Wizard Mode State
+  // Wizard & Sub-Tab State
   const [wizardActive, setWizardActive] = useState(false);
+  const [subTab, setSubTab] = useState<'identity' | 'protocol' | 'cluster' | 'danger'>('identity');
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
   const [setupMode, setSetupMode] = useState<'new' | 'join'>('new');
   const [wizardInviteInput, setWizardInviteInput] = useState('');
@@ -697,6 +698,32 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
     },
   ];
 
+  const renderInlineActions = () => (
+    <div className="pt-4 mt-5 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <p className="text-[11px] text-text-muted">{t('node_save_card_hint')}</p>
+      <div className="flex items-center gap-2 w-full sm:w-auto">
+        <button
+          type="button"
+          onClick={() => handleSave()}
+          disabled={saving}
+          className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-text-main font-semibold text-xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+        >
+          {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 text-text-muted" />}
+          <span>{t('cluster_btn_save_local')}</span>
+        </button>
+        <button
+          type="button"
+          onClick={triggerClusterSync}
+          disabled={saving}
+          className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-primary via-cyan-500 to-teal-400 text-black font-bold text-xs hover:opacity-95 transition-all shadow-md shadow-primary/20 active:scale-95 disabled:opacity-50 cursor-pointer"
+        >
+          <Globe className="w-3.5 h-3.5" />
+          <span>{t('cluster_sync_btn')}</span>
+        </button>
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center p-16 rounded-2xl bg-card border border-card-border backdrop-blur-xl">
@@ -871,28 +898,33 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
       )}
 
       {/* Top Header Card */}
-      <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg flex flex-wrap items-center justify-between gap-4">
+      <div className="p-4 sm:p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg flex flex-wrap items-center justify-between gap-3 sm:gap-4">
         <div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             <h2 className="text-base font-bold text-text-main flex items-center gap-2">
               <Settings className="w-4 h-4 text-primary" />
               {wizardActive ? t('wizard_title') : t('node_panel_title')}
             </h2>
             {config?.node_configured && (
               config.service_active ? (
-                <span className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shadow-sm">
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shadow-sm">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   {t('node_service_online')}
                 </span>
               ) : (
-                <span className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1.5 shadow-sm">
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1.5 shadow-sm">
                   <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
                   {t('node_service_offline')}
                 </span>
               )
             )}
+            {ipv4 && (
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-primary/10 text-primary border border-primary/25">
+                {ipv4}
+              </span>
+            )}
           </div>
-          <p className="text-xs text-text-muted mt-0.5">
+          <p className="text-xs text-text-muted mt-1">
             {wizardActive ? t('wizard_desc') : t('node_panel_desc')}
           </p>
         </div>
@@ -902,57 +934,57 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
           <button
             type="button"
             onClick={() => setWizardActive(!wizardActive)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 border border-primary/30 text-xs font-semibold text-primary transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-primary/10 hover:bg-primary/20 border border-primary/30 text-xs font-semibold text-primary transition-all active:scale-95 cursor-pointer"
           >
             {wizardActive ? <Sliders className="w-3.5 h-3.5" /> : <Sparkles className="w-3.5 h-3.5" />}
             <span>{wizardActive ? t('wizard_switch_manual') : t('wizard_switch_wizard')}</span>
           </button>
 
+          {/* Quick Service Control Icons */}
           {!wizardActive && config?.node_configured && (
-            config.service_active ? (
-              <>
+            <div className="flex items-center gap-1 p-0.5 rounded-xl bg-black/20 border border-white/5">
+              {config.service_active ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleRestartNode}
+                    disabled={controllingService}
+                    title={t('node_btn_restart')}
+                    className="p-1.5 rounded-lg text-amber-400 hover:bg-amber-500/15 transition-colors disabled:opacity-50"
+                  >
+                    <RotateCw className={`w-3.5 h-3.5 ${controllingService ? 'animate-spin' : ''}`} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleStopNode}
+                    disabled={controllingService}
+                    title={t('node_btn_stop')}
+                    className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/15 transition-colors disabled:opacity-50"
+                  >
+                    <Square className="w-3.5 h-3.5" />
+                  </button>
+                </>
+              ) : (
                 <button
                   type="button"
-                  onClick={handleRestartNode}
+                  onClick={handleStartNode}
                   disabled={controllingService}
-                  title={t('node_btn_restart')}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-xs font-medium text-amber-400 transition-colors disabled:opacity-50"
+                  title={t('node_btn_start')}
+                  className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/15 transition-colors disabled:opacity-50"
                 >
-                  <RotateCw className={`w-3.5 h-3.5 ${controllingService ? 'animate-spin' : ''}`} />
-                  <span>{t('node_btn_restart')}</span>
+                  <Play className={`w-3.5 h-3.5 ${controllingService ? 'animate-spin' : ''}`} />
                 </button>
-                <button
-                  type="button"
-                  onClick={handleStopNode}
-                  disabled={controllingService}
-                  title={t('node_btn_stop')}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-xs font-medium text-rose-400 transition-colors disabled:opacity-50"
-                >
-                  <Square className="w-3.5 h-3.5" />
-                  <span>{t('node_btn_stop')}</span>
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                onClick={handleStartNode}
-                disabled={controllingService}
-                title={t('node_btn_start')}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-xs font-medium text-emerald-400 transition-colors disabled:opacity-50"
-              >
-                <Play className={`w-3.5 h-3.5 ${controllingService ? 'animate-spin' : ''}`} />
-                <span>{t('node_btn_start')}</span>
-              </button>
-            )
+              )}
+            </div>
           )}
 
           <button
             type="button"
             onClick={loadData}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-text-muted hover:text-text-main transition-colors"
+            title={t('btn_refresh')}
+            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-text-muted hover:text-text-main transition-colors"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            {t('btn_refresh')}
           </button>
 
           {!wizardActive && (
@@ -963,7 +995,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                 onClick={() => handleSave()}
                 disabled={saving}
                 title={t('cluster_btn_save_local_desc')}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-text-main font-semibold text-xs transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-text-main font-semibold text-xs transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
               >
                 {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 text-text-muted" />}
                 <span>{t('cluster_btn_save_local')}</span>
@@ -975,13 +1007,10 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                 onClick={triggerClusterSync}
                 disabled={saving}
                 title={t('cluster_btn_sync_all_desc')}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-primary via-cyan-500 to-teal-400 text-black font-bold text-xs hover:opacity-95 transition-all shadow-lg shadow-primary/20 active:scale-95 disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-primary via-cyan-500 to-teal-400 text-black font-bold text-xs hover:opacity-95 transition-all shadow-md shadow-primary/20 active:scale-95 disabled:opacity-50 cursor-pointer"
               >
                 <Globe className="w-3.5 h-3.5" />
                 <span>{t('cluster_sync_btn')}</span>
-                <span className="hidden sm:inline px-1.5 py-0.5 rounded bg-black/20 text-[10px] font-mono uppercase tracking-wider">
-                  SafeSync
-                </span>
               </button>
             </div>
           )}
@@ -1777,536 +1806,627 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
       {/* 🛠️ ADVANCED / MANUAL CONFIGURATION VIEW                                   */}
       {/* ========================================================================= */}
       {!wizardActive && (
-        <div className="space-y-6 animate-tab-in">
-          {/* Section 1: Network Identity Card */}
-          <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
-            <h3 className="text-sm font-bold text-text-main flex items-center gap-2 mb-4 pb-2 border-b border-white/5">
-              <Shield className="w-4 h-4 text-primary" />
-              {t('node_identity_title')}
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
-              {/* Hostname (Server Name) - Strictly Required */}
-              <div className="relative">
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="font-bold text-text-main flex items-center gap-1">
-                    <span>{t('node_hostname')}</span>
-                    <span className="text-rose-400">*</span>
-                  </label>
-                  {!hostname.trim() && hostnameTouched && (
-                    <span className="text-[10px] text-rose-400 font-medium">Required</span>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  value={hostname}
-                  onChange={(e) => {
-                    setHostname(e.target.value);
-                    if (!hostnameTouched) setHostnameTouched(true);
-                  }}
-                  placeholder="e.g. server-germany"
-                  className={`w-full px-3.5 py-2 bg-slate-950 border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none transition-all ${
-                    !hostname.trim() && hostnameTouched
-                      ? 'border-rose-500 focus:border-rose-400'
-                      : 'border-white/10 focus:border-primary'
+        <div className="space-y-4 animate-tab-in">
+          {/* Sub-Tab Navigation Bar */}
+          <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-slate-900/60 border border-white/10 overflow-x-auto no-scrollbar">
+            <button
+              type="button"
+              onClick={() => setSubTab('identity')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                subTab === 'identity'
+                  ? 'bg-primary text-black shadow-md shadow-primary/25'
+                  : 'text-text-muted hover:text-text-main hover:bg-white/5'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5 shrink-0" />
+              <span>{t('node_subtab_identity')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSubTab('protocol')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                subTab === 'protocol'
+                  ? 'bg-primary text-black shadow-md shadow-primary/25'
+                  : 'text-text-muted hover:text-text-main hover:bg-white/5'
+              }`}
+            >
+              <Radio className="w-3.5 h-3.5 shrink-0" />
+              <span>{t('node_subtab_protocol')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSubTab('cluster')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                subTab === 'cluster'
+                  ? 'bg-primary text-black shadow-md shadow-primary/25'
+                  : 'text-text-muted hover:text-text-main hover:bg-white/5'
+              }`}
+            >
+              <Share2 className="w-3.5 h-3.5 shrink-0" />
+              <span>{t('node_subtab_cluster')}</span>
+              {peers.length > 0 && (
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold leading-none ${
+                    subTab === 'cluster'
+                      ? 'bg-black/25 text-black'
+                      : 'bg-primary/20 text-primary border border-primary/30'
                   }`}
-                />
-              </div>
+                >
+                  {peers.length}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSubTab('danger')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                subTab === 'danger'
+                  ? 'bg-rose-500 text-white shadow-md shadow-rose-500/25'
+                  : 'text-text-muted hover:text-rose-400 hover:bg-white/5'
+              }`}
+            >
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              <span>{t('node_subtab_danger')}</span>
+            </button>
+          </div>
 
-              {/* Network Name */}
-              <div>
-                <label className="block font-medium text-text-muted mb-1.5">{t('node_net_name')}</label>
-                <input
-                  type="text"
-                  value={networkName}
-                  onChange={(e) => setNetworkName(e.target.value)}
-                  placeholder="e.g. xraymesh"
-                  className="w-full px-3.5 py-2 bg-slate-950 border border-white/10 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
-                />
-              </div>
-
-              {/* Network Secret */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="font-medium text-text-muted">{t('node_net_secret')}</label>
-                  <button
-                    type="button"
-                    onClick={generateRandomSecret}
-                    className="text-[11px] text-primary hover:underline"
-                  >
-                    Generate
-                  </button>
+          {/* Sub-Tab 1: Network Identity & Addresses */}
+          {subTab === 'identity' && (
+            <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg space-y-4 animate-fade-in">
+              <div className="flex items-center justify-between pb-3 border-b border-white/5">
+                <div>
+                  <h3 className="text-sm font-bold text-text-main flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-primary" />
+                    {t('node_identity_title')}
+                  </h3>
+                  <p className="text-xs text-text-muted mt-0.5">
+                    {t('node_panel_desc')}
+                  </p>
                 </div>
+                {ipv4 && (
+                  <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-primary/10 text-primary border border-primary/20">
+                    VIP: {ipv4}
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                {/* Hostname (Server Name) - Strictly Required */}
                 <div className="relative">
-                  <input
-                    type={showSecret ? 'text' : 'password'}
-                    value={networkSecret}
-                    onChange={(e) => setNetworkSecret(e.target.value)}
-                    placeholder="Shared secret across all nodes..."
-                    className="w-full pl-3.5 pr-10 py-2 bg-slate-950 border border-white/10 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowSecret(!showSecret)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main"
-                  >
-                    {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Virtual IP */}
-              <div>
-                <label className="block font-medium text-text-muted mb-1.5">{t('node_vip')}</label>
-                <input
-                  type="text"
-                  value={ipv4}
-                  onChange={(e) => setIpv4(e.target.value)}
-                  placeholder="10.144.144.1"
-                  className="w-full px-3.5 py-2 bg-slate-950 border border-white/10 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
-                />
-              </div>
-
-              {/* Listen Port */}
-              <div>
-                <label className="block font-medium text-text-muted mb-1.5">{t('node_port')}</label>
-                <input
-                  type="number"
-                  value={port}
-                  onChange={(e) => setPort(Number(e.target.value))}
-                  placeholder="11010"
-                  className="w-full px-3.5 py-2 bg-slate-950 border border-white/10 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
-                />
-              </div>
-
-              {/* Detected Public IP */}
-              <div>
-                <label className="block font-medium text-text-muted mb-1.5">{t('node_public_ip')}</label>
-                <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="font-bold text-text-main flex items-center gap-1">
+                      <span>{t('node_hostname')}</span>
+                      <span className="text-rose-400">*</span>
+                    </label>
+                    {!hostname.trim() && hostnameTouched && (
+                      <span className="text-[10px] text-rose-400 font-medium">Required</span>
+                    )}
+                  </div>
                   <input
                     type="text"
-                    readOnly
-                    value={config?.public_ip || 'Detecting...'}
-                    className="w-full px-3.5 py-2 bg-slate-900/60 border border-white/5 rounded-xl font-mono text-text-muted cursor-not-allowed"
+                    value={hostname}
+                    onChange={(e) => {
+                      setHostname(e.target.value);
+                      if (!hostnameTouched) setHostnameTouched(true);
+                    }}
+                    placeholder="e.g. server-germany"
+                    className={`w-full px-3.5 py-2 bg-slate-950 border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none transition-all ${
+                      !hostname.trim() && hostnameTouched
+                        ? 'border-rose-500 focus:border-rose-400'
+                        : 'border-white/10 focus:border-primary'
+                    }`}
                   />
-                  {config?.public_ip && (
-                    <button
-                      onClick={() => onCopy(config.public_ip!)}
-                      className="p-2 rounded-xl bg-white/5 border border-white/10 text-text-muted hover:text-primary transition-colors"
-                      title="Copy IP"
-                    >
-                      {copiedKey === config.public_ip ? (
-                        <Check className="w-4 h-4 text-accent-green" />
-                      ) : (
-                        <Copy className="w-4 h-4" />
-                      )}
-                    </button>
-                  )}
                 </div>
-              </div>
-            </div>
-          </div>
 
-          {/* Section 2: Transport Protocol & Acceleration */}
-          <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
-            <h3 className="text-sm font-bold text-text-main flex items-center gap-2 mb-4 pb-2 border-b border-white/5">
-              <Radio className="w-4 h-4 text-primary" />
-              {t('node_protocol_title')}
-            </h3>
-
-            {/* Protocol Grid Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
-              {protocolsList.map((p) => {
-                const isSelected = protocol === p.id;
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => setProtocol(p.id)}
-                    className={`flex flex-col text-left p-3.5 rounded-xl border transition-all ${
-                      isSelected
-                        ? 'bg-primary/10 border-primary shadow-sm'
-                        : 'bg-slate-900/40 border-white/10 hover:border-white/20'
-                    } ${isRtl ? 'text-right' : 'text-left'}`}
-                  >
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <span className="font-bold text-xs text-text-main">{p.label}</span>
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold border ${p.badgeColor}`}
-                      >
-                        {p.badge}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-text-muted leading-relaxed line-clamp-2">{p.desc}</p>
-                  </button>
-                );
-              })}
-            </div>
-
-            {protocol === 'udp' && (
-              <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-300 animate-modal-in">
-                <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-400 mt-0.5" />
-                <p className="leading-relaxed text-[11px]">
-                  {t('node_proto_udp_hint')}
-                </p>
-              </div>
-            )}
-
-            {/* Accelerators & Toggles */}
-            <div className="pt-4 border-t border-white/5 text-xs">
-              {/* KCP Loss-Resistance Proxy */}
-              <div className="p-3.5 rounded-xl bg-slate-900/50 border border-white/10 flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Zap className="w-3.5 h-3.5 text-amber-400" />
-                    <span className="font-bold text-text-main">{t('node_kcp_label')}</span>
-                  </div>
-                  <p className="text-[11px] text-text-muted leading-relaxed">{t('node_kcp_desc')}</p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                  <input
-                    type="checkbox"
-                    checked={enableKcp}
-                    onChange={(e) => setEnableKcp(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary" />
-                </label>
-              </div>
-            </div>
-
-            {/* Extra Flags (Encryption, IPv6, MTU) */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 mt-4 border-t border-white/5 text-xs">
-              <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-900/30 border border-white/5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={encryption}
-                  onChange={(e) => setEncryption(e.target.checked)}
-                  className="rounded bg-slate-950 border-white/20 text-primary focus:ring-0"
-                />
-                <span className="font-medium text-text-main">{t('node_encryption_label')}</span>
-              </label>
-
-              <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-900/30 border border-white/5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={ipv6}
-                  onChange={(e) => setIpv6(e.target.checked)}
-                  className="rounded bg-slate-950 border-white/20 text-primary focus:ring-0"
-                />
-                <span className="font-medium text-text-main">{t('node_ipv6_label')}</span>
-              </label>
-
-              <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-900/30 border border-white/5">
-                <Sliders className="w-3.5 h-3.5 text-text-muted flex-shrink-0" />
-                <span className="text-[11px] text-text-muted flex-shrink-0">MTU:</span>
-                <input
-                  type="number"
-                  value={mtu}
-                  onChange={(e) => setMtu(Number(e.target.value))}
-                  className="w-full px-2 py-1 bg-slate-950 border border-white/10 rounded font-mono text-xs text-text-main"
-                />
-              </div>
-            </div>
-
-            {/* Quick Cluster-Wide Sync Prompt for Protocol & Acceleration */}
-            <div className="mt-5 p-4 rounded-xl bg-gradient-to-r from-primary/10 via-cyan-500/10 to-transparent border border-primary/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Globe className="w-4 h-4 text-primary" />
-                </div>
+                {/* Virtual IP (IPv4) */}
                 <div>
-                  <h4 className="text-xs font-bold text-text-main flex items-center gap-1.5">
-                    <span>{t('cluster_quick_sync_title')}</span>
-                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-                      Mesh-Wide
-                    </span>
-                  </h4>
-                  <p className="text-[11px] text-text-muted mt-0.5 leading-relaxed">
-                    {t('cluster_quick_sync_desc')}
-                  </p>
+                  <label className="block font-medium text-text-muted mb-1.5">{t('node_vip')}</label>
+                  <input
+                    type="text"
+                    value={ipv4}
+                    onChange={(e) => setIpv4(e.target.value)}
+                    placeholder="10.144.144.1"
+                    className="w-full px-3.5 py-2 bg-slate-950 border border-white/10 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                  />
                 </div>
-              </div>
-              <button
-                type="button"
-                onClick={triggerClusterSync}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-black font-bold text-xs transition-all shadow-md shadow-primary/20 whitespace-nowrap self-stretch sm:self-auto justify-center"
-              >
-                <Globe className="w-3.5 h-3.5" />
-                <span>{t('cluster_sync_btn')}</span>
-              </button>
-            </div>
-          </div>
 
-          {/* Section 3: One-Click Multi-Server Meshing (Invite & Join) */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {/* Share Invite Card */}
-            <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg flex flex-col justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-text-main flex items-center gap-2 mb-1">
-                  <Share2 className="w-4 h-4 text-accent-green" />
-                  {t('node_invite_title')}
-                </h3>
-                <p className="text-xs text-text-muted mb-3">{t('node_invite_desc')}</p>
+                {/* Listen Port */}
+                <div>
+                  <label className="block font-medium text-text-muted mb-1.5">{t('node_port')}</label>
+                  <input
+                    type="number"
+                    value={port}
+                    onChange={(e) => setPort(Number(e.target.value))}
+                    placeholder="11010"
+                    className="w-full px-3.5 py-2 bg-slate-950 border border-white/10 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                  />
+                </div>
 
-                {inviteData && (
-                  <div className="mb-3">
-                    <label className="block text-[11px] text-text-muted mb-1 font-medium">
-                      {t('node_invite_public_endpoint_label')}
-                    </label>
+                {/* Network Name */}
+                <div>
+                  <label className="block font-medium text-text-muted mb-1.5">{t('node_net_name')}</label>
+                  <input
+                    type="text"
+                    value={networkName}
+                    onChange={(e) => setNetworkName(e.target.value)}
+                    placeholder="e.g. xraymesh"
+                    className="w-full px-3.5 py-2 bg-slate-950 border border-white/10 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                  />
+                </div>
+
+                {/* Network Secret */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="font-medium text-text-muted">{t('node_net_secret')}</label>
+                    <button
+                      type="button"
+                      onClick={generateRandomSecret}
+                      className="text-[11px] text-primary hover:underline cursor-pointer"
+                    >
+                      Generate
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showSecret ? 'text' : 'password'}
+                      value={networkSecret}
+                      onChange={(e) => setNetworkSecret(e.target.value)}
+                      placeholder="Shared secret across all nodes..."
+                      className="w-full pl-3.5 pr-10 py-2 bg-slate-950 border border-white/10 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSecret(!showSecret)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main cursor-pointer"
+                    >
+                      {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Detected Public IP */}
+                <div>
+                  <label className="block font-medium text-text-muted mb-1.5">{t('node_public_ip')}</label>
+                  <div className="flex items-center gap-2">
                     <input
                       type="text"
-                      value={overrideEndpoint}
-                      onChange={(e) => setOverrideEndpoint(e.target.value)}
-                      placeholder={inviteData.details.endpoint || t('node_invite_endpoint_placeholder')}
-                      className="w-full px-3 py-1.5 bg-slate-950/90 border border-white/10 rounded-lg font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-accent-green"
+                      readOnly
+                      value={config?.public_ip || 'Detecting...'}
+                      className="w-full px-3.5 py-2 bg-slate-900/60 border border-white/5 rounded-xl font-mono text-text-muted cursor-not-allowed"
                     />
-                    {!overrideEndpoint &&
-                      (!computedInvite?.details.endpoint || computedInvite.details.endpoint.startsWith(':')) && (
-                        <p className="text-[10px] text-amber-400 mt-1 font-medium leading-normal">
-                          {t('node_invite_no_ip_warning')}
-                        </p>
-                      )}
+                    {config?.public_ip && (
+                      <button
+                        onClick={() => onCopy(config.public_ip!)}
+                        className="p-2 rounded-xl bg-white/5 border border-white/10 text-text-muted hover:text-primary transition-colors cursor-pointer"
+                        title="Copy IP"
+                      >
+                        {copiedKey === config.public_ip ? (
+                          <Check className="w-4 h-4 text-accent-green" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </button>
+                    )}
                   </div>
-                )}
-
-                {computedInvite ? (
-                  <div className="p-3.5 rounded-xl bg-slate-950/80 border border-white/10 mb-4">
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <span className="text-[11px] font-mono text-accent-green font-semibold">
-                        {computedInvite.details.net} ({computedInvite.details.proto.toUpperCase()})
-                      </span>
-                      <span className="text-[10px] text-text-muted font-mono">
-                        {computedInvite.details.endpoint || 'No endpoint (relay only)'}
-                      </span>
-                    </div>
-                    <div className="p-2 rounded bg-black/40 border border-white/5 font-mono text-[11px] text-text-main break-all line-clamp-3 select-all">
-                      {computedInvite.invite}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-4 rounded-xl bg-white/[0.02] border border-dashed border-white/10 text-center text-xs text-text-muted mb-4">
-                    {loadingInvite
-                      ? 'Generating invite token...'
-                      : 'Save node configuration to enable mesh invite token.'}
-                  </div>
-                )}
+                </div>
               </div>
 
-              <button
-                onClick={() => computedInvite && handleCopyInviteToken(computedInvite.invite)}
-                disabled={!computedInvite}
-                className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-xs border transition-all duration-200 active:scale-95 disabled:opacity-50 ${
-                  copiedInvite || copiedKey === computedInvite?.invite
-                    ? 'bg-emerald-500/25 text-emerald-300 border-emerald-400/60 shadow-lg shadow-emerald-500/20 scale-[1.01]'
-                    : 'bg-accent-green/15 text-emerald-400 hover:bg-accent-green/25 border-accent-green/30 hover:shadow-md'
-                }`}
-              >
-                {copiedInvite || copiedKey === computedInvite?.invite ? (
-                  <>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 animate-bounce-subtle" />
-                    <span>{t('btn_copied')} ✓</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4" />
-                    <span>{t('node_btn_copy_invite')}</span>
-                  </>
-                )}
-              </button>
+              {renderInlineActions()}
             </div>
+          )}
 
-            {/* Join Existing Mesh Card */}
-            <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg flex flex-col justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-text-main flex items-center gap-2 mb-1">
-                  <Link className="w-4 h-4 text-primary" />
-                  {t('node_join_title')}
-                </h3>
-                <p className="text-xs text-text-muted mb-4">{t('node_join_desc')}</p>
-
-                <textarea
-                  value={joinInput}
-                  onChange={(e) => handleManualJoinInputChange(e.target.value)}
-                  placeholder={t('node_join_placeholder')}
-                  rows={3}
-                  className="w-full p-3 bg-slate-950 border border-white/10 rounded-xl font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-primary resize-none mb-3"
-                />
-
-                {/* Detected token hint */}
-                {parseInviteToken(joinInput) && (
-                  <div className="mb-3 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-[11px] text-emerald-400 flex items-center gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
-                    <span>Invite token recognized! Fields auto-populated above. Enter Server Name and click Join.</span>
-                  </div>
-                )}
-              </div>
-
-              <button
-                onClick={handleJoin}
-                disabled={joining || !joinInput.trim() || !hostname.trim()}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary text-black font-semibold text-xs hover:bg-primary-hover transition-all shadow-md disabled:opacity-50"
-              >
-                {joining ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Link className="w-4 h-4" />}
-                <span>{t('node_btn_join')}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Section 4: Live Mesh Peers Manager */}
-          <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-2 border-b border-white/5">
-              <div>
-                <h3 className="text-sm font-bold text-text-main flex items-center gap-2">
-                  <Server className="w-4 h-4 text-primary" />
-                  {t('node_peers_title')}
-                </h3>
-                <p className="text-xs text-text-muted mt-0.5">{t('node_peers_desc')}</p>
-              </div>
-              <span className="px-2.5 py-1 rounded-full text-xs font-mono font-medium bg-primary/10 text-primary border border-primary/20">
-                {peers.length} {t('peers_title')}
-              </span>
-            </div>
-
-            {/* Add Peer Row */}
-            <div className="flex items-center gap-2 mb-4">
-              <input
-                type="text"
-                value={newPeer}
-                onChange={(e) => setNewPeer(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddPeer()}
-                placeholder={t('node_peer_add_placeholder')}
-                className="flex-1 px-3.5 py-2 bg-slate-950 border border-white/10 rounded-xl font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
-              />
-              <button
-                onClick={handleAddPeer}
-                disabled={addingPeer || !newPeer.trim()}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary/15 hover:bg-primary/25 border border-primary/30 text-primary text-xs font-semibold transition-all disabled:opacity-50"
-              >
-                {addingPeer ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                <span>{t('node_btn_add_peer')}</span>
-              </button>
-            </div>
-
-            {/* Peers List */}
-            {peers.length === 0 ? (
-              <div className="p-6 rounded-xl bg-white/[0.02] border border-dashed border-white/10 text-center text-xs text-text-muted">
-                {t('node_no_peers')}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                {peers.map((p) => (
-                  <div
-                    key={p}
-                    className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/60 border border-white/10 hover:border-white/20 transition-all text-xs"
-                  >
-                    <span className="font-mono text-primary font-medium truncate mr-2">{p}</span>
-                    <button
-                      onClick={() => handleRemovePeer(p)}
-                      className="p-1 rounded-lg text-text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                      title="Remove peer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Section: Save & Deploy Configuration (Local vs Cluster SafeSync) */}
-          <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
-            <h3 className="text-sm font-bold text-text-main flex items-center gap-2 mb-1">
-              <Sparkles className="w-4 h-4 text-primary" />
-              <span>{t('cluster_actions_section_title')}</span>
-            </h3>
-            <p className="text-xs text-text-muted mb-5">
-              {t('cluster_actions_section_desc')}
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Card 1: Local Only Save */}
-              <div className="p-4 rounded-xl bg-slate-900/40 border border-white/10 hover:border-white/20 transition-all flex flex-col justify-between">
+          {/* Sub-Tab 2: Transport Protocol & Accelerators */}
+          {subTab === 'protocol' && (
+            <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg space-y-4 animate-fade-in">
+              <div className="flex items-center justify-between pb-3 border-b border-white/5">
                 <div>
-                  <div className="flex items-center gap-2.5 mb-2">
-                    <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
-                      <Save className="w-3.5 h-3.5 text-text-muted" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-bold text-text-main">{t('cluster_btn_save_local')}</h4>
-                      <span className="text-[10px] text-text-subtle font-mono">{t('cluster_badge_single_node')}</span>
-                    </div>
-                  </div>
-                  <p className="text-[11px] text-text-muted leading-relaxed mb-4">
-                    {t('cluster_btn_save_local_desc')}
+                  <h3 className="text-sm font-bold text-text-main flex items-center gap-2">
+                    <Radio className="w-4 h-4 text-primary" />
+                    {t('node_protocol_title')}
+                  </h3>
+                  <p className="text-xs text-text-muted mt-0.5">
+                    {t('node_protocol')}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleSave()}
-                  disabled={saving}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-text-main font-semibold text-xs transition-all active:scale-95 disabled:opacity-50"
-                >
-                  {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                  <span>{t('cluster_btn_save_local')}</span>
-                </button>
+                <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-primary/10 text-primary border border-primary/20">
+                  {protocol.toUpperCase()}
+                </span>
               </div>
 
-              {/* Card 2: Cluster SafeSync */}
-              <div className="p-4 rounded-xl bg-gradient-to-br from-primary/10 via-cyan-500/5 to-slate-900/60 border border-primary/25 hover:border-primary/40 transition-all flex flex-col justify-between shadow-lg shadow-primary/5">
-                <div>
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center">
-                        <Globe className="w-3.5 h-3.5 text-primary" />
+              {/* Protocol Grid Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {protocolsList.map((p) => {
+                  const isSelected = protocol === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setProtocol(p.id)}
+                      className={`flex flex-col text-left p-3.5 rounded-xl border transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-primary/10 border-primary ring-1 ring-primary/30 shadow-sm'
+                          : 'bg-slate-900/40 border-white/10 hover:border-white/20'
+                      } ${isRtl ? 'text-right' : 'text-left'}`}
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <span className="font-bold text-xs text-text-main">{p.label}</span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold border ${p.badgeColor}`}
+                        >
+                          {p.badge}
+                        </span>
                       </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-text-main">{t('cluster_sync_btn')}</h4>
-                        <span className="text-[10px] text-cyan-400 font-mono font-semibold">{t('cluster_badge_all_nodes')}</span>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                      60s Watchdog
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-text-muted leading-relaxed mb-4">
-                    {t('cluster_btn_sync_all_desc')}
+                      <p className="text-[11px] text-text-muted leading-relaxed line-clamp-2">{p.desc}</p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {protocol === 'udp' && (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-300 animate-fade-in">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-400 mt-0.5" />
+                  <p className="leading-relaxed text-[11px]">
+                    {t('node_proto_udp_hint')}
                   </p>
+                </div>
+              )}
+
+              {/* Accelerators & Toggles */}
+              <div className="pt-2 border-t border-white/5 space-y-3 text-xs">
+                {/* KCP Loss-Resistance Proxy */}
+                <div className="p-3.5 rounded-xl bg-slate-900/50 border border-white/10 flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Zap className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="font-bold text-text-main">{t('node_kcp_label')}</span>
+                    </div>
+                    <p className="text-[11px] text-text-muted leading-relaxed">{t('node_kcp_desc')}</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={enableKcp}
+                      onChange={(e) => setEnableKcp(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary" />
+                  </label>
+                </div>
+
+                {/* Extra Flags (Encryption, IPv6, MTU) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-900/30 border border-white/5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={encryption}
+                      onChange={(e) => setEncryption(e.target.checked)}
+                      className="rounded bg-slate-950 border-white/20 text-primary focus:ring-0"
+                    />
+                    <span className="font-medium text-text-main">{t('node_encryption_label')}</span>
+                  </label>
+
+                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-900/30 border border-white/5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={ipv6}
+                      onChange={(e) => setIpv6(e.target.checked)}
+                      className="rounded bg-slate-950 border-white/20 text-primary focus:ring-0"
+                    />
+                    <span className="font-medium text-text-main">{t('node_ipv6_label')}</span>
+                  </label>
+
+                  <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-900/30 border border-white/5">
+                    <Sliders className="w-3.5 h-3.5 text-text-muted flex-shrink-0" />
+                    <span className="text-[11px] text-text-muted flex-shrink-0">MTU:</span>
+                    <input
+                      type="number"
+                      value={mtu}
+                      onChange={(e) => setMtu(Number(e.target.value))}
+                      className="w-full px-2 py-1 bg-slate-950 border border-white/10 rounded font-mono text-xs text-text-main"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Cluster-Wide Sync Prompt for Protocol & Acceleration */}
+              <div className="p-4 rounded-xl bg-gradient-to-r from-primary/10 via-cyan-500/10 to-transparent border border-primary/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Globe className="w-4 h-4 text-primary" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-text-main flex items-center gap-1.5">
+                      <span>{t('cluster_quick_sync_title')}</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                        Mesh-Wide
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-text-muted mt-0.5 leading-relaxed">
+                      {t('cluster_quick_sync_desc')}
+                    </p>
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={triggerClusterSync}
-                  disabled={saving}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-primary via-cyan-500 to-teal-400 text-black font-bold text-xs hover:opacity-95 transition-all shadow-md shadow-primary/20 active:scale-95 disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-black font-bold text-xs transition-all shadow-md shadow-primary/20 whitespace-nowrap self-stretch sm:self-auto justify-center cursor-pointer"
                 >
                   <Globe className="w-3.5 h-3.5" />
                   <span>{t('cluster_sync_btn')}</span>
                 </button>
               </div>
-            </div>
-          </div>
 
-          {/* Section 5: Danger Zone */}
-          <div className="p-5 rounded-2xl bg-rose-500/5 border border-rose-500/20 backdrop-blur-xl shadow-lg">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-sm font-bold text-rose-400 flex items-center gap-2">
-                  <Trash2 className="w-4 h-4 text-rose-500" />
-                  {t('node_danger_zone')}
-                </h3>
-                <p className="text-xs text-text-muted mt-1 max-w-xl">
-                  {t('node_delete_desc')}
-                </p>
-              </div>
-              <button
-                onClick={() => setShowDeleteModal(true)}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-400 hover:text-rose-300 text-xs font-semibold transition-all whitespace-nowrap"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>{t('node_btn_delete')}</span>
-              </button>
+              {renderInlineActions()}
             </div>
-          </div>
+          )}
+
+          {/* Sub-Tab 3: Multi-Server Meshing & Peers */}
+          {subTab === 'cluster' && (
+            <div className="space-y-4 animate-fade-in">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Share Invite Card */}
+                <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg flex flex-col justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-text-main flex items-center gap-2 mb-1">
+                      <Share2 className="w-4 h-4 text-accent-green" />
+                      {t('node_invite_title')}
+                    </h3>
+                    <p className="text-xs text-text-muted mb-3">{t('node_invite_desc')}</p>
+
+                    {inviteData && (
+                      <div className="mb-3">
+                        <label className="block text-[11px] text-text-muted mb-1 font-medium">
+                          {t('node_invite_public_endpoint_label')}
+                        </label>
+                        <input
+                          type="text"
+                          value={overrideEndpoint}
+                          onChange={(e) => setOverrideEndpoint(e.target.value)}
+                          placeholder={inviteData.details.endpoint || t('node_invite_endpoint_placeholder')}
+                          className="w-full px-3 py-1.5 bg-slate-950/90 border border-white/10 rounded-lg font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-accent-green"
+                        />
+                        {!overrideEndpoint &&
+                          (!computedInvite?.details.endpoint || computedInvite.details.endpoint.startsWith(':')) && (
+                            <p className="text-[10px] text-amber-400 mt-1 font-medium leading-normal">
+                              {t('node_invite_no_ip_warning')}
+                            </p>
+                          )}
+                      </div>
+                    )}
+
+                    {computedInvite ? (
+                      <div className="p-3.5 rounded-xl bg-slate-950/80 border border-white/10 mb-4">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="text-[11px] font-mono text-accent-green font-semibold">
+                            {computedInvite.details.net} ({computedInvite.details.proto.toUpperCase()})
+                          </span>
+                          <span className="text-[10px] text-text-muted font-mono">
+                            {computedInvite.details.endpoint || 'No endpoint (relay only)'}
+                          </span>
+                        </div>
+                        <div className="p-2 rounded bg-black/40 border border-white/5 font-mono text-[11px] text-text-muted truncate select-all">
+                          {computedInvite.invite}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-4 rounded-xl bg-white/[0.02] border border-dashed border-white/10 text-center text-xs text-text-muted mb-4">
+                        {loadingInvite
+                          ? 'Generating invite token...'
+                          : 'Save node configuration to enable mesh invite token.'}
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => computedInvite && handleCopyInviteToken(computedInvite.invite)}
+                    disabled={!computedInvite}
+                    className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-xs border transition-all duration-200 active:scale-95 disabled:opacity-50 cursor-pointer ${
+                      copiedInvite || copiedKey === computedInvite?.invite
+                        ? 'bg-emerald-500/25 text-emerald-300 border-emerald-400/60 shadow-lg shadow-emerald-500/20'
+                        : 'bg-accent-green/15 text-emerald-400 hover:bg-accent-green/25 border-accent-green/30'
+                    }`}
+                  >
+                    {copiedInvite || copiedKey === computedInvite?.invite ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 animate-bounce-subtle" />
+                        <span>{t('btn_copied')} ✓</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4" />
+                        <span>{t('node_btn_copy_invite')}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Join Existing Mesh Card */}
+                <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg flex flex-col justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-text-main flex items-center gap-2 mb-1">
+                      <Link className="w-4 h-4 text-primary" />
+                      {t('node_join_title')}
+                    </h3>
+                    <p className="text-xs text-text-muted mb-4">{t('node_join_desc')}</p>
+
+                    <textarea
+                      value={joinInput}
+                      onChange={(e) => handleManualJoinInputChange(e.target.value)}
+                      placeholder={t('node_join_placeholder')}
+                      rows={3}
+                      className="w-full p-3 bg-slate-950 border border-white/10 rounded-xl font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-primary resize-none mb-3"
+                    />
+
+                    {/* Detected token hint */}
+                    {parseInviteToken(joinInput) && (
+                      <div className="mb-3 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-[11px] text-emerald-400 flex items-center gap-2">
+                        <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>Invite token recognized! Fields auto-populated. Click Join.</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={handleJoin}
+                    disabled={joining || !joinInput.trim() || !hostname.trim()}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary text-black font-semibold text-xs hover:bg-primary-hover transition-all shadow-md disabled:opacity-50 cursor-pointer"
+                  >
+                    {joining ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Link className="w-4 h-4" />}
+                    <span>{t('node_btn_join')}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Live Mesh Peers Manager */}
+              <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-2 border-b border-white/5">
+                  <div>
+                    <h3 className="text-sm font-bold text-text-main flex items-center gap-2">
+                      <Server className="w-4 h-4 text-primary" />
+                      {t('node_peers_title')}
+                    </h3>
+                    <p className="text-xs text-text-muted mt-0.5">{t('node_peers_desc')}</p>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-xs font-mono font-medium bg-primary/10 text-primary border border-primary/20">
+                    {peers.length} {t('peers_title')}
+                  </span>
+                </div>
+
+                {/* Add Peer Row */}
+                <div className="flex items-center gap-2 mb-4">
+                  <input
+                    type="text"
+                    value={newPeer}
+                    onChange={(e) => setNewPeer(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddPeer()}
+                    placeholder={t('node_peer_add_placeholder')}
+                    className="flex-1 px-3.5 py-2 bg-slate-950 border border-white/10 rounded-xl font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                  />
+                  <button
+                    onClick={handleAddPeer}
+                    disabled={addingPeer || !newPeer.trim()}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary/15 hover:bg-primary/25 border border-primary/30 text-primary text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {addingPeer ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                    <span>{t('node_btn_add_peer')}</span>
+                  </button>
+                </div>
+
+                {/* Peers List */}
+                {peers.length === 0 ? (
+                  <div className="p-6 rounded-xl bg-white/[0.02] border border-dashed border-white/10 text-center text-xs text-text-muted">
+                    {t('node_no_peers')}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    {peers.map((p) => (
+                      <div
+                        key={p}
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/60 border border-white/10 hover:border-white/20 transition-all text-xs"
+                      >
+                        <span className="font-mono text-primary font-medium truncate mr-2">{p}</span>
+                        <button
+                          onClick={() => handleRemovePeer(p)}
+                          className="p-1 rounded-lg text-text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                          title="Remove peer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {renderInlineActions()}
+              </div>
+            </div>
+          )}
+
+          {/* Sub-Tab 4: Maintenance & Danger Zone */}
+          {subTab === 'danger' && (
+            <div className="space-y-4 animate-fade-in">
+              {/* Service Control Card */}
+              <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-3 pb-3 border-b border-white/5">
+                  <div>
+                    <h3 className="text-sm font-bold text-text-main flex items-center gap-2">
+                      <Settings className="w-4 h-4 text-primary" />
+                      <span>{t('node_service_online')} / {t('node_service_offline')}</span>
+                    </h3>
+                    <p className="text-xs text-text-muted mt-0.5">
+                      EasyTier Systemd Service Controller
+                    </p>
+                  </div>
+                  {config?.service_active ? (
+                    <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      {t('node_service_online')}
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-rose-400" />
+                      {t('node_service_offline')}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleRestartNode}
+                    disabled={controllingService}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-xs font-semibold text-amber-400 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                  >
+                    <RotateCw className={`w-3.5 h-3.5 ${controllingService ? 'animate-spin' : ''}`} />
+                    <span>{t('node_btn_restart')}</span>
+                  </button>
+                  {config?.service_active ? (
+                    <button
+                      type="button"
+                      onClick={handleStopNode}
+                      disabled={controllingService}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-xs font-semibold text-rose-400 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                    >
+                      <Square className="w-3.5 h-3.5" />
+                      <span>{t('node_btn_stop')}</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleStartNode}
+                      disabled={controllingService}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-xs font-semibold text-emerald-400 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                    >
+                      <Play className={`w-3.5 h-3.5 ${controllingService ? 'animate-spin' : ''}`} />
+                      <span>{t('node_btn_start')}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Danger Zone: Delete Node */}
+              <div className="p-5 rounded-2xl bg-rose-500/5 border border-rose-500/25 backdrop-blur-xl shadow-lg">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-rose-400 flex items-center gap-2">
+                      <Trash2 className="w-4 h-4 text-rose-500" />
+                      {t('node_danger_zone')}
+                    </h3>
+                    <p className="text-xs text-text-muted mt-1 max-w-xl">
+                      {t('node_delete_desc')}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowDeleteModal(true)}
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-400 hover:text-rose-300 text-xs font-semibold transition-all whitespace-nowrap cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{t('node_btn_delete')}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
