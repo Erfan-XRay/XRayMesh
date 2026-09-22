@@ -20,6 +20,8 @@ import * as api from './services/api';
 
 import { Header } from './components/Header';
 import { OverviewCards } from './components/OverviewCards';
+import { MobileDrawer } from './components/MobileDrawer';
+import { MobileBottomNav } from './components/MobileBottomNav';
 import { ToastContainer } from './components/Toast';
 import { LoginModal } from './components/Modals/LoginModal';
 import { TunnelModal, TunnelModalType } from './components/Modals/TunnelModal';
@@ -55,6 +57,7 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [showLogin, setShowLogin] = useState(false);
   const [passwordConfigured, setPasswordConfigured] = useState<boolean>(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Dashboard data
   const [status, setStatus] = useState<StatusResponse>(EMPTY_STATUS);
@@ -476,12 +479,18 @@ export default function App() {
   })();
 
   // ─── Tab Config ─────────────────────────────────────────
-  const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
+  const totalTunnels =
+    (tunnels.haproxy?.length || 0) +
+    (tunnels.iptables?.length || 0) +
+    (tunnels.gost?.length || 0) +
+    (tunnels.realm?.length || 0);
+
+  const tabs: { id: TabId; label: string; icon: React.ReactNode; badge?: number | string }[] = [
     { id: 'node', label: t('tab_node'), icon: <Settings className="w-4 h-4" /> },
-    { id: 'peers', label: t('tab_peers'), icon: <Users className="w-4 h-4" /> },
-    { id: 'speedtest', label: t('tab_speedtest'), icon: <Zap className="w-4 h-4" /> },
+    { id: 'peers', label: t('tab_peers'), icon: <Users className="w-4 h-4" />, badge: peers.length > 0 ? peers.length : undefined },
+    { id: 'tunnels', label: t('tab_tunnels'), icon: <Network className="w-4 h-4" />, badge: totalTunnels > 0 ? totalTunnels : undefined },
     { id: 'ping', label: t('tab_ping'), icon: <Activity className="w-4 h-4" /> },
-    { id: 'tunnels', label: t('tab_tunnels'), icon: <Network className="w-4 h-4" /> },
+    { id: 'speedtest', label: t('tab_speedtest'), icon: <Zap className="w-4 h-4" /> },
   ];
 
   // ─── Loading / Auth Gate ────────────────────────────────
@@ -495,7 +504,7 @@ export default function App() {
 
   // ─── Render ─────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-canvas px-4 py-6 md:px-6 lg:px-8 max-w-7xl mx-auto">
+    <div className="min-h-screen bg-canvas px-3.5 py-4 md:px-6 md:py-6 lg:px-8 max-w-7xl mx-auto pb-24 md:pb-8">
       {/* Login Modal */}
       <LoginModal
         isOpen={showLogin}
@@ -524,6 +533,7 @@ export default function App() {
               availablePalettes={availablePalettes}
               t={t}
               isRtl={isRtl}
+              onOpenDrawer={() => setDrawerOpen(true)}
             />
           </div>
 
@@ -603,15 +613,15 @@ export default function App() {
             />
           </div>
 
-          {/* Tab Navigation */}
-          <div className="flex flex-wrap gap-1.5 mb-6 p-1.5 rounded-2xl bg-card/60 border border-card-border backdrop-blur-md shadow-sm">
+          {/* Desktop Tab Navigation (Hidden on Mobile) */}
+          <div className="hidden md:flex flex-wrap gap-1.5 mb-6 p-1.5 rounded-2xl bg-card/60 border border-card-border backdrop-blur-md shadow-sm">
             {tabs.map((tab) => {
               const isActive = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 active:scale-95 ${
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 active:scale-95 cursor-pointer ${
                     isActive
                       ? 'bg-primary text-black shadow-md shadow-primary/20 font-bold scale-[1.01]'
                       : 'text-text-muted hover:text-text-main hover:bg-white/5'
@@ -619,6 +629,17 @@ export default function App() {
                 >
                   {tab.icon}
                   <span>{tab.label}</span>
+                  {tab.badge !== undefined && (
+                    <span
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold leading-none ${
+                        isActive
+                          ? 'bg-black/25 text-black'
+                          : 'bg-primary/20 text-primary border border-primary/30'
+                      }`}
+                    >
+                      {tab.badge}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -731,6 +752,33 @@ export default function App() {
               isRtl={isRtl}
             />
           )}
+
+          {/* Mobile Bottom Navigation Bar (Thumb-friendly dock) */}
+          <MobileBottomNav
+            activeTab={activeTab}
+            onSelectTab={setActiveTab}
+            items={tabs}
+          />
+
+          {/* Mobile Navigation & Settings Drawer */}
+          <MobileDrawer
+            isOpen={drawerOpen}
+            onClose={() => setDrawerOpen(false)}
+            node={status.node}
+            activeTab={activeTab}
+            onSelectTab={setActiveTab}
+            tabs={tabs}
+            isRefreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            onLogout={handleLogout}
+            lang={lang}
+            onSelectLang={setLang}
+            paletteId={paletteId}
+            onSelectPalette={setPaletteId}
+            availablePalettes={availablePalettes}
+            t={t}
+            isRtl={isRtl}
+          />
         </>
       )}
 

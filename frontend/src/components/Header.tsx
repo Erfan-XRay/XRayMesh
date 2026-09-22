@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NodeInfo, PaletteId, Language } from '../types';
 import { PaletteDef } from '../theme/palettes';
-import { RefreshCw, LogOut, Palette } from 'lucide-react';
+import { RefreshCw, LogOut, Palette, Menu } from 'lucide-react';
 import { XRayMeshLogo } from './XRayMeshLogo';
 
 interface HeaderProps {
@@ -16,6 +16,7 @@ interface HeaderProps {
   availablePalettes: PaletteDef[];
   t: (key: any) => string;
   isRtl: boolean;
+  onOpenDrawer: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -30,41 +31,63 @@ export const Header: React.FC<HeaderProps> = ({
   availablePalettes,
   t,
   isRtl,
+  onOpenDrawer,
 }) => {
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
 
   return (
-    <header className="relative z-50 flex flex-wrap items-center justify-between gap-4 p-4 md:p-6 mb-6 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
+    <header className="relative z-50 flex items-center justify-between gap-3 p-3.5 md:p-5 mb-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg transition-all">
       {/* Brand & Custom Logo */}
-      <div className="flex items-center gap-3.5">
-        <XRayMeshLogo className="w-11 h-11" size={44} glow={true} />
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold text-text-main tracking-tight leading-tight">
+      <div className="flex items-center gap-3 min-w-0">
+        <XRayMeshLogo className="w-10 h-10 md:w-11 md:h-11 shrink-0" size={44} glow={true} />
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 md:gap-2 flex-wrap">
+            <h1 className="text-base md:text-lg font-bold text-text-main tracking-tight leading-tight truncate">
               {t('brand_title')}
             </h1>
-            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-primary/10 text-primary border border-primary/20">
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-primary/10 text-primary border border-primary/20 shrink-0">
               MESH
             </span>
-            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20">
-              v{node.xraymesh_version || '2.0.0'}
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20 shrink-0">
+              v{node.xraymesh_version || '2.0.1'}
             </span>
             {node.ssl_enabled && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" title="SSL/TLS Active">
+              <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0" title="SSL/TLS Active">
                 <span>🔒</span>
                 <span>SSL</span>
               </span>
             )}
           </div>
-          <p className="text-xs text-text-muted mt-0.5">
+          <p className="text-[11px] md:text-xs text-text-muted mt-0.5 truncate">
             {t('network_prefix')}: <span className="font-mono text-primary font-medium">{node.network_name || 'XRayMesh'}</span>
-            {node.easytier_version && ` | EasyTier v${node.easytier_version}`}
+            {node.easytier_version && ` | v${node.easytier_version}`}
           </p>
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center flex-wrap gap-2.5">
+      {/* Mobile Controls (< md) */}
+      <div className="flex md:hidden items-center gap-2 shrink-0">
+        <button
+          onClick={onRefresh}
+          disabled={isRefreshing}
+          className="p-2 rounded-xl bg-white/5 border border-white/10 text-text-muted hover:text-text-main active:scale-95 transition-all disabled:opacity-50"
+          title={t('btn_refresh')}
+        >
+          <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-primary' : ''}`} />
+        </button>
+
+        <button
+          onClick={onOpenDrawer}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary/10 border border-primary/25 text-primary font-semibold text-xs hover:bg-primary/20 active:scale-95 transition-all"
+          aria-label={t('nav_menu') || 'Menu'}
+        >
+          <Menu className="w-4 h-4" />
+          <span className="font-medium text-xs">{t('nav_menu') || 'Menu'}</span>
+        </button>
+      </div>
+
+      {/* Desktop Controls (>= md) */}
+      <div className="hidden md:flex items-center flex-wrap gap-2.5 shrink-0">
         {/* Status indicator */}
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono font-semibold bg-accent-green/10 text-emerald-400 border border-accent-green/20">
           <div className="badge-pulse" />
@@ -160,7 +183,7 @@ export const Header: React.FC<HeaderProps> = ({
           title={t('btn_signout')}
         >
           <LogOut className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">{t('btn_signout')}</span>
+          <span className="hidden md:inline">{t('btn_signout')}</span>
         </button>
       </div>
     </header>

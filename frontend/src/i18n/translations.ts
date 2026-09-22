@@ -335,6 +335,11 @@ export const translations = {
     version_copy_update_cmd: "Copy Update Command",
     version_cmd_copied: "Update command copied to clipboard!",
     version_up_to_date: "Up to Date",
+    nav_menu: "Menu",
+    nav_close: "Close",
+    drawer_tabs: "Navigation",
+    drawer_controls: "Settings & Actions",
+    drawer_server_info: "Node Info",
   },
 
   fa: {
@@ -673,5 +678,10 @@ export const translations = {
     version_copy_update_cmd: "کپی دستور به‌روزرسانی",
     version_cmd_copied: "دستور به‌روزرسانی در کلیپ‌بورد کپی شد!",
     version_up_to_date: "به‌روز",
+    nav_menu: "منو",
+    nav_close: "بستن",
+    drawer_tabs: "بخش‌های داشبورد",
+    drawer_controls: "تنظیمات و عملیات",
+    drawer_server_info: "مشخصات نود سرور",
   }
 };
