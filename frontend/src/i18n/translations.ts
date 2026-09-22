@@ -319,6 +319,11 @@ export const translations = {
     // Onboarding Banner
     onboarding_banner_title: "Welcome to XRayMesh! Initialize Your First Mesh Node",
     onboarding_banner_desc: "Your Web Panel is active. Complete the quick 3-step setup below to generate your encryption keys and launch your private mesh network.",
+    setup_mode_title: "Setup Mode: Mesh Node Required",
+    setup_mode_badge: "Initial Setup",
+    setup_mode_hint: "Initialize this server or join an existing mesh below to activate your node.",
+    setup_mode_locked_notice: "Peers, Speedtest, Ping & Tunnels will unlock after setup",
+    header_status_setup_mode: "Setup Mode (Unconfigured)",
 
     // Origin Server & Distributed Tunnels
     tunnels_origin_server: "Origin Server (Hosted On)",
@@ -669,6 +674,11 @@ export const translations = {
     // Onboarding Banner
     onboarding_banner_title: "به پنل مدیریت XRayMesh خوش آمدید! راه‌اندازی اولین نود مش",
     onboarding_banner_desc: "پنل وب با موفقیت راه‌اندازی شد. لطفاً از طریق ویزارد ۳ مرحله‌ای زیر، اولین نود مش سرور خود را بسازید و روشن کنید.",
+    setup_mode_title: "حالت راه‌اندازی: پیکربندی نود مِش",
+    setup_mode_badge: "راه‌اندازی اولیه",
+    setup_mode_hint: "یک شبکه مش جدید بسازید یا با کد دعوت به شبکه موجود وصل شوید تا نود فعال گردد.",
+    setup_mode_locked_notice: "پیرها، تست سرعت، پینگ و تانل‌ها پس از راه‌اندازی فعال می‌شوند",
+    header_status_setup_mode: "حالت راه‌اندازی (پیکربندی‌نشده)",
 
     // Origin Server & Distributed Tunnels
     tunnels_origin_server: "سرور مبدأ (میزبان تونل)",

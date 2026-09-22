@@ -56,7 +56,16 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
           <p className="text-[10px] sm:text-[11px] md:text-xs text-text-muted mt-0.5 truncate">
-            {t('network_prefix')}: <span className="font-mono text-primary font-medium">{node.network_name || 'XRayMesh'}</span>
+            {node.configured ? (
+              <>
+                {t('network_prefix')}: <span className="font-mono text-primary font-medium">{node.network_name || 'XRayMesh'}</span>
+              </>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-amber-400 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                {t('header_status_setup_mode')}
+              </span>
+            )}
           </p>
         </div>
       </div>

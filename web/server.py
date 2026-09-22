@@ -1956,6 +1956,13 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             self.send_json({"error": "Unauthorized", "authenticated": False}, status=401)
             return
 
+        # Ensure mesh node is configured before allowing operational endpoints
+        if path.startswith(("/api/tunnels/", "/api/ping", "/api/speedtest")):
+            node_cfg = load_env_file(CONFIG_FILE)
+            if not os.path.isfile(CONFIG_FILE) or not node_cfg.get("IPV4"):
+                self.send_json({"ok": False, "error": "Mesh node is not configured yet. Please complete node setup first."}, status=400)
+                return
+
         if path == "/api/ping":
             target = data.get("target", "").strip()
             count = min(max(int(data.get("count", 4)), 1), 10)
