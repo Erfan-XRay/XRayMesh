@@ -903,6 +903,11 @@ def get_server_public_ip():
     return ""
 
 
+def valid_tunnel_name(name):
+    """Return True for tunnel names safe for env filenames and CLI usage."""
+    return bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,31}", name or ""))
+
+
 def sanitize_peer_endpoint(raw_peer, default_port="11010"):
     """
     Sanitize and validate a peer endpoint string.
@@ -2229,6 +2234,10 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
                 return
 
+            if not valid_tunnel_name(name):
+                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
+                return
+
             ok, msg = run_xraymesh_cmd(["haproxy-create", name, target, ports])
             if ok:
                 self.send_json({"ok": True, "message": msg or "HAProxy tunnel created successfully."})
@@ -2247,6 +2256,10 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
                 return
 
+            if not valid_tunnel_name(name):
+                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
+                return
+
             ok, msg = run_xraymesh_cmd(["haproxy-edit", name, target, ports])
             if ok:
                 self.send_json({"ok": True, "message": msg or "HAProxy tunnel updated successfully."})
@@ -2260,6 +2273,10 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             name = data.get("name", "").strip()
             if not name:
                 self.send_json({"ok": False, "error": "Missing tunnel name"}, status=400)
+                return
+
+            if not valid_tunnel_name(name):
+                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
                 return
 
             ok, msg = run_xraymesh_cmd(["haproxy-delete", name])
@@ -2283,6 +2300,10 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
                 return
 
+            if not valid_tunnel_name(name):
+                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
+                return
+
             ok, msg = run_xraymesh_cmd(["iptables-create", name, target, ports, protocol, in_if, source_cidr])
             if ok:
                 self.send_json({"ok": True, "message": msg or "iptables tunnel created successfully."})
@@ -2304,6 +2325,10 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
                 return
 
+            if not valid_tunnel_name(name):
+                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
+                return
+
             ok, msg = run_xraymesh_cmd(["iptables-edit", name, target, ports, protocol, in_if, source_cidr])
             if ok:
                 self.send_json({"ok": True, "message": msg or "iptables tunnel updated successfully."})
@@ -2317,6 +2342,10 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             name = data.get("name", "").strip()
             if not name:
                 self.send_json({"ok": False, "error": "Missing tunnel name"}, status=400)
+                return
+
+            if not valid_tunnel_name(name):
+                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
                 return
 
             ok, msg = run_xraymesh_cmd(["iptables-delete", name])
@@ -2338,6 +2367,10 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
                 return
 
+            if not valid_tunnel_name(name):
+                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
+                return
+
             ok, msg = run_xraymesh_cmd(["gost-create", name, target, ports, protocol])
             if ok:
                 self.send_json({"ok": True, "message": msg or "GOST tunnel created successfully."})
@@ -2357,6 +2390,10 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
                 return
 
+            if not valid_tunnel_name(name):
+                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
+                return
+
             ok, msg = run_xraymesh_cmd(["gost-edit", name, target, ports, protocol])
             if ok:
                 self.send_json({"ok": True, "message": msg or "GOST tunnel updated successfully."})
@@ -2370,6 +2407,10 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             name = data.get("name", "").strip()
             if not name:
                 self.send_json({"ok": False, "error": "Missing tunnel name"}, status=400)
+                return
+
+            if not valid_tunnel_name(name):
+                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
                 return
 
             ok, msg = run_xraymesh_cmd(["gost-delete", name])
@@ -2391,6 +2432,10 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
                 return
 
+            if not valid_tunnel_name(name):
+                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
+                return
+
             ok, msg = run_xraymesh_cmd(["realm-create", name, target, ports, protocol])
             if ok:
                 self.send_json({"ok": True, "message": msg or "Realm tunnel created successfully."})
@@ -2410,6 +2455,10 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
                 return
 
+            if not valid_tunnel_name(name):
+                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
+                return
+
             ok, msg = run_xraymesh_cmd(["realm-edit", name, target, ports, protocol])
             if ok:
                 self.send_json({"ok": True, "message": msg or "Realm tunnel updated successfully."})
@@ -2423,6 +2472,10 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             name = data.get("name", "").strip()
             if not name:
                 self.send_json({"ok": False, "error": "Missing tunnel name"}, status=400)
+                return
+
+            if not valid_tunnel_name(name):
+                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
                 return
 
             ok, msg = run_xraymesh_cmd(["realm-delete", name])

@@ -41,6 +41,7 @@ All notable XRayMesh changes are documented here.
 - Global text-selection unlock, searchable peers list with clear-search, touch-friendly targets, and Lucide icons replacing emoji status symbols.
 - Rebuilt bundled Web UI assets (`web/static/index.html`).
 
+
 ## [2.1.2] - 2026-09-22
 
 ### Added
