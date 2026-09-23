@@ -149,14 +149,14 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
 
         <div className="flex items-center gap-2">
           {uniqueNodes.length > 1 && (
-            <div className="flex items-center gap-1.5 bg-white/5 px-2.5 py-1.5 rounded-lg border border-white/10 text-xs">
+            <div className="flex items-center gap-1.5 bg-white/5 px-2.5 py-1.5 rounded-lg border border-card-border text-xs">
               <Server className="w-3.5 h-3.5 text-primary" />
               <span className="text-text-muted text-[11px] hidden sm:inline">{t('tunnels_filter_server')}:</span>
               <select
                 value={serverFilter}
                 onChange={(e) => setServerFilter(e.target.value)}
                 aria-label={t('tunnels_filter_server')}
-                className="bg-slate-900 border border-white/10 rounded px-2 py-1 text-xs text-text-main focus:border-primary font-mono"
+                className="bg-slate-900 border border-card-border rounded px-2 py-1 text-xs text-text-main focus:border-primary font-mono"
               >
                 <option value="all">{t('tunnels_filter_all_servers')} ({totalCount})</option>
                 {uniqueNodes.map((n) => (
@@ -170,7 +170,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
 
           <button
             onClick={onRefresh}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-medium text-text-muted hover:text-text-main transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-card-border text-xs font-medium text-text-muted hover:text-text-main transition-colors"
           >
             <RefreshCw className="w-3 h-3" />
             <span>{t('btn_refresh')}</span>
@@ -199,7 +199,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
           </div>
 
           {filteredRealm.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-8 text-center rounded-xl bg-white/[0.02] border border-dashed border-white/10">
+            <div className="flex flex-col items-center justify-center p-8 text-center rounded-xl bg-white/[0.02] border border-dashed border-card-border">
               <p className="text-xs font-semibold text-text-main mb-1">{t('tunnels_empty_realm')}</p>
               <p className="text-xs text-text-muted max-w-sm mb-3">{t('tunnels_empty_realm_desc')}</p>
               <button
@@ -216,7 +216,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                 return (
                   <div
                     key={tItem.TUNNEL_NAME}
-                    className="p-4 rounded-xl bg-slate-900/50 border border-white/10 hover:border-card-border-hover transition-all"
+                    className="interactive-card p-4 rounded-2xl bg-card/90 border border-card-border hover:border-card-border-hover shadow-md transition-all border-card-border hover:border-card-border-hover transition-all"
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div>
@@ -253,7 +253,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => onOpenEditRealm(tItem)}
-                        className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-white/5 hover:bg-white/10 text-xs text-text-main border border-white/10 transition-colors"
+                        className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-white/5 hover:bg-white/10 text-xs text-text-main border border-card-border transition-colors"
                       >
                         <Edit3 className="w-3 h-3 text-text-muted" />
                         {t('btn_edit')}
@@ -295,7 +295,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
           </div>
 
           {filteredHaproxy.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-8 text-center rounded-xl bg-white/[0.02] border border-dashed border-white/10">
+            <div className="flex flex-col items-center justify-center p-8 text-center rounded-xl bg-white/[0.02] border border-dashed border-card-border">
               <p className="text-xs font-semibold text-text-main mb-1">{t('tunnels_empty_haproxy')}</p>
               <p className="text-xs text-text-muted max-w-sm mb-3">{t('tunnels_empty_haproxy_desc')}</p>
               <button
@@ -310,7 +310,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
               {filteredHaproxy.map((tItem) => (
                 <div
                   key={tItem.TUNNEL_NAME}
-                  className="p-4 rounded-xl bg-slate-900/50 border border-white/10 hover:border-card-border-hover transition-all"
+                  className="interactive-card p-4 rounded-2xl bg-card/90 border border-card-border hover:border-card-border-hover shadow-md transition-all border-card-border hover:border-card-border-hover transition-all"
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
@@ -342,7 +342,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => onOpenEditHaproxy(tItem)}
-                      className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-white/5 hover:bg-white/10 text-xs text-text-main border border-white/10 transition-colors"
+                      className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-white/5 hover:bg-white/10 text-xs text-text-main border border-card-border transition-colors"
                     >
                       <Edit3 className="w-3 h-3 text-text-muted" />
                       {t('btn_edit')}
@@ -383,7 +383,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
           </div>
 
           {filteredIptables.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-8 text-center rounded-xl bg-white/[0.02] border border-dashed border-white/10">
+            <div className="flex flex-col items-center justify-center p-8 text-center rounded-xl bg-white/[0.02] border border-dashed border-card-border">
               <p className="text-xs font-semibold text-text-main mb-1">{t('tunnels_empty_iptables')}</p>
               <p className="text-xs text-text-muted max-w-sm mb-3">{t('tunnels_empty_iptables_desc')}</p>
               <button
@@ -400,7 +400,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                 return (
                   <div
                     key={tItem.TUNNEL_NAME}
-                    className="p-4 rounded-xl bg-slate-900/50 border border-white/10 hover:border-card-border-hover transition-all"
+                    className="interactive-card p-4 rounded-2xl bg-card/90 border border-card-border hover:border-card-border-hover shadow-md transition-all border-card-border hover:border-card-border-hover transition-all"
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div>
@@ -438,7 +438,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => onOpenEditIptables(tItem)}
-                        className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-white/5 hover:bg-white/10 text-xs text-text-main border border-white/10 transition-colors"
+                        className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-white/5 hover:bg-white/10 text-xs text-text-main border border-card-border transition-colors"
                       >
                         <Edit3 className="w-3 h-3 text-text-muted" />
                         {t('btn_edit')}
@@ -480,7 +480,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
           </div>
 
           {filteredGost.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-8 text-center rounded-xl bg-white/[0.02] border border-dashed border-white/10">
+            <div className="flex flex-col items-center justify-center p-8 text-center rounded-xl bg-white/[0.02] border border-dashed border-card-border">
               <p className="text-xs font-semibold text-text-main mb-1">{t('tunnels_empty_gost')}</p>
               <p className="text-xs text-text-muted max-w-sm mb-3">{t('tunnels_empty_gost_desc')}</p>
               <button
@@ -497,7 +497,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                 return (
                   <div
                     key={tItem.TUNNEL_NAME}
-                    className="p-4 rounded-xl bg-slate-900/50 border border-white/10 hover:border-card-border-hover transition-all"
+                    className="interactive-card p-4 rounded-2xl bg-card/90 border border-card-border hover:border-card-border-hover shadow-md transition-all border-card-border hover:border-card-border-hover transition-all"
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div>
@@ -534,7 +534,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => onOpenEditGost(tItem)}
-                        className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-white/5 hover:bg-white/10 text-xs text-text-main border border-white/10 transition-colors"
+                        className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-white/5 hover:bg-white/10 text-xs text-text-main border border-card-border transition-colors"
                       >
                         <Edit3 className="w-3 h-3 text-text-muted" />
                         {t('btn_edit')}

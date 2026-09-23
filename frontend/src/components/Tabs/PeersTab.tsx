@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
-import { Peer } from '../../types';
-import { Search, Copy, Check, Activity, Zap, RefreshCw, Server, ArrowUpCircle, AlertTriangle, Terminal, BadgeCheck, X } from 'lucide-react';
+import React, { useState, useMemo } from "react";
+import { Peer } from "../../types";
+import { Search, Copy, Check, Activity, Zap, RefreshCw, Server, ArrowUpCircle, AlertTriangle, Terminal, X } from "lucide-react";
 
 interface PeersTabProps {
   peers: Peer[];
@@ -15,11 +15,11 @@ interface PeersTabProps {
 }
 
 function formatTunnelProto(proto?: string): string {
-  if (!proto) return 'UDP';
+  if (!proto) return "UDP";
   const clean = proto.trim();
   const lower = clean.toLowerCase();
-  if (lower.includes('udp') && lower.includes('tcp')) {
-    return 'Dual (UDP + TCP)';
+  if (lower.includes("udp") && lower.includes("tcp")) {
+    return "Dual (UDP + TCP)";
   }
   return clean.toUpperCase();
 }
@@ -35,9 +35,9 @@ export const PeersTab: React.FC<PeersTabProps> = ({
   copiedKey,
   t,
 }) => {
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
 
-  const defaultUpdateCmd = 'bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update';
+  const defaultUpdateCmd = "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update";
   const effectiveUpdateCmd = updateCommand || defaultUpdateCmd;
 
   const hasDrift = clusterVersionDrift || peers.some((p) => p.update_available || p.version_drift);
@@ -47,67 +47,68 @@ export const PeersTab: React.FC<PeersTabProps> = ({
     const base = !q
       ? peers
       : peers.filter((p) => {
-          const ip = (p.ipv4 || '').toLowerCase();
-          const host = (p.hostname || '').toLowerCase();
-          const proto = (p.tunnel_proto || '').toLowerCase();
+          const ip = (p.ipv4 || "").toLowerCase();
+          const host = (p.hostname || "").toLowerCase();
+          const proto = (p.tunnel_proto || "").toLowerCase();
           return ip.includes(q) || host.includes(q) || proto.includes(q);
         });
-    // Always show the current node first
+    // Always show local/current node first
     return [...base].sort((a, b) => Number(b.is_current ?? false) - Number(a.is_current ?? false));
   }, [peers, search]);
 
   return (
-    <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
+    <div className="p-4 sm:p-5 md:p-6 rounded-2xl bg-card/85 border border-card-border backdrop-blur-2xl shadow-xl">
       {/* Panel Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4 sm:mb-5">
         <div>
-          <h2 className="text-base font-bold text-text-main flex items-center gap-2">
-            <Server className="w-4 h-4 text-primary" />
-            {t('peers_panel_title')}
+          <h2 className="text-sm sm:text-base font-bold text-text-main flex items-center gap-2">
+            <Server className="w-4 h-4 text-primary shrink-0" />
+            <span>{t("peers_panel_title")}</span>
           </h2>
-          <p className="text-xs text-text-muted mt-0.5">{t('peers_panel_desc')}</p>
+          <p className="text-xs text-text-muted mt-0.5">{t("peers_panel_desc")}</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="px-2.5 py-1 rounded-full text-xs font-mono font-medium bg-primary/10 text-primary border border-primary/20">
-            {search ? `${filteredPeers.length} / ${peers.length}` : `${peers.length}`} {t('peers_title')}
+          <span className="px-2.5 py-1 rounded-full text-xs font-mono font-semibold bg-primary/10 text-primary border border-primary/20">
+            {search ? `${filteredPeers.length} / ${peers.length}` : `${peers.length}`} {t("peers_title")}
           </span>
           <button
             onClick={onRefresh}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-medium text-text-muted hover:text-text-main hover:bg-white/10 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-medium text-text-muted hover:text-text-main hover:bg-white/10 active:scale-95 transition-all"
+            title={t("btn_refresh")}
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            {t('btn_refresh')}
+            <span className="hidden xs:inline">{t("btn_refresh")}</span>
           </button>
         </div>
       </div>
 
       {/* Cluster Version Drift Warning Banner */}
       {hasDrift && (
-        <div className="mb-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 flex flex-wrap items-center justify-between gap-3 animate-fade-in">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400">
+        <div className="mb-4 sm:mb-5 p-3.5 sm:p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 flex flex-wrap items-center justify-between gap-3 animate-fade-in">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 shrink-0">
               <AlertTriangle className="w-5 h-5" />
             </div>
-            <div>
-              <h3 className="text-xs font-bold text-amber-300">{t('version_drift_warning_title')}</h3>
-              <p className="text-[11px] text-text-muted mt-0.5">{t('version_drift_warning_desc')}</p>
+            <div className="min-w-0">
+              <h3 className="text-xs font-bold text-amber-300">{t("version_drift_warning_title")}</h3>
+              <p className="text-[11px] text-text-muted mt-0.5 leading-relaxed">{t("version_drift_warning_desc")}</p>
             </div>
           </div>
           {effectiveUpdateCmd && (
             <button
               onClick={() => onCopy(effectiveUpdateCmd)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-amber-500 text-black hover:bg-amber-400 text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 text-black hover:bg-amber-400 text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer shrink-0"
               title={effectiveUpdateCmd}
             >
               {copiedKey === effectiveUpdateCmd ? (
                 <>
                   <Check className="w-3.5 h-3.5" />
-                  <span>{t('version_cmd_copied')}</span>
+                  <span>{t("version_cmd_copied")}</span>
                 </>
               ) : (
                 <>
                   <Terminal className="w-3.5 h-3.5" />
-                  <span>{t('version_copy_update_cmd')}</span>
+                  <span>{t("version_copy_update_cmd")}</span>
                 </>
               )}
             </button>
@@ -115,200 +116,174 @@ export const PeersTab: React.FC<PeersTabProps> = ({
         </div>
       )}
 
-      {/* Filter Bar */}
-      <div className="relative mb-4" role="search">
+      {/* Filter / Search Bar */}
+      <div className="relative mb-4 sm:mb-5" role="search">
         <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" aria-hidden="true" />
         <input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder={t('peers_search_placeholder')}
-          aria-label={t('peers_search_placeholder')}
-          className="w-full ps-9 pe-10 py-2 bg-slate-900/80 border border-white/10 rounded-xl text-xs sm:text-sm text-text-main placeholder-text-subtle focus:border-primary transition-colors"
+          placeholder={t("peers_filter_placeholder") || "Search by Hostname, IP, or Protocol..."}
+          className="w-full ps-9 pe-9 py-2.5 bg-black/30 border border-card-border rounded-xl text-xs sm:text-sm text-text-main placeholder-text-subtle focus:outline-none focus:border-primary transition-all"
         />
         {search && (
           <button
-            type="button"
-            onClick={() => setSearch('')}
-            aria-label={t('btn_clear_search')}
-            className="absolute end-2 top-1/2 -translate-y-1/2 interactive-min-hit inline-flex items-center justify-center rounded-lg text-text-muted hover:text-text-main hover:bg-white/10 transition-colors"
+            onClick={() => setSearch("")}
+            className="absolute end-2.5 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-main rounded-md active:scale-90 transition-all"
+            title={t("btn_clear_search")}
           >
-            <X className="w-4 h-4" aria-hidden="true" />
+            <X className="w-4 h-4" />
           </button>
         )}
       </div>
 
-      {/* Grid or Empty */}
+      {/* Peers Bento Grid */}
       {filteredPeers.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-10 text-center rounded-xl bg-white/[0.02] border border-dashed border-white/10">
-          <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-3">
-            <Server className="w-6 h-6" />
-          </div>
-          <h3 className="text-sm font-semibold text-text-main mb-1">
-            {search ? t('peers_no_match') : t('peers_empty_title')}
-          </h3>
-          <p className="text-xs text-text-muted max-w-sm mb-4">
-            {search ? '' : t('peers_empty_desc')}
-          </p>
-          {!search && (
-            <button
-              onClick={onRefresh}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 text-xs font-medium border border-primary/30 transition-colors"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              {t('btn_refresh')}
-            </button>
-          )}
+        <div className="flex flex-col items-center justify-center p-8 sm:p-12 text-center rounded-2xl bg-black/20 border border-dashed border-card-border">
+          <Server className="w-10 h-10 text-text-subtle mb-3" />
+          <p className="text-sm font-semibold text-text-main">{t("peers_empty_title")}</p>
+          <p className="text-xs text-text-muted mt-1 max-w-sm">{t("peers_empty_desc")}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {filteredPeers.map((p) => {
-            const lat = parseFloat(String(p.lat_ms || '0')) || 0;
-            const isCurrent = !!p.is_current;
-            const isDirect = isCurrent || p.cost === 1 || p.cost === '1' || p.cost === 'Local' || Number(p.cost) <= 1;
-
-            let latBadgeColor = 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10';
-            if (lat > 100) latBadgeColor = 'text-amber-400 border-amber-500/30 bg-amber-500/10';
-            if (lat > 200) latBadgeColor = 'text-rose-400 border-rose-500/30 bg-rose-500/10';
+            const isCurrent = Boolean(p.is_current);
+            const latNum = typeof p.lat_ms === "number" ? p.lat_ms : parseFloat(String(p.lat_ms || ""));
+            const hasLatency = !isNaN(latNum) && latNum > 0;
+            const latencyColor = !hasLatency
+              ? "text-text-muted"
+              : latNum < 40
+              ? "text-emerald-400"
+              : latNum < 100
+              ? "text-amber-400"
+              : "text-rose-400";
 
             return (
               <div
                 key={p.ipv4}
-                className={`flex flex-col justify-between p-4 rounded-xl border interactive-card hover:shadow-lg transition-all shadow-sm ${
+                className={`interactive-card relative overflow-hidden p-4 rounded-2xl bg-card/90 border transition-all duration-300 flex flex-col justify-between ${
                   isCurrent
-                    ? 'bg-primary/[0.06] border-primary/50 ring-1 ring-primary/30 hover:border-primary'
-                    : 'bg-slate-900/50 border-white/10 hover:border-primary/30'
+                    ? "border-primary/40 shadow-lg shadow-primary/5 before:absolute before:top-0 before:inset-x-0 before:h-[2px] before:bg-gradient-to-r before:from-transparent before:via-primary before:to-transparent"
+                    : "border-card-border hover:border-card-border-hover shadow-md"
                 }`}
               >
-                {/* Current-node banner */}
-                {isCurrent && (
-                  <div className="mb-2.5 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/15 border border-primary/30 text-[11px] font-bold text-primary">
-                    <BadgeCheck className="w-3.5 h-3.5" />
-                    <span>{t('peer_current_badge')}</span>
+                <div>
+                  {/* Card Header: Hostname & Status Badges */}
+                  <div className="flex items-start justify-between gap-2 mb-2.5">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <Server className="w-3.5 h-3.5 text-primary shrink-0" />
+                        <h3 className="text-sm font-bold text-text-main truncate tech-val">
+                          {p.hostname || p.ipv4}
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className="font-mono text-xs font-semibold text-text-main tech-val">
+                          {p.ipv4}
+                        </span>
+                        <button
+                          onClick={() => onCopy(p.ipv4)}
+                          className="interactive-min-hit p-1 rounded-lg bg-white/5 border border-white/10 text-text-muted hover:text-primary hover:border-primary/40 active:scale-90 transition-all cursor-pointer"
+                          title={copiedKey === p.ipv4 ? t("btn_copied") : "Copy IP"}
+                          aria-label="Copy IP"
+                        >
+                          {copiedKey === p.ipv4 ? (
+                            <Check className="w-3 h-3 text-accent-green" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      {isCurrent ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/20 text-primary border border-primary/30">
+                          {t("peer_badge_current")}
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          <span>P2P</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
-                )}
-                {/* Card Top */}
-                <div className="flex items-start justify-between gap-2 mb-3">
-                  <div>
+
+                  {/* High-Density Bento Metrics Grid (2x2) */}
+                  <div className="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-black/30 border border-white/5 text-xs mb-3">
+                    <div>
+                      <div className="text-[10px] text-text-muted">{t("peer_card_protocol")}</div>
+                      <div className="font-mono font-semibold text-primary mt-0.5 truncate tech-val">
+                        {formatTunnelProto(p.tunnel_proto)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-text-muted">{t("latency_title")}</div>
+                      <div className={`font-mono font-bold mt-0.5 tabular-nums tech-val ${latencyColor}`}>
+                        {hasLatency ? `${latNum.toFixed(1)} ms` : "--"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-text-muted">{t("peer_card_rx")}</div>
+                      <div className="font-mono text-text-main mt-0.5 truncate tabular-nums tech-val">
+                        {p.rx_bytes || "0 B"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-text-muted">{t("peer_card_tx")}</div>
+                      <div className="font-mono text-text-main mt-0.5 truncate tabular-nums tech-val">
+                        {p.tx_bytes || "0 B"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Version & Update Indicator */}
+                  <div className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-black/30 border border-white/5 text-xs mb-3">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-sm sm:text-base font-bold font-mono text-primary tabular-nums">
-                        {p.ipv4}
+                      <span className="text-[10px] text-text-muted">{t("version_title")}:</span>
+                      <span className="font-mono font-semibold text-text-main tech-val">
+                        {p.xraymesh_version || "v2.1.3"}
                       </span>
+                    </div>
+                    {p.update_available ? (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                        <ArrowUpCircle className="w-3 h-3" />
+                        <span>{t("version_update_available")}</span>
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                        {t("version_up_to_date")}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Bottom Action Buttons */}
+                <div>
+                  {isCurrent ? (
+                    <div className="px-3 py-2 rounded-xl bg-white/[0.03] border border-white/5 text-[11px] text-text-muted text-center">
+                      {t("peer_current_desc")}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
                       <button
-                        onClick={() => onCopy(p.ipv4)}
-                        className="p-1 rounded-lg bg-white/5 border border-white/10 text-text-muted hover:text-primary active:scale-90 transition-all"
-                        title={t('btn_copied')}
+                        onClick={() => onQuickPing(p.ipv4)}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-text-main border border-white/10 active:scale-95 transition-all cursor-pointer"
                       >
-                        {copiedKey === p.ipv4 ? (
-                          <Check className="w-3 h-3 text-accent-green animate-bounce-subtle" />
-                        ) : (
-                          <Copy className="w-3 h-3" />
-                        )}
+                        <Activity className="w-3.5 h-3.5 text-text-muted" />
+                        <span>{t("peer_card_btn_ping")}</span>
+                      </button>
+                      <button
+                        onClick={() => onQuickSpeedtest(p.ipv4)}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary/15 hover:bg-primary/25 text-xs font-bold text-primary border border-primary/30 active:scale-95 transition-all cursor-pointer"
+                      >
+                        <Zap className="w-3.5 h-3.5" />
+                        <span>{t("peer_card_btn_speedtest")}</span>
                       </button>
                     </div>
-                    <div className="text-xs text-text-muted mt-0.5">{p.hostname || 'EasyTier Node'}</div>
-                  </div>
-
-                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono font-medium border ${latBadgeColor}`}>
-                      {lat > 0 ? `${lat} ms` : '< 1ms'}
-                    </span>
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${
-                        isDirect
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
-                          : 'bg-amber-500/10 text-amber-400 border-amber-500/25'
-                      }`}
-                    >
-                      {isDirect ? t('peer_direct_badge') : `${t('peer_relayed_badge')} (${p.cost})`}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Details Grid */}
-                <div className="grid grid-cols-2 gap-2 p-2.5 rounded-lg bg-black/20 border border-white/5 text-xs mb-3">
-                  <div>
-                    <div className="text-[11px] text-text-muted">{t('peer_card_protocol')}</div>
-                    <div className="font-mono font-medium text-primary mt-0.5">{formatTunnelProto(p.tunnel_proto)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[11px] text-text-muted">{t('peer_card_cost')}</div>
-                    <div className="font-mono text-text-main mt-0.5">{p.cost || '1'}</div>
-                  </div>
-                  <div>
-                    <div className="text-[11px] text-text-muted">{t('peer_card_rx')}</div>
-                    <div className="font-mono text-text-main mt-0.5">{p.rx_bytes || '0 B'}</div>
-                  </div>
-                  <div>
-                    <div className="text-[11px] text-text-muted">{t('peer_card_tx')}</div>
-                    <div className="font-mono text-text-main mt-0.5">{p.tx_bytes || '0 B'}</div>
-                  </div>
-                </div>
-
-                {/* Version & Update Indicator */}
-                <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-black/20 border border-white/5 text-xs mb-3">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] text-text-muted">{t('version_title')}:</span>
-                    <span className="font-mono font-semibold text-text-main">
-                      {p.xraymesh_version || 'v2.0.1'}
-                    </span>
-                  </div>
-                  {p.update_available ? (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
-                      <ArrowUpCircle className="w-2.5 h-2.5" />
-                      {t('version_update_available')}
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
-                      {t('version_up_to_date')}
-                    </span>
                   )}
                 </div>
-
-                {/* Per-node copy update command if outdated or drift */}
-                {(p.update_available || p.version_drift) && effectiveUpdateCmd && (
-                  <button
-                    onClick={() => onCopy(effectiveUpdateCmd)}
-                    className="w-full mb-2.5 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-xs font-semibold text-amber-300 border border-amber-500/35 transition-all active:scale-95 cursor-pointer"
-                    title={effectiveUpdateCmd}
-                  >
-                    {copiedKey === effectiveUpdateCmd ? (
-                      <>
-                        <Check className="w-3 h-3 text-emerald-400" />
-                        <span>{t('version_cmd_copied')}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Terminal className="w-3 h-3" />
-                        <span>{t('version_copy_update_cmd')}</span>
-                      </>
-                    )}
-                  </button>
-                )}
-
-                {/* Action buttons (ping/speedtest are meaningless against self) */}
-                {isCurrent ? (
-                  <div className="px-2.5 py-1.5 rounded-lg bg-white/[0.03] border border-white/5 text-[11px] text-text-muted text-center">
-                    {t('peer_current_desc')}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => onQuickPing(p.ipv4)}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-text-main border border-white/10 active:scale-95 transition-all"
-                    >
-                      <Activity className="w-3.5 h-3.5 text-text-muted" />
-                      {t('peer_card_btn_ping')}
-                    </button>
-                    <button
-                      onClick={() => onQuickSpeedtest(p.ipv4)}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-primary/15 hover:bg-primary/25 text-xs font-semibold text-primary border border-primary/30 active:scale-95 transition-all"
-                    >
-                      <Zap className="w-3.5 h-3.5" />
-                      {t('peer_card_btn_speedtest')}
-                    </button>
-                  </div>
-                )}
               </div>
             );
           })}

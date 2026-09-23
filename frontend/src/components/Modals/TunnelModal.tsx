@@ -180,7 +180,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-modal-in" role="dialog" aria-modal="true" aria-labelledby="tunnel-title">
-      <div className="w-full max-w-lg p-6 rounded-2xl bg-slate-900 border border-white/15 shadow-2xl relative">
+      <div className="w-full max-w-lg max-h-[90dvh] overflow-y-auto p-5 sm:p-6 rounded-2xl bg-modal border border-card-border shadow-2xl relative">
         <div className="flex items-center justify-between mb-4">
           <h2 id="tunnel-title" className="text-base font-bold text-text-main">{title}</h2>
           <button
@@ -203,7 +203,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
               value={originNode}
               onChange={(e) => setOriginNode(e.target.value)}
               disabled={isEdit}
-              className="w-full px-3.5 py-2 bg-slate-950 border border-white/15 rounded-xl font-mono text-text-main focus:outline-none focus:border-primary disabled:opacity-60"
+              className="w-full px-3.5 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main focus:outline-none focus:border-primary disabled:opacity-60"
             >
               <option value="">{t('tunnels_origin_local')}</option>
               {peers.filter((p) => !p.is_current).map((p) => (
@@ -223,7 +223,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
               onChange={(e) => setName(e.target.value)}
               disabled={isEdit}
               placeholder="e.g. web-forward"
-              className="w-full px-3.5 py-2 bg-slate-950 border border-white/15 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary disabled:opacity-50"
+              className="w-full px-3.5 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary disabled:opacity-50"
               required
             />
           </div>
@@ -235,7 +235,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
               <div className="space-y-2">
                 <select
                   onChange={(e) => handleTargetSelect(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-950 border border-white/15 rounded-xl font-mono text-text-main focus:outline-none focus:border-primary"
+                  className="w-full px-3.5 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main focus:outline-none focus:border-primary"
                   defaultValue=""
                 >
                   <option value="" disabled>
@@ -252,7 +252,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
                   value={target}
                   onChange={(e) => setTarget(e.target.value)}
                   placeholder="Or enter target 10.x.x.x IP manually"
-                  className="w-full px-3.5 py-2 bg-slate-950 border border-white/15 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                  className="w-full px-3.5 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
                   required
                 />
               </div>
@@ -262,7 +262,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
                 placeholder="Target Virtual IP (10.x.x.x)"
-                className="w-full px-3.5 py-2 bg-slate-950 border border-white/15 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                className="w-full px-3.5 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
                 required
               />
             )}
@@ -281,7 +281,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
                     className={`py-1.5 rounded-lg border text-xs font-mono uppercase transition-all ${
                       protocol === p
                         ? 'bg-primary/20 border-primary text-primary font-bold'
-                        : 'bg-white/5 border-white/10 text-text-muted hover:text-text-main'
+                        : 'bg-white/5 border-card-border text-text-muted hover:text-text-main'
                     }`}
                   >
                     {p}
@@ -309,7 +309,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
                         ? type === 'realm'
                           ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-bold'
                           : 'bg-amber-500/20 border-amber-500 text-amber-400 font-bold'
-                        : 'bg-white/5 border-white/10 text-text-muted hover:text-text-main'
+                        : 'bg-white/5 border-card-border text-text-muted hover:text-text-main'
                     }`}
                   >
                     {item.label}
@@ -327,7 +327,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
               value={ports}
               onChange={(e) => setPorts(e.target.value)}
               placeholder="e.g. 80,443 or 8000-8010"
-              className="w-full px-3.5 py-2 bg-slate-950 border border-white/15 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary mb-1.5"
+              className="w-full px-3.5 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary mb-1.5"
               required
             />
             {/* Chips */}
@@ -338,7 +338,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
                   key={pr.val}
                   type="button"
                   onClick={() => handlePresetClick(pr.val)}
-                  className="px-2 py-0.5 rounded-md bg-white/5 hover:bg-primary/15 border border-white/10 hover:border-primary/40 text-[11px] font-mono text-text-muted hover:text-primary transition-colors"
+                  className="px-2 py-0.5 rounded-md bg-white/5 hover:bg-primary/15 border border-card-border hover:border-primary/40 text-[11px] font-mono text-text-muted hover:text-primary transition-colors"
                 >
                   {pr.label}
                 </button>
@@ -363,7 +363,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
                   value={iface}
                   onChange={(e) => setIface(e.target.value)}
                   disabled={loadingInterfaces}
-                  className="w-full px-3 py-2 bg-slate-950 border border-white/15 rounded-xl font-mono text-text-main focus:outline-none focus:border-primary disabled:opacity-60"
+                  className="w-full px-3 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main focus:outline-none focus:border-primary disabled:opacity-60"
                 >
                   {nodeInterfaces.map((i) => (
                     <option key={i} value={i}>
@@ -380,7 +380,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
                   value={sourceCidr}
                   onChange={(e) => setSourceCidr(e.target.value)}
                   placeholder="0.0.0.0/0"
-                  className="w-full px-3.5 py-2 bg-slate-950 border border-white/15 rounded-xl font-mono text-text-main focus:outline-none focus:border-primary"
+                  className="w-full px-3.5 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main focus:outline-none focus:border-primary"
                 />
               </div>
             </div>
@@ -389,7 +389,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
           {error && <div className="text-xs text-rose-400 font-medium">{error}</div>}
 
           {/* Buttons */}
-          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/10">
+          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-card-border">
             <button
               type="button"
               onClick={onClose}

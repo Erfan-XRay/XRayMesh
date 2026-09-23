@@ -147,7 +147,7 @@ export const ClusterSyncModal: React.FC<ClusterSyncModalProps> = ({
         <div
           dir={isRtl ? 'rtl' : 'ltr'}
           onClick={(e) => e.stopPropagation()}
-          className="relative w-full max-w-lg rounded-2xl bg-slate-900 border border-white/20 shadow-2xl p-5 sm:p-6 text-left overflow-hidden text-text-main animate-modal-in"
+          className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto rounded-2xl bg-modal border border-white/20 shadow-2xl p-5 sm:p-6 text-left overflow-hidden text-text-main animate-modal-in"
         >
           {/* ========================================================================= */}
           {/* 🎉 CELEBRATION ANIMATION VIEW                                             */}
@@ -204,7 +204,7 @@ export const ClusterSyncModal: React.FC<ClusterSyncModalProps> = ({
                 <button
                   type="button"
                   onClick={handleCloseGracefully}
-                  className="px-6 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-text-main font-semibold text-xs transition-all active:scale-95 shadow-sm"
+                  className="px-6 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-card-border text-text-main font-semibold text-xs transition-all active:scale-95 shadow-sm"
                 >
                   {t('cluster_btn_close_now')}
                 </button>
@@ -216,7 +216,7 @@ export const ClusterSyncModal: React.FC<ClusterSyncModalProps> = ({
             /* ========================================================================= */
             <div className="space-y-4">
               {/* Header */}
-              <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center justify-between pb-3 border-b border-card-border">
                 <div className="flex items-center gap-2.5">
                   <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-primary/20 to-emerald-400/20 border border-primary/40 flex items-center justify-center text-primary shadow-sm flex-shrink-0">
                     <Globe className="w-4.5 h-4.5" />
@@ -245,7 +245,7 @@ export const ClusterSyncModal: React.FC<ClusterSyncModalProps> = ({
               {/* Content Body */}
               <div className="space-y-3 text-xs">
                 {/* Diff Box: What changes across nodes */}
-                <div className="p-3 rounded-xl bg-slate-950/80 border border-white/10 space-y-2">
+                <div className="p-3 rounded-xl bg-black/40 border border-card-border space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-text-main flex items-center gap-1.5">
                       <Sparkles className="w-4 h-4 text-primary" />
@@ -257,42 +257,42 @@ export const ClusterSyncModal: React.FC<ClusterSyncModalProps> = ({
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    <div className="p-2 rounded-lg bg-slate-900/70 border border-white/5">
+                    <div className="p-2 rounded-lg bg-black/30 border border-white/5">
                       <span className="text-[10px] text-text-muted block mb-0.5">{t('cluster_field_protocol')}</span>
                       <span className="font-mono font-bold text-primary uppercase text-xs">
                         {currentConfig.protocol}
                       </span>
                     </div>
 
-                    <div className="p-2 rounded-lg bg-slate-900/70 border border-white/5">
+                    <div className="p-2 rounded-lg bg-black/30 border border-white/5">
                       <span className="text-[10px] text-text-muted block mb-0.5">{t('cluster_field_kcp')}</span>
                       <span className={`font-mono font-bold text-xs ${currentConfig.enableKcp ? 'text-amber-400' : 'text-text-muted'}`}>
                         {currentConfig.enableKcp ? 'ENABLED (Anti-Loss)' : 'Disabled'}
                       </span>
                     </div>
 
-                    <div className="p-2 rounded-lg bg-slate-900/70 border border-white/5">
+                    <div className="p-2 rounded-lg bg-black/30 border border-white/5">
                       <span className="text-[10px] text-text-muted block mb-0.5">{t('cluster_field_encryption')}</span>
                       <span className="font-mono font-bold text-xs text-text-main">
                         {currentConfig.encryption ? 'ChaCha20-Poly1305' : 'None'}
                       </span>
                     </div>
 
-                    <div className="p-2 rounded-lg bg-slate-900/70 border border-white/5">
+                    <div className="p-2 rounded-lg bg-black/30 border border-white/5">
                       <span className="text-[10px] text-text-muted block mb-0.5">{t('cluster_field_mtu')}</span>
                       <span className="font-mono font-bold text-xs text-text-main">
                         {currentConfig.mtu}
                       </span>
                     </div>
 
-                    <div className="p-2 rounded-lg bg-slate-900/70 border border-white/5">
+                    <div className="p-2 rounded-lg bg-black/30 border border-white/5">
                       <span className="text-[10px] text-text-muted block mb-0.5">{t('cluster_field_ipv6')}</span>
                       <span className="font-mono font-bold text-xs text-text-main">
                         {currentConfig.ipv6 ? 'Active' : 'Disabled'}
                       </span>
                     </div>
 
-                    <div className="p-2 rounded-lg bg-slate-900/70 border border-white/5">
+                    <div className="p-2 rounded-lg bg-black/30 border border-white/5">
                       <span className="text-[10px] text-text-muted block mb-0.5">{t('cluster_field_secret')}</span>
                       <span className="font-mono font-bold text-xs text-primary flex items-center gap-1">
                         <Lock className="w-3 h-3" />
@@ -309,7 +309,7 @@ export const ClusterSyncModal: React.FC<ClusterSyncModalProps> = ({
                 </div>
 
                 {/* Target Nodes Compact Pill List */}
-                <div className="p-3 rounded-xl bg-slate-950/60 border border-white/10 space-y-1.5">
+                <div className="p-3 rounded-xl bg-black/30 border border-card-border space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-text-main flex items-center gap-1.5 text-xs">
                       <Server className="w-3.5 h-3.5 text-text-muted" />
@@ -332,7 +332,7 @@ export const ClusterSyncModal: React.FC<ClusterSyncModalProps> = ({
                     {activePeers.map((p) => (
                       <span
                         key={p.ipv4}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-text-main text-xs font-mono"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-card-border text-text-main text-xs font-mono"
                       >
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                         <span>{p.hostname || 'Remote Node'}</span>
@@ -364,7 +364,7 @@ export const ClusterSyncModal: React.FC<ClusterSyncModalProps> = ({
                 )}
 
                 {isSyncing && (
-                  <div className="p-3 rounded-xl bg-slate-950 border border-primary/30 space-y-1.5 animate-fade-in">
+                  <div className="p-3 rounded-xl bg-input border border-primary/30 space-y-1.5 animate-fade-in">
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-bold text-primary flex items-center gap-2">
                         <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary" />
@@ -390,7 +390,7 @@ export const ClusterSyncModal: React.FC<ClusterSyncModalProps> = ({
               </div>
 
               {/* Footer Actions */}
-              <div className="pt-3 border-t border-white/10 flex items-center justify-between">
+              <div className="pt-3 border-t border-card-border flex items-center justify-between">
                 <button
                   type="button"
                   onClick={handleCloseGracefully}

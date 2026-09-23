@@ -154,7 +154,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
               <button
                 type="button"
                 onClick={() => applyPreset('quick')}
-                className="flex flex-col items-center p-2.5 rounded-xl bg-white/5 border border-white/10 hover:border-primary/40 hover:bg-primary/10 text-xs transition-all"
+                className="flex flex-col items-center p-2.5 rounded-xl bg-white/5 border border-card-border hover:border-primary/40 hover:bg-primary/10 text-xs transition-all"
               >
                 <Rocket className="w-4 h-4 text-primary mb-1" />
                 <span className="font-semibold text-text-main">{t('speed_profile_quick')}</span>
@@ -163,7 +163,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
               <button
                 type="button"
                 onClick={() => applyPreset('max')}
-                className="flex flex-col items-center p-2.5 rounded-xl bg-white/5 border border-white/10 hover:border-primary/40 hover:bg-primary/10 text-xs transition-all"
+                className="flex flex-col items-center p-2.5 rounded-xl bg-white/5 border border-card-border hover:border-primary/40 hover:bg-primary/10 text-xs transition-all"
               >
                 <Zap className="w-4 h-4 text-amber-400 mb-1" />
                 <span className="font-semibold text-text-main">{t('speed_profile_max')}</span>
@@ -172,7 +172,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
               <button
                 type="button"
                 onClick={() => applyPreset('udp')}
-                className="flex flex-col items-center p-2.5 rounded-xl bg-white/5 border border-white/10 hover:border-primary/40 hover:bg-primary/10 text-xs transition-all"
+                className="flex flex-col items-center p-2.5 rounded-xl bg-white/5 border border-card-border hover:border-primary/40 hover:bg-primary/10 text-xs transition-all"
               >
                 <Target className="w-4 h-4 text-emerald-400 mb-1" />
                 <span className="font-semibold text-text-main">{t('speed_profile_udp')}</span>
@@ -182,7 +182,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
           </div>
 
           {/* Node Selectors (Source & Destination with Swap) */}
-          <div className="space-y-2.5 p-3 rounded-xl bg-white/5 border border-white/10">
+          <div className="space-y-2.5 p-3 rounded-xl bg-white/5 border border-card-border">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold text-text-muted flex items-center gap-1.5">
                 <Server className="w-3.5 h-3.5 text-primary" />
@@ -209,7 +209,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
               <select
                 value={sourceIp}
                 onChange={(e) => handleSourceChange(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-900/80 border border-white/15 rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
+                className="w-full px-3 py-2 bg-black/40 border border-card-border rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
               >
                 <option value="">{t('speed_source_placeholder')}</option>
                 {peers.map((p) => (
@@ -228,7 +228,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
               <select
                 value={targetIp}
                 onChange={(e) => handleTargetChange(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-900/80 border border-white/15 rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
+                className="w-full px-3 py-2 bg-black/40 border border-card-border rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
               >
                 <option value="">{t('speed_dest_placeholder')}</option>
                 {peers.filter((p) => p.ipv4 !== sourceIp).map((p) => (
@@ -243,7 +243,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
             {sourceIp && targetIp && (
               <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-primary/10 border border-primary/20 text-xs">
                 <div className="flex items-center gap-1.5 truncate">
-                  <span className="text-[10px] uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-white/10">
+                  <span className="text-[10px] uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-card-border">
                     {t('speed_source_chip_prefix')}
                   </span>
                   <span className="font-mono font-semibold text-text-main truncate">
@@ -259,7 +259,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1.5 truncate">
-                  <span className="text-[10px] uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-white/10">
+                  <span className="text-[10px] uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-card-border">
                     {t('speed_target_chip_prefix')}
                   </span>
                   <span className="font-mono font-semibold text-text-main truncate">
@@ -287,7 +287,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
                 className={`py-2 px-3 rounded-xl border text-xs font-medium transition-all ${
                   protocol === 'tcp'
                     ? 'bg-primary/15 border-primary text-primary font-semibold shadow-sm'
-                    : 'bg-white/5 border-white/10 text-text-muted hover:text-text-main'
+                    : 'bg-white/5 border-card-border text-text-muted hover:text-text-main'
                 }`}
               >
                 {t('speed_proto_tcp')}
@@ -298,7 +298,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
                 className={`py-2 px-3 rounded-xl border text-xs font-medium transition-all ${
                   protocol === 'udp'
                     ? 'bg-primary/15 border-primary text-primary font-semibold shadow-sm'
-                    : 'bg-white/5 border-white/10 text-text-muted hover:text-text-main'
+                    : 'bg-white/5 border-card-border text-text-muted hover:text-text-main'
                 }`}
               >
                 {t('speed_proto_udp')}
@@ -318,7 +318,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
               <select
                 value={bandwidth}
                 onChange={(e) => setBandwidth(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-900/80 border border-white/15 rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
+                className="w-full px-3 py-2 bg-black/40 border border-card-border rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
               >
                 <option value="20M">20 Mbps</option>
                 <option value="50M">50 Mbps</option>
@@ -337,7 +337,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
             <select
               value={duration}
               onChange={(e) => setDuration(Number(e.target.value))}
-              className="w-full px-3 py-2 bg-slate-900/80 border border-white/15 rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
+              className="w-full px-3 py-2 bg-black/40 border border-card-border rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
             >
               <option value={3}>{t('speed_duration_quick')}</option>
               <option value={5}>{t('speed_duration_std')}</option>
@@ -372,9 +372,9 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
         </div>
 
         {/* Right Column: Visualization & Metrics */}
-        <div className="lg:col-span-7 flex flex-col justify-between p-6 rounded-2xl bg-slate-900/40 border border-white/10 relative overflow-hidden min-h-[380px]">
+        <div className="lg:col-span-7 flex flex-col justify-between p-6 rounded-2xl bg-black/40/40 border border-card-border relative overflow-hidden min-h-[380px]">
           {isRunning && (
-            <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center p-6 text-center">
+            <div className="absolute inset-0 bg-black/50/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center p-6 text-center">
               <Loader2 className="w-10 h-10 text-primary animate-spin mb-3" />
               <p className="text-sm font-medium text-primary">{t('speed_running')}</p>
               <p className="text-xs font-mono text-text-muted mt-2">
@@ -392,7 +392,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
           <div className="flex flex-col items-center justify-center text-center my-auto py-4">
             {/* Route indicator chip */}
             {(lastResult?.source || sourceIp) && (lastResult?.target || targetIp) && (
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-mono text-text-muted mb-4">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-card-border text-xs font-mono text-text-muted mb-4">
                 <span className="text-text-main font-semibold">
                   {peers.find((p) => p.ipv4 === (lastResult?.source || sourceIp))?.hostname || (lastResult?.source || sourceIp)}
                 </span>

@@ -706,7 +706,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
           type="button"
           onClick={() => handleSave()}
           disabled={saving}
-          className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-text-main font-semibold text-xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+          className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-card-border text-text-main font-semibold text-xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
         >
           {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 text-text-muted" />}
           <span>{t('cluster_btn_save_local')}</span>
@@ -743,7 +743,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
               celebrationClosing ? 'opacity-0' : 'opacity-100'
             }`}
           >
-            <div className="w-full max-w-lg p-8 rounded-3xl bg-slate-900 border border-emerald-500/40 shadow-2xl relative overflow-hidden text-center animate-modal-in">
+            <div className="w-full max-w-lg p-8 rounded-3xl bg-card/90 border border-emerald-500/40 shadow-2xl relative overflow-hidden text-center animate-modal-in">
               {/* Background glowing gradients */}
               <div className="absolute -top-24 -left-24 w-60 h-60 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
               <div className="absolute -bottom-24 -right-24 w-60 h-60 bg-primary/20 rounded-full blur-3xl pointer-events-none" />
@@ -764,7 +764,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
               </p>
 
               {/* Step Progression Checkmarks */}
-              <div className="space-y-2.5 mb-6 text-xs text-left bg-slate-950/70 p-4 rounded-2xl border border-white/10">
+              <div className="space-y-2.5 mb-6 text-xs text-left bg-black/35 p-4 rounded-2xl border border-card-border">
                 <div
                   className={`flex items-center gap-3 transition-all duration-300 ${
                     celebrationStep >= 1 ? 'text-emerald-400 font-medium' : 'text-text-muted opacity-40'
@@ -827,7 +827,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                 <span className="px-3 py-1 rounded-lg bg-primary/10 text-primary border border-primary/30">
                   VIP: {ipv4}
                 </span>
-                <span className="px-3 py-1 rounded-lg bg-white/5 text-text-muted border border-white/10">
+                <span className="px-3 py-1 rounded-lg bg-white/5 text-text-muted border border-card-border">
                   Net: {networkName}
                 </span>
               </div>
@@ -982,7 +982,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
             type="button"
             onClick={loadData}
             title={t('btn_refresh')}
-            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-text-muted hover:text-text-main transition-colors"
+            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-card-border text-xs font-medium text-text-muted hover:text-text-main transition-colors"
           >
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
@@ -995,7 +995,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                 onClick={() => handleSave()}
                 disabled={saving}
                 title={t('cluster_btn_save_local_desc')}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-text-main font-semibold text-xs transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-card-border text-text-main font-semibold text-xs transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
               >
                 {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 text-text-muted" />}
                 <span>{t('cluster_btn_save_local')}</span>
@@ -1041,7 +1041,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     ? 'bg-primary text-black shadow-lg shadow-primary/30'
                     : wizardStep > 1
                     ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                    : 'bg-white/5 border border-white/10'
+                    : 'bg-white/5 border border-card-border'
                 }`}
               >
                 {wizardStep > 1 ? <Check className="w-3.5 h-3.5" /> : '1'}
@@ -1074,7 +1074,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     ? 'bg-primary text-black shadow-lg shadow-primary/30'
                     : wizardStep > 2
                     ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                    : 'bg-white/5 border border-white/10'
+                    : 'bg-white/5 border border-card-border'
                 }`}
               >
                 {wizardStep > 2 ? <Check className="w-3.5 h-3.5" /> : '2'}
@@ -1103,7 +1103,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                 className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-mono font-bold transition-all ${
                   wizardStep === 3
                     ? 'bg-primary text-black shadow-lg shadow-primary/30'
-                    : 'bg-white/5 border border-white/10'
+                    : 'bg-white/5 border border-card-border'
                 }`}
               >
                 3
@@ -1137,7 +1137,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                   className={`p-5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between ${
                     setupMode === 'new'
                       ? 'bg-primary/10 border-primary shadow-lg shadow-primary/10'
-                      : 'bg-slate-900/40 border-white/10 hover:border-white/20'
+                      : 'bg-black/25 border-card-border hover:border-white/20'
                   }`}
                 >
                   <div>
@@ -1168,7 +1168,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                   className={`p-5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between ${
                     setupMode === 'join'
                       ? 'bg-accent-green/10 border-accent-green shadow-lg shadow-accent-green/10'
-                      : 'bg-slate-900/40 border-white/10 hover:border-white/20'
+                      : 'bg-black/25 border-card-border hover:border-white/20'
                   }`}
                 >
                   <div>
@@ -1196,7 +1196,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
 
               {/* If Join Mode is selected, render the Token Input Box */}
               {setupMode === 'join' && (
-                <div className="max-w-2xl mx-auto p-4 rounded-2xl bg-slate-950/80 border border-accent-green/30 space-y-3 animate-modal-in">
+                <div className="max-w-2xl mx-auto p-4 rounded-2xl bg-black/40 border border-accent-green/30 space-y-3 animate-modal-in">
                   <div className="flex items-center justify-between">
                     <label className="block text-xs font-bold text-emerald-400">
                       {t('wizard_token_label')}
@@ -1208,7 +1208,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     value={wizardInviteInput}
                     onChange={(e) => handleWizardInviteChange(e.target.value)}
                     placeholder={t('wizard_token_placeholder')}
-                    className="w-full p-3 bg-slate-900 border border-white/10 rounded-xl font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-accent-green resize-none"
+                    className="w-full p-3 bg-card/90 border border-card-border rounded-xl font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-accent-green resize-none"
                   />
 
                   {/* Decoded Token Preview Card */}
@@ -1327,12 +1327,12 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                   }}
                   onBlur={() => markTouched('hostname')}
                   placeholder="e.g. germany-node-1, ir-relay, node-alpha"
-                  className={`w-full px-3.5 py-2.5 bg-slate-950 border rounded-xl font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none transition-all duration-200 ${
+                  className={`w-full px-3.5 py-2.5 bg-black/40 border rounded-xl font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none transition-all duration-200 ${
                     isFieldInvalid('hostname')
                       ? 'border-rose-500 bg-rose-500/[0.04] focus:border-rose-400 focus:ring-1 focus:ring-rose-500/30'
                       : isFieldValid('hostname', hostname)
                       ? 'border-emerald-500/40 focus:border-primary'
-                      : 'border-white/10 focus:border-primary'
+                      : 'border-card-border focus:border-primary'
                   }`}
                 />
                 {isFieldInvalid('hostname') ? (
@@ -1377,12 +1377,12 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     onChange={(e) => setIpv4(e.target.value)}
                     onBlur={() => markTouched('ipv4')}
                     placeholder="10.144.144.1"
-                    className={`w-full px-3.5 py-2 bg-slate-950 border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none transition-all duration-200 ${
+                    className={`w-full px-3.5 py-2 bg-black/40 border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none transition-all duration-200 ${
                       isFieldInvalid('ipv4')
                         ? 'border-rose-500 bg-rose-500/[0.04] focus:border-rose-400 focus:ring-1 focus:ring-rose-500/30'
                         : isFieldValid('ipv4', ipv4)
                         ? 'border-emerald-500/40 focus:border-primary'
-                        : 'border-white/10 focus:border-primary'
+                        : 'border-card-border focus:border-primary'
                     }`}
                   />
                   {isFieldInvalid('ipv4') ? (
@@ -1425,12 +1425,12 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     onChange={(e) => setPort(Number(e.target.value))}
                     onBlur={() => markTouched('port')}
                     placeholder="11010"
-                    className={`w-full px-3.5 py-2 bg-slate-950 border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none transition-all duration-200 ${
+                    className={`w-full px-3.5 py-2 bg-black/40 border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none transition-all duration-200 ${
                       isFieldInvalid('port')
                         ? 'border-rose-500 bg-rose-500/[0.04] focus:border-rose-400 focus:ring-1 focus:ring-rose-500/30'
                         : isFieldValid('port', port)
                         ? 'border-emerald-500/40 focus:border-primary'
-                        : 'border-white/10 focus:border-primary'
+                        : 'border-card-border focus:border-primary'
                     }`}
                   />
                   {isFieldInvalid('port') ? (
@@ -1473,12 +1473,12 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     onChange={(e) => setNetworkName(e.target.value)}
                     onBlur={() => markTouched('networkName')}
                     placeholder="e.g. xraymesh"
-                    className={`w-full px-3.5 py-2 bg-slate-950 border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none transition-all duration-200 ${
+                    className={`w-full px-3.5 py-2 bg-black/40 border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none transition-all duration-200 ${
                       isFieldInvalid('networkName')
                         ? 'border-rose-500 bg-rose-500/[0.04] focus:border-rose-400 focus:ring-1 focus:ring-rose-500/30'
                         : isFieldValid('networkName', networkName)
                         ? 'border-emerald-500/40 focus:border-primary'
-                        : 'border-white/10 focus:border-primary'
+                        : 'border-card-border focus:border-primary'
                     }`}
                   />
                   {isFieldInvalid('networkName') && (
@@ -1525,12 +1525,12 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       onChange={(e) => setNetworkSecret(e.target.value)}
                       onBlur={() => markTouched('networkSecret')}
                       placeholder="Shared secret across all nodes..."
-                      className={`w-full pl-3.5 pr-10 py-2 bg-slate-950 border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none transition-all duration-200 ${
+                      className={`w-full pl-3.5 pr-10 py-2 bg-black/40 border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none transition-all duration-200 ${
                         isFieldInvalid('networkSecret')
                           ? 'border-rose-500 bg-rose-500/[0.04] focus:border-rose-400 focus:ring-1 focus:ring-rose-500/30'
                           : isFieldValid('networkSecret', networkSecret)
                           ? 'border-emerald-500/40 focus:border-primary'
-                          : 'border-white/10 focus:border-primary'
+                          : 'border-card-border focus:border-primary'
                       }`}
                     />
                     <button
@@ -1566,7 +1566,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                         className={`p-3 rounded-xl border text-left transition-all duration-200 ${
                           isSelected
                             ? 'bg-primary/10 border-primary text-primary font-bold shadow-sm'
-                            : 'bg-slate-900/40 border-white/10 text-text-muted hover:border-white/20'
+                            : 'bg-black/25 border-card-border text-text-muted hover:border-white/20'
                         } ${isRtl ? 'text-right' : 'text-left'}`}
                       >
                         <div className="flex items-center justify-between gap-1 mb-1">
@@ -1589,7 +1589,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                 </span>
 
                 {/* KCP Loss-Resistance Proxy */}
-                <div className="p-3.5 rounded-xl bg-slate-900/60 border border-white/10 flex items-start justify-between gap-4 transition-all hover:border-amber-500/30">
+                <div className="p-3.5 rounded-xl bg-card/90/60 border border-card-border flex items-start justify-between gap-4 transition-all hover:border-amber-500/30">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <Zap className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
@@ -1610,27 +1610,27 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
 
                 {/* Extra Flags (Encryption, IPv6, MTU) */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-900/40 border border-white/5 cursor-pointer hover:border-white/20 transition-all active:scale-[0.98]">
+                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-black/25 border border-white/5 cursor-pointer hover:border-white/20 transition-all active:scale-[0.98]">
                     <input
                       type="checkbox"
                       checked={encryption}
                       onChange={(e) => setEncryption(e.target.checked)}
-                      className="rounded bg-slate-950 border-white/20 text-primary focus:ring-0"
+                      className="rounded bg-black/40 border-white/20 text-primary focus:ring-0"
                     />
                     <span className="font-medium text-text-main">{t('node_encryption_label')}</span>
                   </label>
 
-                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-900/40 border border-white/5 cursor-pointer hover:border-white/20 transition-all active:scale-[0.98]">
+                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-black/25 border border-white/5 cursor-pointer hover:border-white/20 transition-all active:scale-[0.98]">
                     <input
                       type="checkbox"
                       checked={ipv6}
                       onChange={(e) => setIpv6(e.target.checked)}
-                      className="rounded bg-slate-950 border-white/20 text-primary focus:ring-0"
+                      className="rounded bg-black/40 border-white/20 text-primary focus:ring-0"
                     />
                     <span className="font-medium text-text-main">{t('node_ipv6_label')}</span>
                   </label>
 
-                  <div className={`flex flex-col p-2.5 rounded-xl bg-slate-900/40 border transition-all duration-200 ${
+                  <div className={`flex flex-col p-2.5 rounded-xl bg-black/25 border transition-all duration-200 ${
                     isFieldInvalid('mtu') ? 'border-rose-500/60 bg-rose-500/[0.04]' : 'border-white/5'
                   }`}>
                     <div className="flex items-center gap-2">
@@ -1641,8 +1641,8 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                         value={mtu}
                         onChange={(e) => setMtu(Number(e.target.value))}
                         onBlur={() => markTouched('mtu')}
-                        className={`w-full px-2 py-1 bg-slate-950 border rounded font-mono text-xs text-text-main focus:outline-none transition-all ${
-                          isFieldInvalid('mtu') ? 'border-rose-500 focus:border-rose-400' : 'border-white/10 focus:border-primary'
+                        className={`w-full px-2 py-1 bg-black/40 border rounded font-mono text-xs text-text-main focus:outline-none transition-all ${
+                          isFieldInvalid('mtu') ? 'border-rose-500 focus:border-rose-400' : 'border-card-border focus:border-primary'
                         }`}
                       />
                     </div>
@@ -1688,9 +1688,9 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
               </div>
 
               {/* Review Summary Grid */}
-              <div className="p-5 rounded-2xl bg-slate-950/80 border border-white/10 space-y-4">
+              <div className="p-5 rounded-2xl bg-black/40 border border-card-border space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
-                  <div className="p-3 rounded-xl bg-slate-900/60 border border-white/5">
+                  <div className="p-3 rounded-xl bg-card/90/60 border border-white/5">
                     <span className="text-[10px] text-text-muted uppercase font-sans block mb-1">
                       {t('node_hostname')} (Server Name)
                     </span>
@@ -1700,7 +1700,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     </span>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-slate-900/60 border border-white/5">
+                  <div className="p-3 rounded-xl bg-card/90/60 border border-white/5">
                     <span className="text-[10px] text-text-muted uppercase font-sans block mb-1">
                       {t('node_vip')} (Virtual Mesh IP)
                     </span>
@@ -1710,7 +1710,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     </span>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-slate-900/60 border border-white/5">
+                  <div className="p-3 rounded-xl bg-card/90/60 border border-white/5">
                     <span className="text-[10px] text-text-muted uppercase font-sans block mb-1">
                       {t('node_net_name')} & Port
                     </span>
@@ -1719,7 +1719,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     </span>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-slate-900/60 border border-white/5">
+                  <div className="p-3 rounded-xl bg-card/90/60 border border-white/5">
                     <span className="text-[10px] text-text-muted uppercase font-sans block mb-1">
                       Protocol & Security
                     </span>
@@ -1729,7 +1729,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     </span>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-slate-900/60 border border-white/5 sm:col-span-2 flex flex-wrap items-center justify-between gap-2">
+                  <div className="p-3 rounded-xl bg-card/90/60 border border-white/5 sm:col-span-2 flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <Zap className={`w-4 h-4 ${enableKcp ? 'text-amber-400' : 'text-text-muted'}`} />
                       <div>
@@ -1742,7 +1742,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-[11px] font-mono">
-                      <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-text-muted">
+                      <span className="px-2 py-0.5 rounded bg-white/5 border border-card-border text-text-muted">
                         MTU: <strong className="text-text-main">{mtu}</strong>
                       </span>
                       {ipv6 && (
@@ -1763,7 +1763,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       {peers.map((p) => (
                         <span
                           key={p}
-                          className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 font-mono text-[11px] text-primary"
+                          className="px-2.5 py-1 rounded-lg bg-white/5 border border-card-border font-mono text-[11px] text-primary"
                         >
                           {p}
                         </span>
@@ -1808,7 +1808,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
       {!wizardActive && (
         <div className="space-y-4 animate-tab-in">
           {/* Sub-Tab Navigation Bar */}
-          <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-slate-900/60 border border-white/10 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-card/90/60 border border-card-border overflow-x-auto no-scrollbar">
             <button
               type="button"
               onClick={() => setSubTab('identity')}
@@ -1910,10 +1910,10 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       if (!hostnameTouched) setHostnameTouched(true);
                     }}
                     placeholder="e.g. server-germany"
-                    className={`w-full px-3.5 py-2 bg-slate-950 border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none transition-all ${
+                    className={`w-full px-3.5 py-2 bg-black/40 border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none transition-all ${
                       !hostname.trim() && hostnameTouched
                         ? 'border-rose-500 focus:border-rose-400'
-                        : 'border-white/10 focus:border-primary'
+                        : 'border-card-border focus:border-primary'
                     }`}
                   />
                 </div>
@@ -1926,7 +1926,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     value={ipv4}
                     onChange={(e) => setIpv4(e.target.value)}
                     placeholder="10.144.144.1"
-                    className="w-full px-3.5 py-2 bg-slate-950 border border-white/10 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                    className="w-full px-3.5 py-2 bg-black/40 border border-card-border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
                   />
                 </div>
 
@@ -1938,7 +1938,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     value={port}
                     onChange={(e) => setPort(Number(e.target.value))}
                     placeholder="11010"
-                    className="w-full px-3.5 py-2 bg-slate-950 border border-white/10 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                    className="w-full px-3.5 py-2 bg-black/40 border border-card-border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
                   />
                 </div>
 
@@ -1950,7 +1950,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     value={networkName}
                     onChange={(e) => setNetworkName(e.target.value)}
                     placeholder="e.g. xraymesh"
-                    className="w-full px-3.5 py-2 bg-slate-950 border border-white/10 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                    className="w-full px-3.5 py-2 bg-black/40 border border-card-border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
                   />
                 </div>
 
@@ -1972,7 +1972,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       value={networkSecret}
                       onChange={(e) => setNetworkSecret(e.target.value)}
                       placeholder="Shared secret across all nodes..."
-                      className="w-full pl-3.5 pr-10 py-2 bg-slate-950 border border-white/10 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                      className="w-full pl-3.5 pr-10 py-2 bg-black/40 border border-card-border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
                     />
                     <button
                       type="button"
@@ -1992,12 +1992,12 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       type="text"
                       readOnly
                       value={config?.public_ip || 'Detecting...'}
-                      className="w-full px-3.5 py-2 bg-slate-900/60 border border-white/5 rounded-xl font-mono text-text-muted cursor-not-allowed"
+                      className="w-full px-3.5 py-2 bg-card/90/60 border border-white/5 rounded-xl font-mono text-text-muted cursor-not-allowed"
                     />
                     {config?.public_ip && (
                       <button
                         onClick={() => onCopy(config.public_ip!)}
-                        className="p-2 rounded-xl bg-white/5 border border-white/10 text-text-muted hover:text-primary transition-colors cursor-pointer"
+                        className="p-2 rounded-xl bg-white/5 border border-card-border text-text-muted hover:text-primary transition-colors cursor-pointer"
                         title="Copy IP"
                       >
                         {copiedKey === config.public_ip ? (
@@ -2045,7 +2045,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       className={`flex flex-col text-left p-3.5 rounded-xl border transition-all cursor-pointer ${
                         isSelected
                           ? 'bg-primary/10 border-primary ring-1 ring-primary/30 shadow-sm'
-                          : 'bg-slate-900/40 border-white/10 hover:border-white/20'
+                          : 'bg-black/25 border-card-border hover:border-white/20'
                       } ${isRtl ? 'text-right' : 'text-left'}`}
                     >
                       <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -2074,7 +2074,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
               {/* Accelerators & Toggles */}
               <div className="pt-2 border-t border-white/5 space-y-3 text-xs">
                 {/* KCP Loss-Resistance Proxy */}
-                <div className="p-3.5 rounded-xl bg-slate-900/50 border border-white/10 flex items-start justify-between gap-4">
+                <div className="p-3.5 rounded-xl bg-card/90/50 border border-card-border flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <Zap className="w-3.5 h-3.5 text-amber-400" />
@@ -2095,34 +2095,34 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
 
                 {/* Extra Flags (Encryption, IPv6, MTU) */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-900/30 border border-white/5 cursor-pointer">
+                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-card/90/30 border border-white/5 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={encryption}
                       onChange={(e) => setEncryption(e.target.checked)}
-                      className="rounded bg-slate-950 border-white/20 text-primary focus:ring-0"
+                      className="rounded bg-black/40 border-white/20 text-primary focus:ring-0"
                     />
                     <span className="font-medium text-text-main">{t('node_encryption_label')}</span>
                   </label>
 
-                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-900/30 border border-white/5 cursor-pointer">
+                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-card/90/30 border border-white/5 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={ipv6}
                       onChange={(e) => setIpv6(e.target.checked)}
-                      className="rounded bg-slate-950 border-white/20 text-primary focus:ring-0"
+                      className="rounded bg-black/40 border-white/20 text-primary focus:ring-0"
                     />
                     <span className="font-medium text-text-main">{t('node_ipv6_label')}</span>
                   </label>
 
-                  <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-900/30 border border-white/5">
+                  <div className="flex items-center gap-2 p-2 rounded-xl bg-card/90/30 border border-white/5">
                     <Sliders className="w-3.5 h-3.5 text-text-muted flex-shrink-0" />
                     <span className="text-[11px] text-text-muted flex-shrink-0">MTU:</span>
                     <input
                       type="number"
                       value={mtu}
                       onChange={(e) => setMtu(Number(e.target.value))}
-                      className="w-full px-2 py-1 bg-slate-950 border border-white/10 rounded font-mono text-xs text-text-main"
+                      className="w-full px-2 py-1 bg-black/40 border border-card-border rounded font-mono text-xs text-text-main"
                     />
                   </div>
                 </div>
@@ -2183,7 +2183,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                           value={overrideEndpoint}
                           onChange={(e) => setOverrideEndpoint(e.target.value)}
                           placeholder={inviteData.details.endpoint || t('node_invite_endpoint_placeholder')}
-                          className="w-full px-3 py-1.5 bg-slate-950/90 border border-white/10 rounded-lg font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-accent-green"
+                          className="w-full px-3 py-1.5 bg-black/40/90 border border-card-border rounded-lg font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-accent-green"
                         />
                         {!overrideEndpoint &&
                           (!computedInvite?.details.endpoint || computedInvite.details.endpoint.startsWith(':')) && (
@@ -2195,7 +2195,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     )}
 
                     {computedInvite ? (
-                      <div className="p-3.5 rounded-xl bg-slate-950/80 border border-white/10 mb-4">
+                      <div className="p-3.5 rounded-xl bg-black/40 border border-card-border mb-4">
                         <div className="flex items-center justify-between gap-2 mb-2">
                           <span className="text-[11px] font-mono text-accent-green font-semibold">
                             {computedInvite.details.net} ({computedInvite.details.proto.toUpperCase()})
@@ -2209,7 +2209,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                         </div>
                       </div>
                     ) : (
-                      <div className="p-4 rounded-xl bg-white/[0.02] border border-dashed border-white/10 text-center text-xs text-text-muted mb-4">
+                      <div className="p-4 rounded-xl bg-white/[0.02] border border-dashed border-card-border text-center text-xs text-text-muted mb-4">
                         {loadingInvite
                           ? 'Generating invite token...'
                           : 'Save node configuration to enable mesh invite token.'}
@@ -2254,7 +2254,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       onChange={(e) => handleManualJoinInputChange(e.target.value)}
                       placeholder={t('node_join_placeholder')}
                       rows={3}
-                      className="w-full p-3 bg-slate-950 border border-white/10 rounded-xl font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-primary resize-none mb-3"
+                      className="w-full p-3 bg-black/40 border border-card-border rounded-xl font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-primary resize-none mb-3"
                     />
 
                     {/* Detected token hint */}
@@ -2300,7 +2300,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     onChange={(e) => setNewPeer(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleAddPeer()}
                     placeholder={t('node_peer_add_placeholder')}
-                    className="flex-1 px-3.5 py-2 bg-slate-950 border border-white/10 rounded-xl font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                    className="flex-1 px-3.5 py-2 bg-black/40 border border-card-border rounded-xl font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
                   />
                   <button
                     onClick={handleAddPeer}
@@ -2314,7 +2314,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
 
                 {/* Peers List */}
                 {peers.length === 0 ? (
-                  <div className="p-6 rounded-xl bg-white/[0.02] border border-dashed border-white/10 text-center text-xs text-text-muted">
+                  <div className="p-6 rounded-xl bg-white/[0.02] border border-dashed border-card-border text-center text-xs text-text-muted">
                     {t('node_no_peers')}
                   </div>
                 ) : (
@@ -2322,7 +2322,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     {peers.map((p) => (
                       <div
                         key={p}
-                        className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/60 border border-white/10 hover:border-white/20 transition-all text-xs"
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-card/90/60 border border-card-border hover:border-white/20 transition-all text-xs"
                       >
                         <span className="font-mono text-primary font-medium truncate mr-2">{p}</span>
                         <button
@@ -2434,7 +2434,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
       {showDeleteModal &&
         createPortal(
           <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-modal-in">
-            <div className="w-full max-w-md p-6 rounded-2xl bg-slate-900 border border-rose-500/30 shadow-2xl relative">
+            <div className="w-full max-w-md p-6 rounded-2xl bg-card/90 border border-rose-500/30 shadow-2xl relative">
               <div className="flex items-center gap-3 text-rose-400 mb-3">
                 <AlertCircle className="w-6 h-6 flex-shrink-0" />
                 <h3 className="text-base font-bold text-text-main">{t('node_delete_confirm_title')}</h3>

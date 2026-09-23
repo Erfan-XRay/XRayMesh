@@ -68,7 +68,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-modal-in" role="dialog" aria-modal="true" aria-labelledby="login-title">
-      <div className="w-full max-w-md p-6 rounded-2xl bg-slate-900 border border-white/15 shadow-2xl text-center relative">
+      <div className="w-full max-w-md p-6 rounded-2xl bg-modal border border-card-border shadow-2xl text-center relative">
         {/* Brand Icon */}
         <div className="flex items-center justify-center mx-auto mb-4">
           <XRayMeshLogo className="w-14 h-14" size={56} glow={true} />
@@ -78,7 +78,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         <p className="text-xs text-text-muted mt-1 mb-5">{t('modal_login_desc')}</p>
 
         {/* Tab switch */}
-        <div className="inline-flex rounded-xl bg-white/5 border border-white/10 p-1 mb-4 w-full" role="group" aria-label={t('modal_login_title')}>
+        <div className="inline-flex rounded-xl bg-white/5 border border-card-border p-1 mb-4 w-full" role="group" aria-label={t('modal_login_title')}>
           <button
             type="button"
             aria-pressed={tab === 'pw'}
@@ -128,7 +128,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={t('modal_login_pw_placeholder')}
-                className="w-full ps-9 pe-4 py-2.5 bg-slate-950 border border-white/15 rounded-xl text-sm font-mono text-center text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                className="w-full ps-9 pe-4 py-2.5 bg-input border border-card-border rounded-xl text-sm font-mono text-center text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
                 required
               />
             </div>
@@ -140,7 +140,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
                 placeholder={t('modal_login_tk_placeholder')}
-                className="w-full ps-9 pe-4 py-2.5 bg-slate-950 border border-white/15 rounded-xl text-sm font-mono text-center text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                className="w-full ps-9 pe-4 py-2.5 bg-input border border-card-border rounded-xl text-sm font-mono text-center text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
                 required
               />
             </div>

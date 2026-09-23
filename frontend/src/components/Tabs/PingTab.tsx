@@ -99,7 +99,7 @@ export const PingTab: React.FC<PingTabProps> = ({
       {/* Input Controls Form */}
       <form onSubmit={handleSend} className="space-y-4 mb-6">
         {/* Route Selectors (Source & Target with Swap) */}
-        <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-3">
+        <div className="p-3.5 rounded-xl bg-white/5 border border-card-border space-y-3">
           <div className="flex items-center justify-between">
             <label className="text-xs font-semibold text-text-muted flex items-center gap-1.5">
               <Server className="w-3.5 h-3.5 text-primary" />
@@ -127,7 +127,7 @@ export const PingTab: React.FC<PingTabProps> = ({
               <select
                 value={sourceIp}
                 onChange={(e) => handleSourceChange(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-900/80 border border-white/15 rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
+                className="w-full px-3 py-2 bg-black/40 border border-card-border rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
               >
                 <option value="">{t('ping_source_placeholder')}</option>
                 {peers.map((p) => (
@@ -148,7 +148,7 @@ export const PingTab: React.FC<PingTabProps> = ({
                 onChange={(e) => {
                   if (e.target.value) onTargetChange(e.target.value);
                 }}
-                className="w-full px-3 py-2 bg-slate-900/80 border border-white/15 rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
+                className="w-full px-3 py-2 bg-black/40 border border-card-border rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
               >
                 <option value="">{t('ping_dest_select_placeholder')}</option>
                 {peers.filter((p) => p.ipv4 !== sourceIp).map((p) => (
@@ -171,7 +171,7 @@ export const PingTab: React.FC<PingTabProps> = ({
                 value={targetIp}
                 onChange={(e) => onTargetChange(e.target.value)}
                 placeholder="10.144.144.2"
-                className="w-full px-3.5 py-2 bg-slate-900/80 border border-white/15 rounded-xl text-xs sm:text-sm font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                className="w-full px-3.5 py-2 bg-black/40 border border-card-border rounded-xl text-xs sm:text-sm font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
               />
             </div>
 
@@ -182,7 +182,7 @@ export const PingTab: React.FC<PingTabProps> = ({
               <select
                 value={count}
                 onChange={(e) => setCount(Number(e.target.value))}
-                className="w-full px-3 py-2 bg-slate-900/80 border border-white/15 rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
+                className="w-full px-3 py-2 bg-black/40 border border-card-border rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
               >
                 <option value={4}>{t('ping_count_4')}</option>
                 <option value={8}>{t('ping_count_8')}</option>
@@ -195,7 +195,7 @@ export const PingTab: React.FC<PingTabProps> = ({
           {sourceIp && targetIp && (
             <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-primary/10 border border-primary/20 text-xs">
               <div className="flex items-center gap-1.5 truncate">
-                <span className="text-[10px] uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-white/10">
+                <span className="text-[10px] uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-card-border">
                   {t('ping_source_chip_prefix')}
                 </span>
                 <span className="font-mono font-semibold text-text-main truncate">
@@ -211,7 +211,7 @@ export const PingTab: React.FC<PingTabProps> = ({
               </div>
 
               <div className="flex items-center gap-1.5 truncate">
-                <span className="text-[10px] uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-white/10">
+                <span className="text-[10px] uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-card-border">
                   {t('ping_dest_chip_prefix')}
                 </span>
                 <span className="font-mono font-semibold text-text-main truncate">
@@ -251,7 +251,7 @@ export const PingTab: React.FC<PingTabProps> = ({
         <div className="space-y-4 animate-modal-in">
           {/* Diagnostic Route Banner */}
           {(lastResult.source || sourceIp) && (lastResult.target || targetIp) && (
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-mono text-text-muted">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-card-border text-xs font-mono text-text-muted">
               <span className="text-text-main font-semibold">
                 {peers.find((p) => p.ipv4 === (lastResult.source || sourceIp))?.hostname || (lastResult.source || sourceIp)}
               </span>
@@ -295,7 +295,7 @@ export const PingTab: React.FC<PingTabProps> = ({
           </div>
 
           {/* Raw Terminal Output */}
-          <div className="rounded-xl bg-black/40 border border-white/10 p-3.5">
+          <div className="rounded-xl bg-black/40 border border-card-border p-3.5">
             <div className="flex items-center gap-2 text-xs font-mono text-text-muted mb-2">
               <Terminal className="w-3.5 h-3.5" />
               <span>Diagnostic Raw Terminal</span>

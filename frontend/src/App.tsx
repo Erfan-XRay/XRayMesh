@@ -21,6 +21,7 @@ import * as api from './services/api';
 import { Header } from './components/Header';
 import { OverviewCards } from './components/OverviewCards';
 import { MobileDrawer } from './components/MobileDrawer';
+import { MobileBottomNav } from './components/MobileBottomNav';
 import { ToastContainer } from './components/Toast';
 import { LoginModal } from './components/Modals/LoginModal';
 import { TunnelModal, TunnelModalType } from './components/Modals/TunnelModal';
@@ -541,7 +542,7 @@ export default function App() {
 
   // ─── Render ─────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-canvas px-3 sm:px-6 py-3.5 sm:py-6 lg:px-8 max-w-7xl mx-auto pb-8 sm:pb-12">
+    <div className="min-h-screen bg-canvas px-3 sm:px-6 py-3.5 sm:py-6 lg:px-8 max-w-7xl mx-auto pb-24 md:pb-12">
       {/* Login Modal */}
       <LoginModal
         isOpen={showLogin}
@@ -650,7 +651,7 @@ export default function App() {
 
           {/* Tab Navigation (When configured) / Setup Mode Bar (When unconfigured) */}
           {isNodeConfigured ? (
-            <nav aria-label={t('drawer_tabs')} className="horizontal-scroll flex overflow-x-auto md:flex-wrap gap-1.5 mb-4 sm:mb-6 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl bg-card/60 border border-card-border backdrop-blur-md shadow-sm" role="tablist">
+            <nav aria-label={t('drawer_tabs')} className="horizontal-scroll hidden md:flex flex-wrap gap-1.5 mb-4 sm:mb-6 p-1.5 rounded-2xl bg-card/80 border border-card-border backdrop-blur-xl shadow-lg" role="tablist">
               {tabs.map((tab) => {
                 const isActive = activeTab === tab.id;
                 return (
@@ -812,6 +813,16 @@ export default function App() {
           )}
 
           {/* Mobile Navigation & Settings Drawer */}
+          {/* Mobile Sticky Bottom Navigation Bar */}
+          {isNodeConfigured && (
+            <MobileBottomNav
+              activeTab={activeTab}
+              onSelectTab={setActiveTab}
+              tabs={tabs}
+              t={t}
+            />
+          )}
+
           <MobileDrawer
             isOpen={drawerOpen}
             onClose={() => setDrawerOpen(false)}

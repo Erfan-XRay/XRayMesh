@@ -2,6 +2,15 @@
 
 All notable XRayMesh changes are documented here.
 
+## [2.1.4] - 2026-09-23
+
+### Added
+- Data-Dense Bento Grid layout: asymmetric high-density topology cards, latency metrics, and server telemetry gauges.
+- Mobile Bottom Navigation Bar: fixed thumb-reachable glassy nav bar with active tab indicators and badge counts on mobile viewports.
+- Enhanced Color Palette system: Sky Tech, Cyber Emerald, Neon Violet, Amber Glow, Crimson Rose, and OLED Midnight themes with dynamic CSS token propagation.
+- Mobile quick toggles: single-tap Persian/English language switch and color palette selector directly accessible from mobile top bar.
+- Technical LTR isolation: strict LTR bidi isolation for IP addresses, ports, protocols, and latency values in RTL Persian layout.
+
 ## [2.1.3] - 2026-09-23
 
 ### Changed
