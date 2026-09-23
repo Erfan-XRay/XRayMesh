@@ -52,7 +52,7 @@ Developed with passion by **ErfanXRay**.
 - **Realm Tunnels:** Ultra-lightweight, memory-efficient Rust forwarding for TCP and UDP.
 - **GOST v3 Tunnels:** Versatile multi-protocol forwarding engine with user-space reliability.
 - **iptables Kernel Forwarding:** Native Linux kernel-level DNAT + MASQUERADE for lowest possible latency on TCP and UDP applications (e.g. Hysteria2, WireGuard).
-- Flexible port specifications: single ports (`443`), lists (`80,443,8080`), and port ranges (`8000-8020`).
+- Flexible port specifications: single ports (`443`), lists (`80,443,8080`), port ranges (`8000-8020`), and listen-to-target mappings (`1234:443`, `1000-1002:2000-2002`). Legacy entries still map each port to itself.
 
 ### ⚡ Cluster SafeSync (Inter-Node Synchronization)
 - Sync mesh configuration updates to all cluster nodes simultaneously.

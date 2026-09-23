@@ -2,6 +2,14 @@
 
 All notable XRayMesh changes are documented here.
 
+## [Unreleased]
+
+### Added
+- Listen-to-target port mapping for HAProxy, iptables, GOST, and Realm tunnels using `LISTEN:TARGET` syntax (for example `1234:443`).
+- Tunnel name validation is now consistent across Web UI, API, and CLI, and invalid requests are rejected before relay runtimes are installed.
+- Pairwise range mappings such as `1000-1002:2000-2002`, plus range-to-single-target mappings such as `1000-1002:443`.
+- Web UI hints and presets for port mapping while preserving existing single-port, list, and range behavior.
+
 ## [2.1.2] - 2026-09-22
 
 ### Added

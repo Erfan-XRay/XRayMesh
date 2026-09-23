@@ -111,6 +111,10 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
       setError('Please fill in all required fields');
       return;
     }
+    if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/.test(name.trim())) {
+      setError("Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'.");
+      return;
+    }
     setError(null);
     setIsLoading(true);
     try {
@@ -140,6 +144,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
     presets = [
       { label: '80,443 (Web)', val: '80,443' },
       { label: '443 (HTTPS/TLS)', val: '443' },
+      { label: '1234→443 (Map)', val: '1234:443' },
       { label: '8000-8010 (Range)', val: '8000-8010' },
       { label: '2222 (SSH)', val: '2222' },
     ];
@@ -147,6 +152,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
     title = isEdit ? 'Edit iptables UDP/TCP Tunnel' : 'Create iptables UDP/TCP Tunnel';
     presets = [
       { label: '443 (Hysteria/QUIC)', val: '443' },
+      { label: '1234→443 (Map)', val: '1234:443' },
       { label: '20000-20100 (Hopping)', val: '20000-20100' },
       { label: '80,443 (Multi)', val: '80,443' },
       { label: '53 (DNS)', val: '53' },
@@ -156,6 +162,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
     presets = [
       { label: '80,443 (Web Dual)', val: '80,443' },
       { label: '443 (HTTPS/TLS)', val: '443' },
+      { label: '1234→443 (Map)', val: '1234:443' },
       { label: '8000-8010 (Range)', val: '8000-8010' },
       { label: '2222 (SSH)', val: '2222' },
     ];
@@ -164,6 +171,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
     presets = [
       { label: '80,443 (Web Dual)', val: '80,443' },
       { label: '443 (HTTPS/QUIC)', val: '443' },
+      { label: '1234→443 (Map)', val: '1234:443' },
       { label: '8000-8010 (Range)', val: '8000-8010' },
       { label: '1080 (SOCKS5)', val: '1080' },
     ];
@@ -213,6 +221,9 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
               onChange={(e) => setName(e.target.value)}
               disabled={isEdit}
               placeholder="e.g. web-forward"
+              maxLength={32}
+              pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,31}"
+              title="1-32 characters: letters, numbers, underscore, or hyphen"
               className="w-full px-3.5 py-2 bg-slate-950 border border-white/15 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary disabled:opacity-50"
               required
             />
@@ -316,10 +327,11 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
               type="text"
               value={ports}
               onChange={(e) => setPorts(e.target.value)}
-              placeholder="e.g. 80,443 or 8000-8010"
+              placeholder="e.g. 80,443 · 8000-8010 · 1234:443"
               className="w-full px-3.5 py-2 bg-slate-950 border border-white/15 rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary mb-1.5"
               required
             />
+            <p className="text-[10px] text-text-subtle mb-2">{t('modal_tunnel_ports_help')}</p>
             {/* Chips */}
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[11px] text-text-subtle">{t('modal_tunnel_presets')}:</span>

@@ -1234,30 +1234,89 @@ validate_tunnel_name() {
   [[ "$1" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]{0,31}$ ]]
 }
 
-expand_port_spec() {
-  local spec="${1//[[:space:]]/}" item start end port
-  local -a expanded=()
-  local -A seen=()
+expand_port_token() {
+  local token="$1" output_name="$2" start end port
+  local -n output_ref="$output_name"
+  output_ref=()
+
+  if [[ "$token" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+    start="${BASH_REMATCH[1]}"
+    end="${BASH_REMATCH[2]}"
+    (( start >= 1 && end <= 65535 && start <= end )) || return 1
+    (( end - start <= 255 )) || return 1
+    for ((port=start; port<=end; port++)); do output_ref+=("$port"); done
+  elif valid_port "$token"; then
+    output_ref+=("$token")
+  else
+    return 1
+  fi
+}
+
+# Expand a port specification into "listen_port<TAB>target_port" pairs.
+# Backward-compatible forms keep the same port on both sides:
+#   443                 -> 443 -> 443
+#   80,443,8000-8002    -> same-port mappings
+# Port mapping forms use LISTEN:TARGET:
+#   1234:443            -> 1234 -> 443
+#   1000-1002:2000-2002 -> pairwise range mapping
+#   1000-1002:443       -> all three listen ports -> 443
+expand_port_mappings() {
+  local spec="${1//[[:space:]]/}" item listen_token target_token idx listen_port target_port
+  local -a items=() listen_ports=() target_ports=()
+  local -A seen_target=()
+  local count=0
+
+  [[ -n "$spec" ]] || return 1
   IFS=',' read -ra items <<< "$spec"
   for item in "${items[@]}"; do
-    if [[ "$item" =~ ^([0-9]+)-([0-9]+)$ ]]; then
-      start="${BASH_REMATCH[1]}"
-      end="${BASH_REMATCH[2]}"
-      (( start >= 1 && end <= 65535 && start <= end )) || return 1
-      (( end - start <= 255 )) || return 1
-      for ((port=start; port<=end; port++)); do expanded+=("$port"); done
-    elif valid_port "$item"; then
-      expanded+=("$item")
+    [[ -n "$item" ]] || return 1
+
+    if [[ "$item" == *:* ]]; then
+      [[ "$item" =~ ^([^:]+):([^:]+)$ ]] || return 1
+      listen_token="${BASH_REMATCH[1]}"
+      target_token="${BASH_REMATCH[2]}"
     else
+      listen_token="$item"
+      target_token="$item"
+    fi
+
+    expand_port_token "$listen_token" listen_ports || return 1
+    expand_port_token "$target_token" target_ports || return 1
+
+    if ((${#target_ports[@]} != 1 && ${#target_ports[@]} != ${#listen_ports[@]})); then
       return 1
     fi
+
+    for ((idx=0; idx<${#listen_ports[@]}; idx++)); do
+      listen_port="${listen_ports[$idx]}"
+      if ((${#target_ports[@]} == 1)); then
+        target_port="${target_ports[0]}"
+      else
+        target_port="${target_ports[$idx]}"
+      fi
+
+      if [[ -n "${seen_target[$listen_port]:-}" ]]; then
+        [[ "${seen_target[$listen_port]}" == "$target_port" ]] || return 1
+        continue
+      fi
+
+      seen_target["$listen_port"]="$target_port"
+      ((count+=1))
+      (( count <= 256 )) || return 1
+      printf '%s\t%s\n' "$listen_port" "$target_port"
+    done
   done
-  ((${#expanded[@]} > 0 && ${#expanded[@]} <= 256)) || return 1
-  for port in "${expanded[@]}"; do
-    [[ -n "${seen[$port]:-}" ]] && continue
-    seen["$port"]=1
-    printf '%s\n' "$port"
-  done
+
+  (( count > 0 ))
+}
+
+# Compatibility helper used by collision checks: emit only inbound/listen ports.
+expand_port_spec() {
+  local mappings listen_port target_port
+  mappings="$(expand_port_mappings "$1")" || return 1
+  while IFS=$'\t' read -r listen_port target_port; do
+    [[ -n "$listen_port" ]] && printf '%s\n' "$listen_port"
+  done <<< "$mappings"
 }
 
 discover_mesh_nodes() {
@@ -1353,7 +1412,7 @@ EOF
 
 generate_haproxy_config() {
   mkdir -p "$HAPROXY_TUNNEL_DIR"
-  local tmp="${HAPROXY_CONFIG}.tmp" definition name target port_spec port safe
+  local tmp="${HAPROXY_CONFIG}.tmp" definition name target port_spec listen_port target_port safe
   {
     cat <<'EOF'
 global
@@ -1380,19 +1439,19 @@ EOF
       # shellcheck disable=SC2153
       port_spec="$PORT_SPEC"
       safe="${name//-/_}"
-      while IFS= read -r port; do
+      while IFS=$'\t' read -r listen_port target_port; do
         cat <<EOF
 
-frontend xr_${safe}_${port}
-    bind 0.0.0.0:${port}
+frontend xr_${safe}_${listen_port}
+    bind 0.0.0.0:${listen_port}
     mode tcp
-    default_backend xr_${safe}_${port}_backend
+    default_backend xr_${safe}_${listen_port}_backend
 
-backend xr_${safe}_${port}_backend
+backend xr_${safe}_${listen_port}_backend
     mode tcp
-    server ${safe}_node ${target}:${port} check inter 5s fall 3 rise 2
+    server ${safe}_node ${target}:${target_port} check inter 5s fall 3 rise 2
 EOF
-      done < <(expand_port_spec "$port_spec")
+      done < <(expand_port_mappings "$port_spec")
     done
   } > "$tmp"
   mv -f "$tmp" "$HAPROXY_CONFIG"
@@ -1479,12 +1538,12 @@ save_haproxy_tunnel() {
 
 create_haproxy_tunnel_noninteractive() {
   require_root
-  install_haproxy_runtime
   local name="${1:-}" target="${2:-}" ports="${3:-}"
-  validate_tunnel_name "$name" || { fail "Enter a valid tunnel name with up to 32 characters."; return 1; }
+  validate_tunnel_name "$name" || { fail "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."; return 1; }
   [[ ! -f "${HAPROXY_TUNNEL_DIR}/${name}.env" ]] || { fail "A tunnel with this name already exists."; return 1; }
   valid_ip "$target" || { fail "Target must be a valid 10.x.x.x mesh IP."; return 1; }
-  expand_port_spec "$ports" >/dev/null || { fail "Invalid port list or range."; return 1; }
+  expand_port_spec "$ports" >/dev/null || { fail "Invalid port specification. Use ports/ranges or LISTEN:TARGET mappings."; return 1; }
+  install_haproxy_runtime
   validate_haproxy_ports "$name" "$ports" || return 1
 
   save_haproxy_tunnel "$name" "$target" "$ports"
@@ -1514,12 +1573,12 @@ delete_haproxy_tunnel_noninteractive() {
 
 edit_haproxy_tunnel_noninteractive() {
   require_root
-  install_haproxy_runtime
   local name="${1:-}" target="${2:-}" ports="${3:-}"
-  validate_tunnel_name "$name" || { fail "Enter a valid tunnel name with up to 32 characters."; return 1; }
+  validate_tunnel_name "$name" || { fail "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."; return 1; }
   [[ -f "${HAPROXY_TUNNEL_DIR}/${name}.env" ]] || { fail "HAProxy tunnel '${name}' not found."; return 1; }
   valid_ip "$target" || { fail "Target must be a valid 10.x.x.x mesh IP."; return 1; }
-  expand_port_spec "$ports" >/dev/null || { fail "Invalid port list or range."; return 1; }
+  expand_port_spec "$ports" >/dev/null || { fail "Invalid port specification. Use ports/ranges or LISTEN:TARGET mappings."; return 1; }
+  install_haproxy_runtime
   validate_haproxy_ports "$name" "$ports" || return 1
 
   local backup
@@ -1703,7 +1762,7 @@ EOF_SERVICE
 generate_iptables_apply_script() {
   mkdir -p "$IPTABLES_TUNNEL_DIR" "$INSTALL_DIR"
   local tmp="${IPTABLES_APPLY_SCRIPT}.tmp"
-  local definition target port_spec protocol in_if source_cidr proto port
+  local definition target port_spec protocol in_if source_cidr proto listen_port target_port
   local TUNNEL_NAME TARGET_IP PORT_SPEC FORWARD_PROTOCOL IN_IF SOURCE_CIDR
 
   cat > "$tmp" <<'EOF_SCRIPT'
@@ -1758,23 +1817,23 @@ EOF_SCRIPT
 
     # shellcheck disable=SC2016,SC2129
     while IFS= read -r proto; do
-      while IFS= read -r port; do
+      while IFS=$'\t' read -r listen_port target_port; do
         printf '  "$IPT" -w -t nat -A "$DNAT_CHAIN"' >> "$tmp"
         [[ "$in_if" == "any" ]] || printf ' -i %q' "$in_if" >> "$tmp"
         printf ' -s %q -p %q --dport %q -j DNAT --to-destination %q\n' \
-          "$source_cidr" "$proto" "$port" "${target}:${port}" >> "$tmp"
+          "$source_cidr" "$proto" "$listen_port" "${target}:${target_port}" >> "$tmp"
 
         printf '  "$IPT" -w -t filter -A "$FWD_CHAIN"' >> "$tmp"
         [[ "$in_if" == "any" ]] || printf ' -i %q' "$in_if" >> "$tmp"
         printf ' -s %q -p %q -d %q --dport %q -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT\n' \
-          "$source_cidr" "$proto" "$target" "$port" >> "$tmp"
+          "$source_cidr" "$proto" "$target" "$target_port" >> "$tmp"
 
         printf '  "$IPT" -w -t filter -A "$FWD_CHAIN" -p %q -s %q --sport %q -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT\n' \
-          "$proto" "$target" "$port" >> "$tmp"
+          "$proto" "$target" "$target_port" >> "$tmp"
 
         printf '  "$IPT" -w -t nat -A "$SNAT_CHAIN" -p %q -d %q --dport %q -m conntrack --ctstate DNAT -j MASQUERADE\n' \
-          "$proto" "$target" "$port" >> "$tmp"
-      done < <(expand_port_spec "$port_spec")
+          "$proto" "$target" "$target_port" >> "$tmp"
+      done < <(expand_port_mappings "$port_spec")
     done < <(iptables_protocols "$protocol")
   done
 
@@ -1856,15 +1915,15 @@ disable_iptables_tunnels() {
 
 create_iptables_tunnel_noninteractive() {
   require_root
-  install_iptables_runtime
   local name="${1:-}" target="${2:-}" ports="${3:-}" protocol="${4:-udp}" in_if="${5:-any}" source_cidr="${6:-0.0.0.0/0}"
-  validate_tunnel_name "$name" || { fail "Enter a valid tunnel name with up to 32 characters."; return 1; }
+  validate_tunnel_name "$name" || { fail "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."; return 1; }
   [[ ! -f "${IPTABLES_TUNNEL_DIR}/${name}.env" ]] || { fail "A tunnel with this name already exists."; return 1; }
   valid_ip "$target" || { fail "Target must be a valid 10.x.x.x mesh IP."; return 1; }
   [[ "$protocol" =~ ^(tcp|udp|both)$ ]] || { fail "Protocol must be tcp, udp, or both."; return 1; }
   validate_iptables_interface "$in_if" || { fail "Interface '${in_if}' does not exist."; return 1; }
   valid_ipv4_cidr "$source_cidr" || { fail "Invalid source IPv4/CIDR '${source_cidr}'."; return 1; }
-  expand_port_spec "$ports" >/dev/null || { fail "Invalid port specification."; return 1; }
+  expand_port_spec "$ports" >/dev/null || { fail "Invalid port specification. Use ports/ranges or LISTEN:TARGET mappings."; return 1; }
+  install_iptables_runtime
   validate_iptables_ports "$name" "$protocol" "$ports" "$in_if" || return 1
 
   save_iptables_tunnel "$name" "$target" "$ports" "$protocol" "$in_if" "$source_cidr"
@@ -1892,15 +1951,15 @@ delete_iptables_tunnel_noninteractive() {
 
 edit_iptables_tunnel_noninteractive() {
   require_root
-  install_iptables_runtime
   local name="${1:-}" target="${2:-}" ports="${3:-}" protocol="${4:-udp}" in_if="${5:-any}" source_cidr="${6:-0.0.0.0/0}"
-  validate_tunnel_name "$name" || { fail "Enter a valid tunnel name with up to 32 characters."; return 1; }
+  validate_tunnel_name "$name" || { fail "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."; return 1; }
   [[ -f "${IPTABLES_TUNNEL_DIR}/${name}.env" ]] || { fail "iptables tunnel '${name}' not found."; return 1; }
   valid_ip "$target" || { fail "Target must be a valid 10.x.x.x mesh IP."; return 1; }
   [[ "$protocol" =~ ^(tcp|udp|both)$ ]] || { fail "Protocol must be tcp, udp, or both."; return 1; }
   validate_iptables_interface "$in_if" || { fail "Interface '${in_if}' does not exist."; return 1; }
   valid_ipv4_cidr "$source_cidr" || { fail "Invalid source IPv4/CIDR '${source_cidr}'."; return 1; }
-  expand_port_spec "$ports" >/dev/null || { fail "Invalid port specification."; return 1; }
+  expand_port_spec "$ports" >/dev/null || { fail "Invalid port specification. Use ports/ranges or LISTEN:TARGET mappings."; return 1; }
+  install_iptables_runtime
   validate_iptables_ports "$name" "$protocol" "$ports" "$in_if" || return 1
 
   local backup
@@ -2082,7 +2141,7 @@ generate_gost_config() {
   fi
 
   mkdir -p "$(dirname "$GOST_CONFIG_FILE")"
-  local tmp first_service=1 definition port
+  local tmp first_service=1 definition listen_port target_port
   tmp="$(mktemp)"
 
   {
@@ -2100,8 +2159,8 @@ generate_gost_config() {
 
       [[ -n "$target" && -n "$port_spec" ]] || continue
 
-      while IFS= read -r port; do
-        [[ -n "$port" ]] || continue
+      while IFS=$'\t' read -r listen_port target_port; do
+        [[ -n "$listen_port" && -n "$target_port" ]] || continue
 
         if [[ "$protocol" == "tcp" || "$protocol" == "both" ]]; then
           if (( first_service )); then
@@ -2111,8 +2170,8 @@ generate_gost_config() {
           fi
           cat <<EOF_JSON_TCP
     {
-      "name": "${name}-tcp-${port}",
-      "addr": ":${port}",
+      "name": "${name}-tcp-${listen_port}",
+      "addr": ":${listen_port}",
       "handler": {
         "type": "tcp"
       },
@@ -2122,8 +2181,8 @@ generate_gost_config() {
       "forwarder": {
         "nodes": [
           {
-            "name": "target-tcp-${port}",
-            "addr": "${target}:${port}"
+            "name": "target-tcp-${listen_port}",
+            "addr": "${target}:${target_port}"
           }
         ]
       }
@@ -2139,8 +2198,8 @@ EOF_JSON_TCP
           fi
           cat <<EOF_JSON_UDP
     {
-      "name": "${name}-udp-${port}",
-      "addr": ":${port}",
+      "name": "${name}-udp-${listen_port}",
+      "addr": ":${listen_port}",
       "handler": {
         "type": "udp"
       },
@@ -2150,15 +2209,15 @@ EOF_JSON_TCP
       "forwarder": {
         "nodes": [
           {
-            "name": "target-udp-${port}",
-            "addr": "${target}:${port}"
+            "name": "target-udp-${listen_port}",
+            "addr": "${target}:${target_port}"
           }
         ]
       }
     }
 EOF_JSON_UDP
         fi
-      done < <(expand_port_spec "$port_spec")
+      done < <(expand_port_mappings "$port_spec")
     done
     printf '\n  ]\n}\n'
   } > "$tmp"
@@ -2185,13 +2244,13 @@ apply_gost_config() {
 
 create_gost_tunnel_noninteractive() {
   require_root
-  install_gost_runtime
   local name="${1:-}" target="${2:-}" ports="${3:-}" protocol="${4:-both}"
   protocol="${protocol,,}"
-  validate_tunnel_name "$name" || { fail "Enter a valid tunnel name with up to 32 characters."; return 1; }
+  validate_tunnel_name "$name" || { fail "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."; return 1; }
   [[ ! -f "${GOST_TUNNEL_DIR}/${name}.env" ]] || { fail "A tunnel with this name already exists."; return 1; }
   valid_ip "$target" || { fail "Target must be a valid 10.x.x.x mesh IP."; return 1; }
-  expand_port_spec "$ports" >/dev/null || { fail "Invalid port list or range."; return 1; }
+  expand_port_spec "$ports" >/dev/null || { fail "Invalid port specification. Use ports/ranges or LISTEN:TARGET mappings."; return 1; }
+  install_gost_runtime
   validate_gost_ports "$name" "$ports" "$protocol" || return 1
 
   save_gost_tunnel "$name" "$target" "$ports" "$protocol"
@@ -2215,13 +2274,13 @@ delete_gost_tunnel_noninteractive() {
 
 edit_gost_tunnel_noninteractive() {
   require_root
-  install_gost_runtime
   local name="${1:-}" target="${2:-}" ports="${3:-}" protocol="${4:-both}"
   protocol="${protocol,,}"
-  validate_tunnel_name "$name" || { fail "Enter a valid tunnel name with up to 32 characters."; return 1; }
+  validate_tunnel_name "$name" || { fail "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."; return 1; }
   [[ -f "${GOST_TUNNEL_DIR}/${name}.env" ]] || { fail "GOST tunnel '${name}' not found."; return 1; }
   valid_ip "$target" || { fail "Target must be a valid 10.x.x.x mesh IP."; return 1; }
-  expand_port_spec "$ports" >/dev/null || { fail "Invalid port list or range."; return 1; }
+  expand_port_spec "$ports" >/dev/null || { fail "Invalid port specification. Use ports/ranges or LISTEN:TARGET mappings."; return 1; }
+  install_gost_runtime
   validate_gost_ports "$name" "$ports" "$protocol" || return 1
 
   local backup
@@ -2321,7 +2380,7 @@ generate_realm_config() {
   fi
 
   mkdir -p "$(dirname "$REALM_CONFIG_FILE")"
-  local tmp first_ep=1 definition port
+  local tmp first_ep=1 definition listen_port target_port
   tmp="$(mktemp)"
 
   {
@@ -2352,8 +2411,8 @@ generate_realm_config() {
 
       [[ -n "$target" && -n "$port_spec" ]] || continue
 
-      while IFS= read -r port; do
-        [[ -n "$port" ]] || continue
+      while IFS=$'\t' read -r listen_port target_port; do
+        [[ -n "$listen_port" && -n "$target_port" ]] || continue
         if (( first_ep )); then
           first_ep=0
         else
@@ -2361,15 +2420,15 @@ generate_realm_config() {
         fi
         cat <<EOF_EP
     {
-      "listen": "0.0.0.0:${port}",
-      "remote": "${target}:${port}",
+      "listen": "0.0.0.0:${listen_port}",
+      "remote": "${target}:${target_port}",
       "network": {
         "no_tcp": ${no_tcp},
         "use_udp": ${use_udp}
       }
     }
 EOF_EP
-      done < <(expand_port_spec "$port_spec")
+      done < <(expand_port_mappings "$port_spec")
     done
     printf '\n  ]\n}\n'
   } > "$tmp"
@@ -2461,13 +2520,13 @@ save_realm_tunnel() {
 
 create_realm_tunnel_noninteractive() {
   require_root
-  install_realm_runtime
   local name="${1:-}" target="${2:-}" ports="${3:-}" protocol="${4:-both}"
   protocol="${protocol,,}"
-  validate_tunnel_name "$name" || { fail "Enter a valid tunnel name with up to 32 characters."; return 1; }
+  validate_tunnel_name "$name" || { fail "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."; return 1; }
   [[ ! -f "${REALM_TUNNEL_DIR}/${name}.env" ]] || { fail "A tunnel with this name already exists."; return 1; }
   valid_ip "$target" || { fail "Target must be a valid 10.x.x.x mesh IP."; return 1; }
-  expand_port_spec "$ports" >/dev/null || { fail "Invalid port list or range."; return 1; }
+  expand_port_spec "$ports" >/dev/null || { fail "Invalid port specification. Use ports/ranges or LISTEN:TARGET mappings."; return 1; }
+  install_realm_runtime
   validate_realm_ports "$name" "$ports" "$protocol" || return 1
 
   save_realm_tunnel "$name" "$target" "$ports" "$protocol"
@@ -2491,13 +2550,13 @@ delete_realm_tunnel_noninteractive() {
 
 edit_realm_tunnel_noninteractive() {
   require_root
-  install_realm_runtime
   local name="${1:-}" target="${2:-}" ports="${3:-}" protocol="${4:-both}"
   protocol="${protocol,,}"
-  validate_tunnel_name "$name" || { fail "Enter a valid tunnel name with up to 32 characters."; return 1; }
+  validate_tunnel_name "$name" || { fail "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."; return 1; }
   [[ -f "${REALM_TUNNEL_DIR}/${name}.env" ]] || { fail "Realm tunnel '${name}' not found."; return 1; }
   valid_ip "$target" || { fail "Target must be a valid 10.x.x.x mesh IP."; return 1; }
-  expand_port_spec "$ports" >/dev/null || { fail "Invalid port list or range."; return 1; }
+  expand_port_spec "$ports" >/dev/null || { fail "Invalid port specification. Use ports/ranges or LISTEN:TARGET mappings."; return 1; }
+  install_realm_runtime
   validate_realm_ports "$name" "$ports" "$protocol" || return 1
 
   local backup
