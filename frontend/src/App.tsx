@@ -650,14 +650,18 @@ export default function App() {
 
           {/* Tab Navigation (When configured) / Setup Mode Bar (When unconfigured) */}
           {isNodeConfigured ? (
-            <div className="flex overflow-x-auto no-scrollbar md:flex-wrap gap-1.5 mb-4 sm:mb-6 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl bg-card/60 border border-card-border backdrop-blur-md shadow-sm">
+            <nav aria-label={t('drawer_tabs')} className="horizontal-scroll flex overflow-x-auto md:flex-wrap gap-1.5 mb-4 sm:mb-6 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl bg-card/60 border border-card-border backdrop-blur-md shadow-sm" role="tablist">
               {tabs.map((tab) => {
                 const isActive = activeTab === tab.id;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 active:scale-95 cursor-pointer whitespace-nowrap shrink-0 ${
+                    role="tab"
+                    aria-selected={isActive}
+                    aria-label={tab.label}
+                    tabIndex={isActive ? 0 : -1}
+                    className={`interactive-min-hit flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 active:scale-95 cursor-pointer whitespace-nowrap shrink-0 ${
                       isActive
                         ? 'bg-primary text-black shadow-md shadow-primary/20 font-bold'
                         : 'text-text-muted hover:text-text-main hover:bg-white/5'
@@ -679,7 +683,7 @@ export default function App() {
                   </button>
                 );
               })}
-            </div>
+            </nav>
           ) : (
             <div className="flex items-center justify-between gap-3 mb-4 sm:mb-6 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl bg-card/70 border border-primary/30 backdrop-blur-md shadow-sm animate-fade-in">
               <div className="flex items-center gap-2 sm:gap-2.5">
@@ -700,7 +704,7 @@ export default function App() {
           )}
 
           {/* Tab Content with Smooth Transition */}
-          <div key={activeTab} className="animate-tab-in">
+          <main id="dashboard-content" role="tabpanel" aria-label={tabs.find((item) => item.id === activeTab)?.label} className="animate-tab-in">
             {activeTab === 'node' && (
               <NodeConfigTab
                 onRefreshStatus={handleRefresh}
@@ -765,7 +769,7 @@ export default function App() {
                 t={t}
               />
             )}
-          </div>
+          </main>
 
           {/* Tunnel Create/Edit Modal */}
           <TunnelModal

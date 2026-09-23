@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Peer } from '../../types';
-import { Search, Copy, Check, Activity, Zap, RefreshCw, Server, ArrowUpCircle, AlertTriangle, Terminal, BadgeCheck } from 'lucide-react';
+import { Search, Copy, Check, Activity, Zap, RefreshCw, Server, ArrowUpCircle, AlertTriangle, Terminal, BadgeCheck, X } from 'lucide-react';
 
 interface PeersTabProps {
   peers: Peer[];
@@ -116,15 +116,26 @@ export const PeersTab: React.FC<PeersTabProps> = ({
       )}
 
       {/* Filter Bar */}
-      <div className="relative mb-4">
-        <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
+      <div className="relative mb-4" role="search">
+        <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" aria-hidden="true" />
         <input
-          type="text"
+          type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t('peers_search_placeholder')}
-          className="w-full ps-9 pe-4 py-2 bg-slate-900/80 border border-white/10 rounded-xl text-xs sm:text-sm text-text-main placeholder-text-subtle focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
+          aria-label={t('peers_search_placeholder')}
+          className="w-full ps-9 pe-10 py-2 bg-slate-900/80 border border-white/10 rounded-xl text-xs sm:text-sm text-text-main placeholder-text-subtle focus:border-primary transition-colors"
         />
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch('')}
+            aria-label={t('btn_clear_search')}
+            className="absolute end-2 top-1/2 -translate-y-1/2 interactive-min-hit inline-flex items-center justify-center rounded-lg text-text-muted hover:text-text-main hover:bg-white/10 transition-colors"
+          >
+            <X className="w-4 h-4" aria-hidden="true" />
+          </button>
+        )}
       </div>
 
       {/* Grid or Empty */}

@@ -203,3 +203,39 @@ body.font-persian,
 .animate-fade-in {
   animation: fadeIn 200ms ease forwards;
 }
+
+
+/* UI/UX Pro Max: Accessibility, Focus & Performance Standards */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+:where(input, select, textarea) {
+  touch-action: manipulation;
+}
+
+button, a {
+  touch-action: manipulation;
+}
+
+/* Reduced motion preference compliance */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Custom horizontal scroll for responsive tab navigation */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

@@ -18,10 +18,19 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   isDeleting,
   t,
 }) => {
+  React.useEffect(() => {
+    if (!isOpen || isDeleting) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isDeleting, onCancel]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="delete-tunnel-title">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
@@ -33,7 +42,8 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
         {/* Close button */}
         <button
           onClick={onCancel}
-          className="absolute top-4 end-4 p-1.5 rounded-lg text-text-muted hover:text-text-main hover:bg-white/10 transition-colors"
+          aria-label={t('btn_cancel')}
+          className="interactive-min-hit absolute top-4 end-4 p-1.5 rounded-lg text-text-muted hover:text-text-main hover:bg-white/10 transition-colors cursor-pointer"
         >
           <X className="w-4 h-4" />
         </button>
@@ -44,7 +54,7 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
         </div>
 
         {/* Title */}
-        <h3 className="text-lg font-bold text-text-main text-center mb-2">
+        <h3 id="delete-tunnel-title" className="text-lg font-bold text-text-main text-center mb-2">
           {t('modal_delete_title')}
         </h3>
 
@@ -66,7 +76,7 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
           <button
             onClick={onCancel}
             disabled={isDeleting}
-            className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm font-medium text-text-muted hover:text-text-main hover:bg-white/10 transition-colors disabled:opacity-50"
+            className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm font-medium text-text-muted hover:text-text-main hover:bg-white/10 transition-colors disabled:opacity-50 cursor-pointer"
           >
             {t('btn_cancel')}
           </button>

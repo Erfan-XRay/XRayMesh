@@ -134,6 +134,9 @@ export const ClusterSyncModal: React.FC<ClusterSyncModalProps> = ({
   return (
     <div
       className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-md"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t('cluster_modal_title')}
       onClick={(e) => {
         if (e.target === e.currentTarget && !isSyncing) {
           handleCloseGracefully();

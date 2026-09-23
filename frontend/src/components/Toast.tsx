@@ -8,7 +8,7 @@ interface ToastProps {
 
 export const ToastContainer: React.FC<ToastProps> = ({ toasts }) => {
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 max-w-sm pointer-events-none">
+    <div className="toast-region fixed bottom-6 right-6 z-50 flex flex-col gap-2 max-w-sm pointer-events-none" role="status" aria-live="polite" aria-atomic="false">
       {toasts.map((toast) => {
         let Icon = Info;
         let borderClass = 'border-primary/30';

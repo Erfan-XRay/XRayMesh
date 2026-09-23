@@ -33,6 +33,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     }
   }, [passwordConfigured]);
 
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isLoading) {
+        setError(null);
+        setIsLoading(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isLoading]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -55,20 +67,21 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const tipCmd = 'sudo xraymesh token';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-modal-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-modal-in" role="dialog" aria-modal="true" aria-labelledby="login-title">
       <div className="w-full max-w-md p-6 rounded-2xl bg-slate-900 border border-white/15 shadow-2xl text-center relative">
         {/* Brand Icon */}
         <div className="flex items-center justify-center mx-auto mb-4">
           <XRayMeshLogo className="w-14 h-14" size={56} glow={true} />
         </div>
 
-        <h2 className="text-lg font-bold text-text-main">{t('modal_login_title')}</h2>
+        <h2 id="login-title" className="text-lg font-bold text-text-main">{t('modal_login_title')}</h2>
         <p className="text-xs text-text-muted mt-1 mb-5">{t('modal_login_desc')}</p>
 
         {/* Tab switch */}
-        <div className="inline-flex rounded-xl bg-white/5 border border-white/10 p-1 mb-4 w-full">
+        <div className="inline-flex rounded-xl bg-white/5 border border-white/10 p-1 mb-4 w-full" role="group" aria-label={t('modal_login_title')}>
           <button
             type="button"
+            aria-pressed={tab === 'pw'}
             onClick={() => {
               if (passwordConfigured) {
                 setTab('pw');
@@ -90,6 +103,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           </button>
           <button
             type="button"
+            aria-pressed={tab === 'tk'}
             onClick={() => {
               setTab('tk');
               setError(null);
@@ -132,7 +146,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             </div>
           )}
 
-          {error && <div className="text-xs text-rose-400 font-medium">{error}</div>}
+          {error && <div className="text-xs text-rose-400 font-medium" role="alert" aria-live="assertive">{error}</div>}
 
           <button
             type="submit"

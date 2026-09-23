@@ -84,8 +84,10 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
     <div className="space-y-6">
       {/* Sub-Tabs Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-2 rounded-xl bg-card border border-card-border backdrop-blur-md">
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label={t('tunnels_subtab_all')}>
           <button
+            type="button"
+            aria-pressed={filter === 'all'}
             onClick={() => setFilter('all')}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
               filter === 'all'
@@ -96,6 +98,8 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
             {t('tunnels_subtab_all')} ({totalCount})
           </button>
           <button
+            type="button"
+            aria-pressed={filter === 'realm'}
             onClick={() => setFilter('realm')}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
               filter === 'realm'
@@ -106,6 +110,8 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
             {t('tunnels_subtab_realm')} ({realmCount})
           </button>
           <button
+            type="button"
+            aria-pressed={filter === 'haproxy'}
             onClick={() => setFilter('haproxy')}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
               filter === 'haproxy'
@@ -116,6 +122,8 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
             {t('tunnels_subtab_haproxy')} ({haproxyCount})
           </button>
           <button
+            type="button"
+            aria-pressed={filter === 'iptables'}
             onClick={() => setFilter('iptables')}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
               filter === 'iptables'
@@ -126,6 +134,8 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
             {t('tunnels_subtab_iptables')} ({iptablesCount})
           </button>
           <button
+            type="button"
+            aria-pressed={filter === 'gost'}
             onClick={() => setFilter('gost')}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
               filter === 'gost'
@@ -145,7 +155,8 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
               <select
                 value={serverFilter}
                 onChange={(e) => setServerFilter(e.target.value)}
-                className="bg-slate-900 border border-white/10 rounded px-2 py-0.5 text-xs text-text-main focus:outline-none focus:border-primary font-mono"
+                aria-label={t('tunnels_filter_server')}
+                className="bg-slate-900 border border-white/10 rounded px-2 py-1 text-xs text-text-main focus:border-primary font-mono"
               >
                 <option value="all">{t('tunnels_filter_all_servers')} ({totalCount})</option>
                 {uniqueNodes.map((n) => (

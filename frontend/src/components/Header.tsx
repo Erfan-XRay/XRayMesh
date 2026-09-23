@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NodeInfo, PaletteId, Language } from '../types';
 import { PaletteDef } from '../theme/palettes';
-import { RefreshCw, LogOut, Palette, Menu } from 'lucide-react';
+import { RefreshCw, LogOut, Palette, Menu, Lock } from 'lucide-react';
 import { XRayMeshLogo } from './XRayMeshLogo';
 
 interface HeaderProps {
@@ -49,8 +49,8 @@ export const Header: React.FC<HeaderProps> = ({
               v{node.xraymesh_version || '2.0.5'}
             </span>
             {node.ssl_enabled && (
-              <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0" title="SSL/TLS Active">
-                <span>🔒</span>
+              <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0" title="SSL/TLS Active" aria-label="SSL/TLS Active">
+                <Lock className="w-3 h-3 text-emerald-400" aria-hidden="true" />
                 <span>SSL</span>
               </span>
             )}
@@ -117,6 +117,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="relative inline-flex rounded-lg bg-white/5 border border-white/10 p-0.5 text-xs font-medium">
           <button
             onClick={() => onSelectLang('en')}
+            aria-pressed={lang === 'en'}
             className={`px-2.5 py-1 rounded-md transition-all ${
               lang === 'en'
                 ? 'bg-primary text-black font-semibold shadow-sm'
@@ -127,6 +128,7 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
           <button
             onClick={() => onSelectLang('fa')}
+            aria-pressed={lang === 'fa'}
             className={`px-2.5 py-1 rounded-md transition-all font-persian ${
               lang === 'fa'
                 ? 'bg-primary text-black font-semibold shadow-sm'
@@ -141,6 +143,8 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="relative">
           <button
             onClick={() => setThemeMenuOpen(!themeMenuOpen)}
+            aria-expanded={themeMenuOpen}
+            aria-haspopup="menu"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-medium text-text-muted hover:text-text-main hover:bg-white/10 transition-colors"
             title={t('theme_selector')}
           >
@@ -162,6 +166,7 @@ export const Header: React.FC<HeaderProps> = ({
                 {availablePalettes.map((p) => (
                   <button
                     key={p.id}
+                    aria-current={paletteId === p.id}
                     onClick={() => {
                       onSelectPalette(p.id);
                       setThemeMenuOpen(false);

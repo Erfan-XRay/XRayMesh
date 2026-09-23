@@ -13,6 +13,7 @@ export const translations = {
     btn_delete: "Delete",
     btn_edit: "Edit",
     btn_copied: "Copied to clipboard",
+    btn_clear_search: "Clear search",
 
     // Themes & Lang
     theme_selector: "Color Palette",
@@ -83,7 +84,7 @@ export const translations = {
     node_invite_desc: "Copy this invite token and paste it into another server's Web UI to automatically join this mesh network in 1 second.",
     node_invite_public_endpoint_label: "Server Public IP / Domain (Endpoint)",
     node_invite_endpoint_placeholder: "e.g. 5.161.20.30 or mynode.example.com",
-    node_invite_no_ip_warning: "⚠️ Public IP was not auto-detected. Please enter your server's Public IP or domain above before copying.",
+    node_invite_no_ip_warning: "Public IP was not auto-detected. Please enter your server's Public IP or domain above before copying.",
     node_btn_copy_invite: "Copy Mesh Invite Token",
     node_join_title: "Join Another Server's Mesh Network",
     node_join_desc: "Paste an invite token (xrmesh://...) from another server to automatically configure this node and connect to it.",
@@ -183,7 +184,7 @@ export const translations = {
     cluster_status_prepared: "Prepared & Verified",
     cluster_status_committed: "Applied & Restarted",
     cluster_status_reconnected: "Online on New Settings",
-    cluster_celebrate_title: "Cluster Synchronized Successfully! 🎉",
+    cluster_celebrate_title: "Cluster Synchronized Successfully!",
     cluster_celebrate_desc: "All connected mesh nodes have successfully applied the configuration and re-established secure links.",
     cluster_celebrate_closing: "Closing automatically in a moment...",
     cluster_btn_close_now: "Close Now",
@@ -380,6 +381,7 @@ export const translations = {
     btn_delete: "حذف",
     btn_edit: "ویرایش",
     btn_copied: "در کلیپ‌بورد کپی شد",
+    btn_clear_search: "پاک کردن جستجو",
 
     // Themes & Lang
     theme_selector: "پالت رنگی",
@@ -450,7 +452,7 @@ export const translations = {
     node_invite_desc: "این کد دعوت را کپی کرده و در پنل وب سرور دیگر پیست کنید تا هر دو سرور در ۱ ثانیه به هم مِش شوند.",
     node_invite_public_endpoint_label: "آدرس پابلیک سرور / دامنه (جهت اتصال دیگران)",
     node_invite_endpoint_placeholder: "مثال: 5.161.20.30 یا mynode.example.com",
-    node_invite_no_ip_warning: "⚠️ آی‌پی پابلیک سرور خودکار شناسایی نشد. لطفاً قبل از کپی، آی‌پی پابلیک یا دامنه را وارد کنید.",
+    node_invite_no_ip_warning: "آی‌پی پابلیک سرور خودکار شناسایی نشد. لطفاً قبل از کپی، آی‌پی پابلیک یا دامنه را وارد کنید.",
     node_btn_copy_invite: "کپی کد دعوت مش",
     node_join_title: "پیوستن به شبکه مش سرور دیگر",
     node_join_desc: "کد دعوت دریافتی (xrmesh://...) از سرور دیگر را پیست کنید تا این سرور خودکار به آن متصل شود.",
@@ -550,7 +552,7 @@ export const translations = {
     cluster_status_prepared: "آماده‌سازی و اعتبارسنجی شد",
     cluster_status_committed: "اعمال شد و در حال ریستارت",
     cluster_status_reconnected: "آنلاین با تنظیمات جدید",
-    cluster_celebrate_title: "همگام‌سازی شبکه با موفقیت انجام شد! 🎉",
+    cluster_celebrate_title: "همگام‌سازی شبکه با موفقیت انجام شد!",
     cluster_celebrate_desc: "تنظیمات جدید با موفقیت روی تمام سرورهای متصل اعمال شد و ارتباطات مش با موفقیت آنلاین گردید.",
     cluster_celebrate_closing: "پنجره تا لحظاتی دیگر به‌صورت خودکار بسته می‌شود...",
     cluster_btn_close_now: "بستن پنجره",

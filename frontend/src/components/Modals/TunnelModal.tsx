@@ -42,6 +42,15 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
   const [loadingInterfaces, setLoadingInterfaces] = useState(false);
 
   useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isLoading) onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isLoading, onClose]);
+
+  useEffect(() => {
     if (!isOpen || type !== 'iptables') return;
 
     let isMounted = true;
@@ -170,13 +179,14 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-modal-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-modal-in" role="dialog" aria-modal="true" aria-labelledby="tunnel-title">
       <div className="w-full max-w-lg p-6 rounded-2xl bg-slate-900 border border-white/15 shadow-2xl relative">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-bold text-text-main">{title}</h2>
+          <h2 id="tunnel-title" className="text-base font-bold text-text-main">{title}</h2>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-text-muted hover:text-text-main hover:bg-white/10 transition-colors"
+            aria-label={t('btn_cancel')}
+            className="interactive-min-hit p-1 rounded-lg text-text-muted hover:text-text-main hover:bg-white/10 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>

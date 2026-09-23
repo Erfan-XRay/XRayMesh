@@ -1,7 +1,7 @@
 {
-  "version": "2.1.2",
-  "release_name": "XRayMesh v2.1.2 (Multi-Node Diagnostics & Speedtest)",
-  "release_date": "2026-09-22",
-  "changelog": "Multi-node in-mesh ping & latency diagnostics (any node to any node), multi-node iperf3 speedtest suite, setup wizard lockdown mode, and invite-based CLI mesh joining.",
+  "version": "2.1.3",
+  "release_name": "XRayMesh v2.1.3 (Web UI Accessibility & UX Polish)",
+  "release_date": "2026-09-23",
+  "changelog": "Web dashboard accessibility and UX polish: keyboard navigation with visible focus rings, semantic tab/dialog landmarks with Escape handling, screen-reader live regions and labeled controls, global text-selection unlock, searchable peers with clear-search, and touch-friendly targets with reduced-motion support.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh) update"
 }

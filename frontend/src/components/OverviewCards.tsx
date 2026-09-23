@@ -39,7 +39,7 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 mb-4 sm:mb-6">
       {/* 1. Mesh Virtual IP */}
-      <div className="relative overflow-hidden p-3 sm:p-4 md:p-5 rounded-2xl bg-card border border-card-border hover:border-primary/40 shadow-sm hover:shadow-xl hover:shadow-primary/5 backdrop-blur-xl transition-all duration-300 before:absolute before:top-0 before:inset-x-0 before:h-[2px] before:bg-gradient-to-r before:from-transparent before:via-primary/50 before:to-transparent">
+      <div className="interactive-card relative overflow-hidden p-3 sm:p-4 md:p-5 rounded-2xl bg-card border border-card-border hover:border-primary/40 shadow-sm hover:shadow-xl hover:shadow-primary/5 backdrop-blur-xl transition-all duration-300 before:absolute before:top-0 before:inset-x-0 before:h-[2px] before:bg-gradient-to-r before:from-transparent before:via-primary/50 before:to-transparent">
         <div className="flex items-center justify-between mb-1.5 sm:mb-2.5">
           <span className="text-[11px] sm:text-xs font-semibold text-text-muted truncate">{t('vip_title')}</span>
           <span className="hidden xs:inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono font-bold bg-primary/10 text-primary border border-primary/20 shrink-0">
@@ -54,8 +54,10 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({
           {node.ipv4 && (
             <button
               onClick={() => onCopy(node.ipv4!)}
-              className="p-1 sm:p-1.5 rounded-lg sm:rounded-xl bg-white/5 border border-white/10 text-text-muted hover:text-primary hover:border-primary/40 active:scale-90 transition-all cursor-pointer shrink-0"
-              title={t('btn_copied')}
+              className="interactive-min-hit p-1 sm:p-1.5 rounded-lg sm:rounded-xl bg-white/5 border border-white/10 text-text-muted hover:text-primary hover:border-primary/40 active:scale-90 transition-all cursor-pointer shrink-0"
+              title={copiedKey === node.ipv4 ? t('btn_copied') : t('vip_title')}
+              aria-label={copiedKey === node.ipv4 ? t('btn_copied') : t('vip_title')}
+              aria-pressed={copiedKey === node.ipv4}
             >
               {copiedKey === node.ipv4 ? (
                 <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-accent-green" />
@@ -72,7 +74,7 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({
       </div>
 
       {/* 2. Connected Peers */}
-      <div className="relative overflow-hidden p-3 sm:p-4 md:p-5 rounded-2xl bg-card border border-card-border hover:border-primary/40 shadow-sm hover:shadow-xl hover:shadow-primary/5 backdrop-blur-xl transition-all duration-300 before:absolute before:top-0 before:inset-x-0 before:h-[2px] before:bg-gradient-to-r before:from-transparent before:via-emerald-500/50 before:to-transparent">
+      <div className="interactive-card relative overflow-hidden p-3 sm:p-4 md:p-5 rounded-2xl bg-card border border-card-border hover:border-primary/40 shadow-sm hover:shadow-xl hover:shadow-primary/5 backdrop-blur-xl transition-all duration-300 before:absolute before:top-0 before:inset-x-0 before:h-[2px] before:bg-gradient-to-r before:from-transparent before:via-emerald-500/50 before:to-transparent">
         <div className="flex items-center justify-between mb-1.5 sm:mb-2.5">
           <span className="text-[11px] sm:text-xs font-semibold text-text-muted truncate">{t('peers_title')}</span>
           <div className="p-1 sm:p-1.5 rounded-lg sm:rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
@@ -94,7 +96,7 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({
       </div>
 
       {/* 3. Average Latency */}
-      <div className="relative overflow-hidden p-3 sm:p-4 md:p-5 rounded-2xl bg-card border border-card-border hover:border-primary/40 shadow-sm hover:shadow-xl hover:shadow-primary/5 backdrop-blur-xl transition-all duration-300 before:absolute before:top-0 before:inset-x-0 before:h-[2px] before:bg-gradient-to-r before:from-transparent before:via-purple-500/50 before:to-transparent">
+      <div className="interactive-card relative overflow-hidden p-3 sm:p-4 md:p-5 rounded-2xl bg-card border border-card-border hover:border-primary/40 shadow-sm hover:shadow-xl hover:shadow-primary/5 backdrop-blur-xl transition-all duration-300 before:absolute before:top-0 before:inset-x-0 before:h-[2px] before:bg-gradient-to-r before:from-transparent before:via-purple-500/50 before:to-transparent">
         <div className="flex items-center justify-between mb-1.5 sm:mb-2.5">
           <span className="text-[11px] sm:text-xs font-semibold text-text-muted truncate">{t('latency_title')}</span>
           <div className="p-1 sm:p-1.5 rounded-lg sm:rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 shrink-0">
@@ -108,7 +110,7 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({
       </div>
 
       {/* 4. Host Server Resources (CPU & RAM) */}
-      <div className="relative overflow-hidden p-3 sm:p-4 md:p-5 rounded-2xl bg-card border border-card-border hover:border-primary/40 shadow-sm hover:shadow-xl hover:shadow-primary/5 backdrop-blur-xl transition-all duration-300 before:absolute before:top-0 before:inset-x-0 before:h-[2px] before:bg-gradient-to-r before:from-transparent before:via-amber-500/50 before:to-transparent">
+      <div className="interactive-card relative overflow-hidden p-3 sm:p-4 md:p-5 rounded-2xl bg-card border border-card-border hover:border-primary/40 shadow-sm hover:shadow-xl hover:shadow-primary/5 backdrop-blur-xl transition-all duration-300 before:absolute before:top-0 before:inset-x-0 before:h-[2px] before:bg-gradient-to-r before:from-transparent before:via-amber-500/50 before:to-transparent">
         <div className="flex items-center justify-between mb-1.5 sm:mb-2">
           <span className="text-[11px] sm:text-xs font-semibold text-text-muted truncate">{t('resources_title')}</span>
           <div className="p-1 sm:p-1.5 rounded-lg sm:rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
@@ -122,7 +124,7 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({
             <span className="text-text-muted truncate">{t('cpu_usage')}</span>
             <span className="font-mono font-semibold text-text-main tabular-nums">{cpuPct}%</span>
           </div>
-          <div className="h-1.5 sm:h-2 w-full bg-white/10 rounded-full overflow-hidden p-0.5">
+          <div className="h-1.5 sm:h-2 w-full bg-white/10 rounded-full overflow-hidden p-0.5" role="progressbar" aria-label={t('cpu_usage')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={cpuPct}>
             <div
               className={`h-full rounded-full transition-all duration-500 shadow-sm ${
                 cpuPct > 85
@@ -144,7 +146,7 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({
               {ramPct}%{usedRamStr && totalRamStr ? <span className="hidden sm:inline text-text-muted font-normal"> ({usedRamStr})</span> : ''}
             </span>
           </div>
-          <div className="h-1.5 sm:h-2 w-full bg-white/10 rounded-full overflow-hidden p-0.5">
+          <div className="h-1.5 sm:h-2 w-full bg-white/10 rounded-full overflow-hidden p-0.5" role="progressbar" aria-label={t('ram_usage')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={ramPct}>
             <div
               className={`h-full rounded-full transition-all duration-500 shadow-sm ${
                 ramPct > 85
