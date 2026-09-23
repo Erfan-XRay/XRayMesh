@@ -50,7 +50,7 @@ const EMPTY_STATUS: StatusResponse = {
 
 export default function App() {
   // Hooks
-  const { paletteId, setPaletteId, availablePalettes } = useTheme();
+  const { paletteId, setPaletteId, themeMode, setThemeMode, availablePalettes } = useTheme();
   const { lang, setLang, isRtl, t } = useTranslation();
 
   // Auth state
@@ -568,6 +568,8 @@ export default function App() {
               onSelectLang={setLang}
               paletteId={paletteId}
               onSelectPalette={setPaletteId}
+              themeMode={themeMode}
+              onSelectThemeMode={setThemeMode}
               availablePalettes={availablePalettes}
               t={t}
               isRtl={isRtl}
@@ -837,6 +839,8 @@ export default function App() {
             onSelectLang={setLang}
             paletteId={paletteId}
             onSelectPalette={setPaletteId}
+            themeMode={themeMode}
+            onSelectThemeMode={setThemeMode}
             availablePalettes={availablePalettes}
             t={t}
             isRtl={isRtl}

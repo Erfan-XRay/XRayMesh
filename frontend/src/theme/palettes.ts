@@ -6,7 +6,39 @@ export interface PaletteDef {
   nameFa: string;
   primaryColor: string;
   vars: Record<string, string>;
+  lightVars: Record<string, string>;
 }
+
+const makeLightVars = (
+  primary: string,
+  primaryHover: string,
+  primarySubtle: string,
+  primaryBorder: string,
+): Record<string, string> => ({
+  "--bg-dark": "#f7f9fc",
+  "--card-bg": "rgba(255, 255, 255, 0.92)",
+  "--surface-dark": "#eef2f7",
+  "--input-bg": "#ffffff",
+  "--modal-bg": "#ffffff",
+  "--card-border": "rgba(15, 23, 42, 0.10)",
+  "--card-border-hover": primaryBorder,
+  "--primary": primary,
+  "--primary-hover": primaryHover,
+  "--primary-subtle": primarySubtle,
+  "--primary-border": primaryBorder,
+  "--accent-green": "#059669",
+  "--accent-yellow": "#d97706",
+  "--accent-red": "#e11d48",
+  "--text-main": "#0f172a",
+  "--text-muted": "#475569",
+  "--text-subtle": "#64748b",
+  "--on-primary": "#ffffff",
+  "--success-text": "#047857",
+  "--warning-text": "#b45309",
+  "--danger-text": "#be123c",
+  "--info-text": "#0369a1",
+  "--grid-line": "rgba(15, 23, 42, 0.055)",
+});
 
 export const PALETTES: Record<PaletteId, PaletteDef> = {
   sky: {
@@ -32,7 +64,9 @@ export const PALETTES: Record<PaletteId, PaletteDef> = {
       "--text-main": "#f8fafc",
       "--text-muted": "#94a3b8",
       "--text-subtle": "#64748b",
+      "--on-primary": "#000000",
     },
+    lightVars: makeLightVars("#0284c7", "#0369a1", "rgba(2, 132, 199, 0.10)", "rgba(2, 132, 199, 0.32)"),
   },
   emerald: {
     id: "emerald",
@@ -57,7 +91,9 @@ export const PALETTES: Record<PaletteId, PaletteDef> = {
       "--text-main": "#f0fdf4",
       "--text-muted": "#86efac",
       "--text-subtle": "#4ade80",
+      "--on-primary": "#000000",
     },
+    lightVars: makeLightVars("#047857", "#065f46", "rgba(4, 120, 87, 0.10)", "rgba(4, 120, 87, 0.32)"),
   },
   violet: {
     id: "violet",
@@ -82,7 +118,9 @@ export const PALETTES: Record<PaletteId, PaletteDef> = {
       "--text-main": "#faf5ff",
       "--text-muted": "#d8b4fe",
       "--text-subtle": "#a855f7",
+      "--on-primary": "#000000",
     },
+    lightVars: makeLightVars("#7e22ce", "#6b21a8", "rgba(126, 34, 206, 0.10)", "rgba(126, 34, 206, 0.32)"),
   },
   amber: {
     id: "amber",
@@ -107,7 +145,9 @@ export const PALETTES: Record<PaletteId, PaletteDef> = {
       "--text-main": "#fffbeb",
       "--text-muted": "#fde68a",
       "--text-subtle": "#fbbf24",
+      "--on-primary": "#000000",
     },
+    lightVars: makeLightVars("#b45309", "#92400e", "rgba(180, 83, 9, 0.10)", "rgba(180, 83, 9, 0.32)"),
   },
   rose: {
     id: "rose",
@@ -132,7 +172,9 @@ export const PALETTES: Record<PaletteId, PaletteDef> = {
       "--text-main": "#fff1f2",
       "--text-muted": "#fecdd3",
       "--text-subtle": "#fb7185",
+      "--on-primary": "#000000",
     },
+    lightVars: makeLightVars("#be123c", "#9f1239", "rgba(190, 18, 60, 0.10)", "rgba(190, 18, 60, 0.32)"),
   },
   oled: {
     id: "oled",
@@ -157,6 +199,8 @@ export const PALETTES: Record<PaletteId, PaletteDef> = {
       "--text-main": "#ffffff",
       "--text-muted": "#a1a1aa",
       "--text-subtle": "#71717a",
+      "--on-primary": "#000000",
     },
+    lightVars: makeLightVars("#0369a1", "#075985", "rgba(3, 105, 161, 0.10)", "rgba(3, 105, 161, 0.32)"),
   },
 };

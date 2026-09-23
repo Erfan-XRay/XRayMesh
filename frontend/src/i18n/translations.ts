@@ -17,6 +17,10 @@ export const translations = {
 
     // Themes & Lang
     theme_selector: "Color Palette",
+    theme_mode: "Appearance",
+    theme_auto: "Auto",
+    theme_light: "Light",
+    theme_dark: "Dark",
     lang_selector: "Language",
 
     // Overview Cards
@@ -86,6 +90,7 @@ export const translations = {
     node_invite_endpoint_placeholder: "e.g. 5.161.20.30 or mynode.example.com",
     node_invite_no_ip_warning: "Public IP was not auto-detected. Please enter your server's Public IP or domain above before copying.",
     node_btn_copy_invite: "Copy Mesh Invite Token",
+    node_invite_link_label: "Complete Mesh Invite Link",
     node_join_title: "Join Another Server's Mesh Network",
     node_join_desc: "Paste an invite token (xrmesh://...) from another server to automatically configure this node and connect to it.",
     node_join_placeholder: "Paste xrmesh:// token here...",
@@ -385,6 +390,10 @@ export const translations = {
 
     // Themes & Lang
     theme_selector: "پالت رنگی",
+    theme_mode: "ظاهر",
+    theme_auto: "خودکار",
+    theme_light: "روشن",
+    theme_dark: "تیره",
     lang_selector: "زبان",
 
     // Overview Cards
@@ -454,6 +463,7 @@ export const translations = {
     node_invite_endpoint_placeholder: "مثال: 5.161.20.30 یا mynode.example.com",
     node_invite_no_ip_warning: "آی‌پی پابلیک سرور خودکار شناسایی نشد. لطفاً قبل از کپی، آی‌پی پابلیک یا دامنه را وارد کنید.",
     node_btn_copy_invite: "کپی کد دعوت مش",
+    node_invite_link_label: "لینک کامل دعوت مش",
     node_join_title: "پیوستن به شبکه مش سرور دیگر",
     node_join_desc: "کد دعوت دریافتی (xrmesh://...) از سرور دیگر را پیست کنید تا این سرور خودکار به آن متصل شود.",
     node_join_placeholder: "کد xrmesh:// را اینجا پیست کنید...",

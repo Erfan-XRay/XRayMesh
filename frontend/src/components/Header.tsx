@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { NodeInfo, PaletteId, Language } from "../types";
+import { NodeInfo, PaletteId, Language, ThemeMode } from "../types";
 import { PaletteDef } from "../theme/palettes";
 import { RefreshCw, LogOut, Palette, Menu, Lock, Check } from "lucide-react";
 import { XRayMeshLogo } from "./XRayMeshLogo";
+import { ThemeModeSwitch } from "./ThemeModeSwitch";
 
 interface HeaderProps {
   node: NodeInfo;
@@ -13,6 +14,8 @@ interface HeaderProps {
   onSelectLang: (l: Language) => void;
   paletteId: PaletteId;
   onSelectPalette: (p: PaletteId) => void;
+  themeMode: ThemeMode;
+  onSelectThemeMode: (mode: ThemeMode) => void;
   availablePalettes: PaletteDef[];
   t: (key: any) => string;
   isRtl: boolean;
@@ -28,6 +31,8 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectLang,
   paletteId,
   onSelectPalette,
+  themeMode,
+  onSelectThemeMode,
   availablePalettes,
   t,
   isRtl,
@@ -97,8 +102,17 @@ export const Header: React.FC<HeaderProps> = ({
             <>
               <div className="fixed inset-0 z-40" onClick={() => setThemeMenuOpen(false)} />
               <div
-                className={`absolute ${isRtl ? "left-0" : "right-0"} top-full mt-2 w-48 rounded-xl bg-card border border-card-border shadow-2xl p-1.5 z-50 animate-modal-in`}
+                className={`absolute ${isRtl ? "left-0" : "right-0"} top-full mt-2 w-60 rounded-xl bg-card border border-card-border shadow-2xl p-2 z-50 animate-modal-in`}
               >
+                <div className="mb-2">
+                  <div className="px-1 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-text-subtle">
+                    {t("theme_mode")}
+                  </div>
+                  <ThemeModeSwitch value={themeMode} onChange={onSelectThemeMode} t={t} />
+                </div>
+                <div className="px-1 mb-1 text-[10px] font-bold uppercase tracking-wider text-text-subtle">
+                  {t("theme_selector")}
+                </div>
                 {availablePalettes.map((p) => (
                   <button
                     key={p.id}
@@ -196,8 +210,17 @@ export const Header: React.FC<HeaderProps> = ({
             <>
               <div className="fixed inset-0 z-40" onClick={() => setThemeMenuOpen(false)} />
               <div
-                className={`absolute ${isRtl ? "left-0" : "right-0"} top-full mt-2 w-52 rounded-xl bg-card border border-card-border shadow-2xl p-1.5 z-50 animate-modal-in`}
+                className={`absolute ${isRtl ? "left-0" : "right-0"} top-full mt-2 w-72 rounded-xl bg-card border border-card-border shadow-2xl p-2 z-50 animate-modal-in`}
               >
+                <div className="mb-2">
+                  <div className="px-1 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-text-subtle">
+                    {t("theme_mode")}
+                  </div>
+                  <ThemeModeSwitch value={themeMode} onChange={onSelectThemeMode} t={t} />
+                </div>
+                <div className="px-1 mb-1 text-[10px] font-bold uppercase tracking-wider text-text-subtle">
+                  {t("theme_selector")}
+                </div>
                 {availablePalettes.map((p) => (
                   <button
                     key={p.id}
@@ -232,7 +255,7 @@ export const Header: React.FC<HeaderProps> = ({
           href="https://github.com/Erfan-XRay/XRayMesh"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-medium text-text-muted hover:text-white hover:bg-white/10 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-medium text-text-muted hover:text-text-main hover:bg-white/10 transition-colors"
           title="GitHub Repository"
           aria-label="GitHub Repository"
         >

@@ -14,6 +14,7 @@ export default {
           subtle: "var(--primary-subtle)",
           border: "var(--primary-border)",
         },
+        "on-primary": "var(--on-primary, #000000)",
         canvas: "var(--bg-dark)",
         surface: "var(--surface-dark)",
         input: "var(--input-bg)",

@@ -1208,7 +1208,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     value={wizardInviteInput}
                     onChange={(e) => handleWizardInviteChange(e.target.value)}
                     placeholder={t('wizard_token_placeholder')}
-                    className="w-full p-3 bg-card/90 border border-card-border rounded-xl font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-accent-green resize-none"
+                    className="w-full p-3 bg-input border border-card-border rounded-xl font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-accent-green resize-none min-h-24"
                   />
 
                   {/* Decoded Token Preview Card */}
@@ -2204,7 +2204,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                             {computedInvite.details.endpoint || 'No endpoint (relay only)'}
                           </span>
                         </div>
-                        <div className="p-2 rounded bg-black/40 border border-white/5 font-mono text-[11px] text-text-muted truncate select-all">
+                        <div className="p-2 rounded bg-input border border-card-border font-mono text-[11px] text-text-main whitespace-pre-wrap break-all select-all" dir="ltr">
                           {computedInvite.invite}
                         </div>
                       </div>
@@ -2254,7 +2254,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       onChange={(e) => handleManualJoinInputChange(e.target.value)}
                       placeholder={t('node_join_placeholder')}
                       rows={3}
-                      className="w-full p-3 bg-black/40 border border-card-border rounded-xl font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-primary resize-none mb-3"
+                      className="w-full p-3 bg-input border border-card-border rounded-xl font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-primary resize-none min-h-24 mb-3"
                     />
 
                     {/* Detected token hint */}
