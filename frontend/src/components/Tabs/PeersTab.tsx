@@ -123,7 +123,7 @@ export const PeersTab: React.FC<PeersTabProps> = ({
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder={t("peers_filter_placeholder") || "Search by Hostname, IP, or Protocol..."}
+          placeholder={t("peers_filter_placeholder")}
           className="w-full ps-9 pe-9 py-2.5 bg-black/30 border border-card-border rounded-xl text-xs sm:text-sm text-text-main placeholder-text-subtle focus:outline-none focus:border-primary transition-all"
         />
         {search && (
@@ -198,8 +198,9 @@ export const PeersTab: React.FC<PeersTabProps> = ({
 
                     <div className="flex flex-col items-end gap-1 shrink-0">
                       {isCurrent ? (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/20 text-primary border border-primary/30">
-                          {t("peer_badge_current")}
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-primary/20 text-primary border border-primary/30 flex items-center gap-1.5 shrink-0">
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                          <span>{t("peer_badge_current")}</span>
                         </span>
                       ) : (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">

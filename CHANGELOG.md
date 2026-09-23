@@ -2,6 +2,12 @@
 
 All notable XRayMesh changes are documented here.
 
+## [2.2.1] - 2026-09-23
+
+### Fixed
+- Fixed unlocalized translation keys in Peers tab: search filter placeholder and current node badge (`peer_badge_current`, `peers_filter_placeholder`).
+- Polished current node badge in Peers tab with an active pulsing status indicator and clean spacing.
+
 ## [2.2.0] - 2026-09-23
 
 ### Added
