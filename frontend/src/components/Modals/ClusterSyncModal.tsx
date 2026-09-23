@@ -167,7 +167,7 @@ export const ClusterSyncModal: React.FC<ClusterSyncModalProps> = ({
               </div>
 
               <div className="space-y-1.5 max-w-sm mx-auto">
-                <h3 className="text-lg sm:text-xl font-bold text-white tracking-wide">
+                <h3 className="text-lg sm:text-xl font-bold text-text-main tracking-wide">
                   {t('cluster_celebrate_title')}
                 </h3>
                 <p className="text-xs text-text-muted leading-relaxed">

@@ -756,7 +756,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                 </div>
               </div>
 
-              <h3 className="text-xl font-bold text-white mb-2 tracking-wide">
+              <h3 className="text-xl font-bold text-text-main mb-2 tracking-wide">
                 {t('wizard_celebration_title')}
               </h3>
               <p className="text-xs text-text-muted mb-6 leading-relaxed max-w-md mx-auto">
@@ -1589,7 +1589,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                 </span>
 
                 {/* KCP Loss-Resistance Proxy */}
-                <div className="p-3.5 rounded-xl bg-card/90/60 border border-card-border flex items-start justify-between gap-4 transition-all hover:border-amber-500/30">
+                <div className="p-3.5 rounded-xl bg-surface border border-card-border flex items-start justify-between gap-4 transition-all hover:border-amber-500/30">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <Zap className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
@@ -1690,7 +1690,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
               {/* Review Summary Grid */}
               <div className="p-5 rounded-2xl bg-black/40 border border-card-border space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
-                  <div className="p-3 rounded-xl bg-card/90/60 border border-white/5">
+                  <div className="p-3 rounded-xl bg-surface border border-white/5">
                     <span className="text-[10px] text-text-muted uppercase font-sans block mb-1">
                       {t('node_hostname')} (Server Name)
                     </span>
@@ -1700,7 +1700,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     </span>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-card/90/60 border border-white/5">
+                  <div className="p-3 rounded-xl bg-surface border border-white/5">
                     <span className="text-[10px] text-text-muted uppercase font-sans block mb-1">
                       {t('node_vip')} (Virtual Mesh IP)
                     </span>
@@ -1710,7 +1710,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     </span>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-card/90/60 border border-white/5">
+                  <div className="p-3 rounded-xl bg-surface border border-white/5">
                     <span className="text-[10px] text-text-muted uppercase font-sans block mb-1">
                       {t('node_net_name')} & Port
                     </span>
@@ -1719,7 +1719,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     </span>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-card/90/60 border border-white/5">
+                  <div className="p-3 rounded-xl bg-surface border border-white/5">
                     <span className="text-[10px] text-text-muted uppercase font-sans block mb-1">
                       Protocol & Security
                     </span>
@@ -1729,7 +1729,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     </span>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-card/90/60 border border-white/5 sm:col-span-2 flex flex-wrap items-center justify-between gap-2">
+                  <div className="p-3 rounded-xl bg-surface border border-white/5 sm:col-span-2 flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <Zap className={`w-4 h-4 ${enableKcp ? 'text-amber-400' : 'text-text-muted'}`} />
                       <div>
@@ -1808,7 +1808,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
       {!wizardActive && (
         <div className="space-y-4 animate-tab-in">
           {/* Sub-Tab Navigation Bar */}
-          <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-card/90/60 border border-card-border overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-surface border border-card-border overflow-x-auto no-scrollbar">
             <button
               type="button"
               onClick={() => setSubTab('identity')}
@@ -1992,7 +1992,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       type="text"
                       readOnly
                       value={config?.public_ip || 'Detecting...'}
-                      className="w-full px-3.5 py-2 bg-card/90/60 border border-white/5 rounded-xl font-mono text-text-muted cursor-not-allowed"
+                      className="w-full px-3.5 py-2 bg-surface border border-white/5 rounded-xl font-mono text-text-muted cursor-not-allowed"
                     />
                     {config?.public_ip && (
                       <button
@@ -2074,7 +2074,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
               {/* Accelerators & Toggles */}
               <div className="pt-2 border-t border-white/5 space-y-3 text-xs">
                 {/* KCP Loss-Resistance Proxy */}
-                <div className="p-3.5 rounded-xl bg-card/90/50 border border-card-border flex items-start justify-between gap-4">
+                <div className="p-3.5 rounded-xl bg-surface border border-card-border flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <Zap className="w-3.5 h-3.5 text-amber-400" />
@@ -2095,7 +2095,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
 
                 {/* Extra Flags (Encryption, IPv6, MTU) */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-card/90/30 border border-white/5 cursor-pointer">
+                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-surface border border-white/5 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={encryption}
@@ -2105,7 +2105,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     <span className="font-medium text-text-main">{t('node_encryption_label')}</span>
                   </label>
 
-                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-card/90/30 border border-white/5 cursor-pointer">
+                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-surface border border-white/5 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={ipv6}
@@ -2115,7 +2115,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     <span className="font-medium text-text-main">{t('node_ipv6_label')}</span>
                   </label>
 
-                  <div className="flex items-center gap-2 p-2 rounded-xl bg-card/90/30 border border-white/5">
+                  <div className="flex items-center gap-2 p-2 rounded-xl bg-surface border border-white/5">
                     <Sliders className="w-3.5 h-3.5 text-text-muted flex-shrink-0" />
                     <span className="text-[11px] text-text-muted flex-shrink-0">MTU:</span>
                     <input
@@ -2183,7 +2183,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                           value={overrideEndpoint}
                           onChange={(e) => setOverrideEndpoint(e.target.value)}
                           placeholder={inviteData.details.endpoint || t('node_invite_endpoint_placeholder')}
-                          className="w-full px-3 py-1.5 bg-black/40/90 border border-card-border rounded-lg font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-accent-green"
+                          className="w-full px-3 py-1.5 bg-input border border-card-border rounded-lg font-mono text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-accent-green"
                         />
                         {!overrideEndpoint &&
                           (!computedInvite?.details.endpoint || computedInvite.details.endpoint.startsWith(':')) && (
@@ -2322,7 +2322,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     {peers.map((p) => (
                       <div
                         key={p}
-                        className="flex items-center justify-between p-2.5 rounded-xl bg-card/90/60 border border-card-border hover:border-white/20 transition-all text-xs"
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-surface border border-card-border hover:border-white/20 transition-all text-xs"
                       >
                         <span className="font-mono text-primary font-medium truncate mr-2">{p}</span>
                         <button

@@ -372,9 +372,9 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
         </div>
 
         {/* Right Column: Visualization & Metrics */}
-        <div className="lg:col-span-7 flex flex-col justify-between p-6 rounded-2xl bg-black/40/40 border border-card-border relative overflow-hidden min-h-[380px]">
+        <div className="lg:col-span-7 flex flex-col justify-between p-6 rounded-2xl bg-surface border border-card-border relative overflow-hidden min-h-[380px]">
           {isRunning && (
-            <div className="absolute inset-0 bg-black/50/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center p-6 text-center">
+            <div className="absolute inset-0 bg-black/75 backdrop-blur-sm z-20 flex flex-col items-center justify-center p-6 text-center">
               <Loader2 className="w-10 h-10 text-primary animate-spin mb-3" />
               <p className="text-sm font-medium text-primary">{t('speed_running')}</p>
               <p className="text-xs font-mono text-text-muted mt-2">

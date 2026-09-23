@@ -256,18 +256,32 @@ select:focus {
   border-color: var(--primary) !important;
 }
 
+html[data-theme="light"] .bg-card,
+html[data-theme="light"] [class*="bg-card/"],
+html[data-theme="light"] .interactive-card {
+  background-color: var(--card-bg) !important;
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+html[data-theme="light"] .bg-surface,
 html[data-theme="light"] .bg-black\/40,
-html[data-theme="light"] .bg-black\/40\/90,
+html[data-theme="light"] .bg-black\/35,
 html[data-theme="light"] .bg-black\/30,
 html[data-theme="light"] .bg-black\/25,
 html[data-theme="light"] .bg-black\/20 {
-  background-color: var(--input-bg) !important;
+  background-color: var(--surface-dark) !important;
+  border-color: var(--card-border) !important;
 }
 
 html[data-theme="light"] .bg-white\/5,
 html[data-theme="light"] .bg-white\/10,
 html[data-theme="light"] .bg-white\/15 {
-  background-color: rgba(15, 23, 42, 0.05) !important;
+  background-color: var(--surface-dark) !important;
+  border-color: var(--card-border) !important;
+}
+
+html[data-theme="light"] [role="progressbar"] {
+  background-color: rgba(15, 23, 42, 0.08) !important;
 }
 
 html[data-theme="light"] .border-white\/5,
@@ -277,8 +291,26 @@ html[data-theme="light"] .border-white\/20 {
   border-color: var(--card-border) !important;
 }
 
-html[data-theme="light"] .text-white {
-  color: var(--text-main) !important;
+html[data-theme="light"] .bg-primary,
+html[data-theme="light"] button.bg-primary,
+html[data-theme="light"] a.bg-primary {
+  color: var(--on-primary) !important;
+}
+
+html[data-theme="light"] .bg-primary svg,
+html[data-theme="light"] button.bg-primary svg,
+html[data-theme="light"] a.bg-primary svg {
+  stroke: var(--on-primary) !important;
+}
+
+html[data-theme="light"] ::-webkit-scrollbar-track {
+  background: var(--surface-dark);
+}
+html[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: var(--card-border);
+}
+html[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
 }
 
 html[data-theme="light"] .text-emerald-400,

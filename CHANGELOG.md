@@ -2,6 +2,15 @@
 
 All notable XRayMesh changes are documented here.
 
+## [2.1.5] - 2026-09-23
+
+### Changed
+- Light mode color palettes overhaul: Sky Tech, Cyber Emerald, Neon Violet, Amber Glow, Crimson Rose, and OLED Midnight now feature rich tinted canvases, tailored compartment surfaces, and AAA contrast ink typography.
+- Enhanced Bento card legibility: solid light card surfaces with elevation shadows and distinct compartment fills prevent card wash-out and preserve visual depth.
+- Default appearance mode set to Dark mode across all initial sessions.
+- High-contrast primary buttons and badges with crisp text contrast in Light mode.
+- Fixed nested UI utility classes in node configuration and speedtest diagnostic views.
+
 ## [2.1.4] - 2026-09-23
 
 ### Added
