@@ -2,6 +2,13 @@
 
 All notable XRayMesh changes are documented here.
 
+## [2.2.0] - 2026-09-23
+
+### Added
+- Auto theme matching as default for new installations (detects OS light/dark preference with live sync).
+- Complete High-Contrast Light Mode overhaul across all 6 themes with dedicated tinted canvases and compartment elevation.
+- Data-Dense Bento Grid architecture with full mobile thumb navigation bar and Persian RTL isolation.
+
 ## [2.1.5] - 2026-09-23
 
 ### Changed

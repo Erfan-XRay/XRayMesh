@@ -12,7 +12,7 @@ export function useTheme() {
   });
   const [themeMode, setThemeModeState] = useState<ThemeMode>(() => {
     const saved = localStorage.getItem(THEME_MODE_STORAGE_KEY);
-    return saved === 'light' || saved === 'dark' || saved === 'auto' ? saved : 'dark';
+    return saved === 'light' || saved === 'dark' || saved === 'auto' ? saved : 'auto';
   });
   const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(() => {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
