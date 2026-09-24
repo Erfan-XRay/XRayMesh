@@ -1,7 +1,7 @@
 {
-  "version": "2.2.4",
-  "release_name": "XRayMesh v2.2.4 (Remote Interface Discovery Fix)",
+  "version": "2.2.5",
+  "release_name": "XRayMesh v2.2.5 (iptables Origin Lock & Peer Probe Optimization)",
   "release_date": "2026-09-24",
-  "changelog": "Reliable remote iptables interface discovery with peer metadata caching, discovered-port fallback, bounded request timeouts, visible load errors, and regression coverage.",
+  "changelog": "Restricted iptables tunnels to local host to avoid interface discovery hangs, removed blind port scanning, optimized peer probe latency, and preserved valid peer versions on transient network timeouts.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh) update"
 }

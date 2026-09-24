@@ -2,6 +2,14 @@
 
 All notable XRayMesh changes are documented here.
 
+## [2.2.5] - 2026-09-24
+
+### Fixed
+- Restricted iptables tunnels to local host origin, eliminating remote interface discovery hangs and ensuring kernel-level forwarding rules execute on the correct host.
+- Removed blind port scanning across arbitrary ports in peer version discovery, targeting only the primary/cached Web UI port.
+- Reduced peer probe request timeouts to 1.0s, preventing Web UI lag during dashboard peer polling.
+- Preserved valid peer versions and interface metadata during transient network timeouts instead of falsely falling back to `legacy (< 2.0.0)`.
+
 ## [2.2.4] - 2026-09-24
 
 ### Fixed
