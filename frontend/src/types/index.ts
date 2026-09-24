@@ -39,6 +39,7 @@ export interface Peer {
   rx_packets?: string | number;
   tx_packets?: string | number;
   xraymesh_version?: string;
+  interfaces?: string[];
   update_available?: boolean;
   version_drift?: boolean;
   is_current?: boolean;

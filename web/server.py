@@ -33,7 +33,7 @@ import ssl
 from pathlib import Path
 
 # Paths & Defaults
-CURRENT_VERSION = "2.2.3"
+CURRENT_VERSION = "2.2.4"
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/xraymesh")
 BIN_DIR = os.path.join(INSTALL_DIR, "bin")
 CONFIG_FILE = os.environ.get("CONFIG_FILE", "/etc/xraymesh/config.env")
@@ -134,6 +134,66 @@ def get_version_info():
     return result
 
 
+def normalize_network_interfaces(raw_interfaces):
+    """Return a validated, de-duplicated interface list with any first."""
+    if not isinstance(raw_interfaces, (list, tuple, set)):
+        return []
+
+    interfaces = []
+    for raw_interface in raw_interfaces:
+        if not isinstance(raw_interface, str):
+            continue
+        interface = raw_interface.strip()
+        if interface and interface not in interfaces:
+            interfaces.append(interface)
+
+    if interfaces:
+        if "any" in interfaces:
+            interfaces.remove("any")
+        interfaces.insert(0, "any")
+    return interfaces
+
+
+def get_peer_port_candidates(peer_ip, preferred_port=None):
+    """Build a stable, de-duplicated Web UI port list for a mesh peer."""
+    cached_peer = PEER_VERSION_CACHE.get(peer_ip, {})
+    ports = []
+    for candidate in (preferred_port, cached_peer.get("port"), PORT, 11080, 8080, 8443, 443, 80):
+        try:
+            port = int(candidate)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= port <= 65535 and port not in ports:
+            ports.append(port)
+    return ports
+
+
+def fetch_peer_cluster_info(peer_ip, preferred_port=None, timeout=2.0):
+    """Fetch public cluster metadata, preserving the responsive peer port."""
+    insecure_ssl_ctx = ssl.create_default_context()
+    insecure_ssl_ctx.check_hostname = False
+    insecure_ssl_ctx.verify_mode = ssl.CERT_NONE
+    schemes = ("https", "http") if is_ssl_enabled() else ("http", "https")
+    last_err = "Failed to connect to cluster peer"
+
+    for port in get_peer_port_candidates(peer_ip, preferred_port):
+        for scheme in schemes:
+            url = f"{scheme}://{peer_ip}:{port}/api/cluster/info"
+            req = urllib.request.Request(url, headers={"User-Agent": f"XRayMesh-Cluster/{CURRENT_VERSION}"})
+            try:
+                ctx = insecure_ssl_ctx if scheme == "https" else None
+                with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    if isinstance(data, dict) and data.get("ok") is True and data.get("version"):
+                        return data, port, ""
+            except urllib.error.HTTPError as error:
+                last_err = f"HTTP {error.code}"
+            except Exception as error:
+                last_err = str(error)
+
+    return {}, None, last_err
+
+
 def get_peer_version(peer_ip, port=None, timeout=2.0):
     """Probe peer's /api/cluster/info or cached version across candidate ports."""
     now = time.time()
@@ -141,42 +201,15 @@ def get_peer_version(peer_ip, port=None, timeout=2.0):
     if cached and (now - cached.get("timestamp", 0) < 60.0) and cached.get("version"):
         return cached.get("version", "unknown")
 
-    insecure_ssl_ctx = ssl.create_default_context()
-    insecure_ssl_ctx.check_hostname = False
-    insecure_ssl_ctx.verify_mode = ssl.CERT_NONE
-
-    ports_to_try = []
-    if port:
-        ports_to_try.append(port)
-    for p in (PORT, 11080, 8080, 8443, 443, 80):
-        if p not in ports_to_try:
-            ports_to_try.append(p)
-
-    version_found = None
-    responsive_port = None
-
-    for p in ports_to_try:
-        for scheme in ("http", "https"):
-            url = f"{scheme}://{peer_ip}:{p}/api/cluster/info"
-            req = urllib.request.Request(url, headers={"User-Agent": f"XRayMesh-Cluster/{CURRENT_VERSION}"})
-            try:
-                ctx = insecure_ssl_ctx if scheme == "https" else None
-                with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-                    data = json.loads(resp.read().decode("utf-8"))
-                    version_found = data.get("version")
-                    responsive_port = p
-                    break
-            except Exception:
-                pass
-        if version_found:
-            break
-
+    peer_info, responsive_port, _ = fetch_peer_cluster_info(peer_ip, port, timeout)
+    version_found = peer_info.get("version") if peer_info else None
     if not version_found:
         version_found = "legacy (< 2.0.0)"
 
     PEER_VERSION_CACHE[peer_ip] = {
         "version": version_found,
         "port": responsive_port or port or PORT,
+        "interfaces": normalize_network_interfaces(peer_info.get("interfaces") if peer_info else None),
         "timestamp": now
     }
     return version_found
@@ -679,7 +712,6 @@ def get_xraymesh_script():
 
 def get_network_interfaces():
     """Retrieve available host network interfaces using multiple discovery methods."""
-    interfaces = ["any"]
     found = set()
 
     # 1. Method A: ip -o link show
@@ -716,10 +748,7 @@ def get_network_interfaces():
     except Exception:
         pass
 
-    for iface in sorted(found):
-        if iface not in interfaces:
-            interfaces.append(iface)
-    return interfaces
+    return normalize_network_interfaces(sorted(found)) or ["any"]
 
 
 def run_xraymesh_cmd(args, timeout=45):
@@ -1223,17 +1252,7 @@ def send_cluster_http(target_ip, target_port, endpoint, secret, payload, timeout
     insecure_ssl_ctx.check_hostname = False
     insecure_ssl_ctx.verify_mode = ssl.CERT_NONE
 
-    ports_to_try = []
-    if target_port:
-        ports_to_try.append(target_port)
-    cached_peer = PEER_VERSION_CACHE.get(target_ip)
-    if cached_peer and cached_peer.get("port"):
-        cp = cached_peer["port"]
-        if cp not in ports_to_try:
-            ports_to_try.append(cp)
-    for p in (PORT, 11080, 8080, 8443, 443, 80):
-        if p not in ports_to_try:
-            ports_to_try.append(p)
+    ports_to_try = get_peer_port_candidates(target_ip, target_port)
 
     schemes = ("https", "http") if is_ssl_enabled() else ("http", "https")
     last_err = "Failed to connect to cluster peer"
@@ -1263,6 +1282,46 @@ def send_cluster_http(target_ip, target_port, endpoint, secret, payload, timeout
                 last_err = str(e)
                 continue
     return False, last_err
+
+
+def get_remote_network_interfaces(peer_ip, secret, timeout=3.0):
+    """Resolve interfaces from the selected peer without degrading failures to any."""
+    signed_ok, signed_response = send_cluster_http(
+        peer_ip,
+        PORT,
+        "/api/cluster/interfaces",
+        secret,
+        {},
+        timeout=timeout,
+    )
+    if signed_ok and isinstance(signed_response, dict) and signed_response.get("ok"):
+        interfaces = normalize_network_interfaces(signed_response.get("interfaces"))
+        if interfaces:
+            cached_peer = PEER_VERSION_CACHE.setdefault(peer_ip, {})
+            cached_peer["interfaces"] = interfaces
+            cached_peer["timestamp"] = time.time()
+            return interfaces, ""
+
+    signed_error = str(signed_response) if not signed_ok else "Remote response did not include interfaces"
+
+    cached_interfaces = normalize_network_interfaces(
+        PEER_VERSION_CACHE.get(peer_ip, {}).get("interfaces")
+    )
+    if cached_interfaces:
+        return cached_interfaces, "Used cached interface metadata from the peer probe."
+
+    peer_info, responsive_port, info_error = fetch_peer_cluster_info(peer_ip, timeout=timeout)
+    info_interfaces = normalize_network_interfaces(peer_info.get("interfaces") if peer_info else None)
+    if info_interfaces:
+        cached_peer = PEER_VERSION_CACHE.setdefault(peer_ip, {})
+        cached_peer["interfaces"] = info_interfaces
+        if responsive_port:
+            cached_peer["port"] = responsive_port
+        cached_peer["timestamp"] = time.time()
+        return info_interfaces, "Used public cluster metadata for interface discovery."
+
+    errors = [error for error in (signed_error, info_error) if error]
+    return [], "; ".join(dict.fromkeys(errors))
 
 
 def proxy_tunnel_if_remote(handler, data, tunnel_type, action):
@@ -1598,6 +1657,8 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                         except Exception:
                             p_ver = "unknown"
                         p["xraymesh_version"] = p_ver
+                        peer_cache = PEER_VERSION_CACHE.get(p.get("ipv4", ""), {})
+                        p["interfaces"] = normalize_network_interfaces(peer_cache.get("interfaces"))
                         p["update_available"] = is_newer_version(latest_v, p_ver)
                         p["version_drift"] = (p_ver != CURRENT_VERSION)
 
@@ -1613,6 +1674,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                     "rx_bytes": "0 B",
                     "tx_bytes": "0 B",
                     "xraymesh_version": CURRENT_VERSION,
+                    "interfaces": get_network_interfaces(),
                     "update_available": is_newer_version(latest_v, CURRENT_VERSION),
                     "version_drift": False,
                     "is_current": True,
@@ -1704,41 +1766,23 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
 
             if query_node and query_node not in ("local", "127.0.0.1", local_ip):
                 secret = cfg.get("NETWORK_SECRET", "").strip()
-                ok, res = send_cluster_http(query_node, PORT, "/api/cluster/interfaces", secret, {}, timeout=3.0)
-                if ok and isinstance(res, dict) and res.get("ok"):
-                    remote_ifaces = res.get("interfaces", ["any"])
-                    self.send_json({
+                remote_ifaces, warning = get_remote_network_interfaces(query_node, secret)
+                if remote_ifaces:
+                    response = {
                         "ok": True,
                         "data": remote_ifaces,
-                        "node": query_node
-                    })
+                        "node": query_node,
+                    }
+                    if warning:
+                        response["warning"] = warning
+                    self.send_json(response)
                     return
 
-                # HMAC auth failed — fall back to unauthenticated /api/cluster/info which also includes interfaces
-                fallback_ifaces = ["any"]
-                insecure_ssl_ctx = ssl.create_default_context()
-                insecure_ssl_ctx.check_hostname = False
-                insecure_ssl_ctx.verify_mode = ssl.CERT_NONE
-                for scheme in (("https", "http") if is_ssl_enabled() else ("http", "https")):
-                    try:
-                        info_url = f"{scheme}://{query_node}:{PORT}/api/cluster/info"
-                        info_req = urllib.request.Request(info_url, method="GET")
-                        ctx = insecure_ssl_ctx if scheme == "https" else None
-                        with urllib.request.urlopen(info_req, timeout=3, context=ctx) as resp:
-                            info_data = json.loads(resp.read().decode("utf-8"))
-                            ifaces = info_data.get("interfaces")
-                            if isinstance(ifaces, list) and len(ifaces) > 0:
-                                fallback_ifaces = ifaces
-                        break
-                    except Exception:
-                        continue
-
                 self.send_json({
-                    "ok": True,
-                    "data": fallback_ifaces,
+                    "ok": False,
+                    "error": warning or "Could not load interfaces from remote node.",
                     "node": query_node,
-                    "warning": "Used unauthenticated fallback for interface list." if fallback_ifaces != ["any"] else "Could not reach remote node for interface list."
-                })
+                }, status=502)
                 return
 
             ifaces = get_network_interfaces()

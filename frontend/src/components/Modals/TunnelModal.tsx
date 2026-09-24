@@ -40,6 +40,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
 
   const [nodeInterfaces, setNodeInterfaces] = useState<string[]>(interfaces || ['any']);
   const [loadingInterfaces, setLoadingInterfaces] = useState(false);
+  const [interfaceError, setInterfaceError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -54,6 +55,13 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
     if (!isOpen || type !== 'iptables') return;
 
     let isMounted = true;
+    const selectedPeer = peers.find((peer) => peer.ipv4 === originNode && !peer.is_current);
+    const availableInterfaces = originNode
+      ? selectedPeer?.interfaces?.length ? selectedPeer.interfaces : ['any']
+      : interfaces?.length ? interfaces : ['any'];
+    setNodeInterfaces(availableInterfaces);
+    setIface((prev) => (availableInterfaces.includes(prev) ? prev : 'any'));
+    setInterfaceError(null);
     setLoadingInterfaces(true);
     fetchInterfaces(originNode || undefined)
       .then((ifaces) => {
@@ -62,8 +70,14 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
           setIface((prev) => (ifaces.includes(prev) ? prev : 'any'));
         }
       })
-      .catch(() => {
-        if (isMounted) setNodeInterfaces(['any']);
+      .catch((requestError: unknown) => {
+        if (isMounted) {
+          setNodeInterfaces(availableInterfaces);
+          setIface((prev) => (availableInterfaces.includes(prev) ? prev : 'any'));
+          if (availableInterfaces.length === 1) {
+            setInterfaceError(requestError instanceof Error ? requestError.message : t('modal_tunnel_interfaces_error'));
+          }
+        }
       })
       .finally(() => {
         if (isMounted) setLoadingInterfaces(false);
@@ -72,7 +86,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [originNode, isOpen, type]);
+  }, [originNode, isOpen, type, t]);
 
   useEffect(() => {
     if (initialData && isEdit) {
@@ -375,6 +389,7 @@ placeholder="e.g. 80,443 · 8000-8010 · 1234:443"
                   value={iface}
                   onChange={(e) => setIface(e.target.value)}
                   disabled={loadingInterfaces}
+                  aria-label={t('modal_tunnel_interface')}
                   className="w-full px-3 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main focus:outline-none focus:border-primary disabled:opacity-60"
                 >
                   {nodeInterfaces.map((i) => (
@@ -383,6 +398,11 @@ placeholder="e.g. 80,443 · 8000-8010 · 1234:443"
                     </option>
                   ))}
                 </select>
+                {interfaceError && (
+                  <p className="mt-1.5 text-[10px] text-rose-400 leading-relaxed" role="alert" aria-live="polite">
+                    {t('modal_tunnel_interfaces_error')}: {interfaceError}
+                  </p>
+                )}
               </div>
 
               <div>

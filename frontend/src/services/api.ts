@@ -89,14 +89,22 @@ export async function fetchTunnels(): Promise<TunnelsData> {
 }
 
 export async function fetchInterfaces(node?: string): Promise<string[]> {
-  try {
-    const url = node && node !== 'local' ? `/api/interfaces?node=${encodeURIComponent(node)}` : '/api/interfaces';
-    const res = await fetch(url);
-    const d = await res.json();
-    return d.data || ['any'];
-  } catch {
-    return ['any'];
+  const url = node && node !== 'local' ? `/api/interfaces?node=${encodeURIComponent(node)}` : '/api/interfaces';
+  const res = await fetch(url);
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(d.error || `Failed to load interfaces (HTTP ${res.status})`);
   }
+  if (!Array.isArray(d.data)) throw new Error('Interface API returned an invalid response');
+
+  const interfaces: string[] = [...new Set<string>(
+    d.data
+      .filter((item: unknown): item is string => typeof item === 'string')
+      .map((item: string) => item.trim())
+      .filter(Boolean),
+  )];
+  if (interfaces.length === 0) throw new Error('No network interfaces were returned');
+  return interfaces;
 }
 
 export async function runPing(

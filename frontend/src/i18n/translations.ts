@@ -335,6 +335,7 @@ export const translations = {
     modal_tunnel_proto: "Forward Protocol",
     modal_tunnel_interface: "Inbound Interface",
     modal_tunnel_loading_ifaces: "Loading interfaces...",
+    modal_tunnel_interfaces_error: "Could not load interfaces for the selected node",
     modal_tunnel_source_cidr: "Allowed Source CIDR",
 
     // Onboarding Banner
@@ -711,6 +712,7 @@ export const translations = {
     modal_tunnel_proto: "پروتکل فوروارد",
     modal_tunnel_interface: "کارت شبکه ورودی",
     modal_tunnel_loading_ifaces: "در حال دریافت اینترفیس‌ها...",
+    modal_tunnel_interfaces_error: "دریافت اینترفیس‌های نود انتخاب‌شده ممکن نشد",
     modal_tunnel_source_cidr: "محدوده مجاز مبدا (CIDR)",
 
     // Onboarding Banner

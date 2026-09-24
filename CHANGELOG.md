@@ -2,6 +2,13 @@
 
 All notable XRayMesh changes are documented here.
 
+## [2.2.4] - 2026-09-24
+
+### Fixed
+- Remote iptables interface discovery now preserves interface metadata from peer probes and honors the responsive remote Web UI port, including custom ports.
+- Interface API failures no longer degrade silently to `any`; the Web UI shows the actual remote discovery error.
+- Added regression coverage for peer interface caching, custom-port fallback, and remote lookup failures.
+
 ## [2.2.3] - 2026-09-23
 
 ### Added
