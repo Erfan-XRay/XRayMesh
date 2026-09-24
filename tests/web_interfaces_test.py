@@ -182,6 +182,26 @@ class WebInterfaceDiscoveryTests(unittest.TestCase):
             self.assertTrue(server.is_local_origin("10.144.144.1"))
             self.assertFalse(server.is_local_origin("10.144.144.2"))
 
+    def test_peer_version_preserves_valid_version_on_probe_failure(self):
+        server.PEER_VERSION_CACHE["10.144.144.2"] = {
+            "version": "2.2.4",
+            "port": 11080,
+            "interfaces": ["any", "eth0"],
+            "timestamp": 1,
+        }
+        with mock.patch.object(server, "fetch_peer_cluster_info", return_value=({}, None, "Connection timed out")):
+            version = server.get_peer_version("10.144.144.2")
+
+        self.assertEqual(version, "2.2.4")
+        self.assertEqual(server.PEER_VERSION_CACHE["10.144.144.2"]["interfaces"], ["any", "eth0"])
+        self.assertNotEqual(version, "legacy (< 2.0.0)")
+
+    def test_peer_port_candidates_avoids_blind_port_scanning(self):
+        candidates = server.get_peer_port_candidates("10.144.144.2")
+        self.assertEqual(candidates, [server.PORT])
+        self.assertNotIn(8080, candidates)
+        self.assertNotIn(8443, candidates)
+
 
 if __name__ == "__main__":
     unittest.main()

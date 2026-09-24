@@ -158,7 +158,7 @@ def get_peer_port_candidates(peer_ip, preferred_port=None):
     """Build a stable, de-duplicated Web UI port list for a mesh peer."""
     cached_peer = PEER_VERSION_CACHE.get(peer_ip, {})
     ports = []
-    for candidate in (preferred_port, cached_peer.get("port"), PORT, 11080, 8080, 8443, 443, 80):
+    for candidate in (preferred_port, cached_peer.get("port"), PORT):
         try:
             port = int(candidate)
         except (TypeError, ValueError):
@@ -168,7 +168,7 @@ def get_peer_port_candidates(peer_ip, preferred_port=None):
     return ports
 
 
-def fetch_peer_cluster_info(peer_ip, preferred_port=None, timeout=2.0, strict_port=False):
+def fetch_peer_cluster_info(peer_ip, preferred_port=None, timeout=1.0, strict_port=False):
     """Fetch public cluster metadata, preserving the responsive peer port."""
     insecure_ssl_ctx = ssl.create_default_context()
     insecure_ssl_ctx.check_hostname = False
@@ -201,22 +201,28 @@ def fetch_peer_cluster_info(peer_ip, preferred_port=None, timeout=2.0, strict_po
     return {}, None, last_err
 
 
-def get_peer_version(peer_ip, port=None, timeout=2.0):
+def get_peer_version(peer_ip, port=None, timeout=1.0):
     """Probe peer's /api/cluster/info or cached version across candidate ports."""
     now = time.time()
-    cached = PEER_VERSION_CACHE.get(peer_ip)
+    cached = PEER_VERSION_CACHE.get(peer_ip, {})
     if cached and (now - cached.get("timestamp", 0) < 60.0) and cached.get("version"):
         return cached.get("version", "unknown")
 
     peer_info, responsive_port, _ = fetch_peer_cluster_info(peer_ip, port, timeout)
     version_found = peer_info.get("version") if peer_info else None
     if not version_found:
-        version_found = "legacy (< 2.0.0)"
+        prev_ver = cached.get("version")
+        if prev_ver and prev_ver not in ("legacy (< 2.0.0)", "unknown"):
+            version_found = prev_ver
+        else:
+            version_found = "unknown"
 
     PEER_VERSION_CACHE[peer_ip] = {
         "version": version_found,
-        "port": responsive_port or port or PORT,
-        "interfaces": normalize_network_interfaces(peer_info.get("interfaces") if peer_info else None),
+        "port": responsive_port or cached.get("port") or port or PORT,
+        "interfaces": normalize_network_interfaces(
+            (peer_info.get("interfaces") if peer_info else None) or cached.get("interfaces")
+        ),
         "timestamp": now
     }
     return version_found
