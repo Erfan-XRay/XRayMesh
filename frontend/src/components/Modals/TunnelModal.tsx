@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Peer, HaproxyTunnel, IptablesTunnel, GostTunnel, RealmTunnel } from '../../types';
 import { fetchInterfaces } from '../../services/api';
-import { X, Loader2 } from 'lucide-react';
+import { X, Loader2, Server, AlertCircle } from 'lucide-react';
 
 export type TunnelModalType = 'haproxy' | 'iptables' | 'gost' | 'realm';
 
@@ -42,6 +42,12 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
   const [loadingInterfaces, setLoadingInterfaces] = useState(false);
   const [interfaceError, setInterfaceError] = useState<string | null>(null);
 
+  const isRemoteIptablesEdit = Boolean(
+    type === 'iptables' &&
+    isEdit &&
+    ((initialData as any)?._is_local === false || ((initialData as any)?._node_ip && (initialData as any)?._is_local !== true))
+  );
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -56,27 +62,43 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
 
     let isMounted = true;
     const abortController = new AbortController();
-    const timeout = setTimeout(() => abortController.abort(), 8000);
-    const selectedPeer = peers.find((peer) => peer.ipv4 === originNode && !peer.is_current);
-    const availableInterfaces = originNode
-      ? selectedPeer?.interfaces?.length ? selectedPeer.interfaces : ['any']
-      : interfaces?.length ? interfaces : ['any'];
-    setNodeInterfaces(availableInterfaces);
-    setIface((prev) => (availableInterfaces.includes(prev) ? prev : 'any'));
+    const timeout = setTimeout(() => abortController.abort(), 6000);
+
+    const initialIface = (initialData as IptablesTunnel)?.IN_IF;
+    const baseInterfaces = interfaces && interfaces.length > 0 ? interfaces : ['any'];
+    const mergedBase = initialIface && initialIface !== 'any' && !baseInterfaces.includes(initialIface)
+      ? [...baseInterfaces, initialIface]
+      : baseInterfaces;
+
+    setNodeInterfaces(mergedBase);
+    setIface((prev) => (mergedBase.includes(prev) ? prev : initialIface || 'any'));
     setInterfaceError(null);
+
+    if (isRemoteIptablesEdit) {
+      setLoadingInterfaces(false);
+      return () => {
+        isMounted = false;
+        abortController.abort();
+        clearTimeout(timeout);
+      };
+    }
+
     setLoadingInterfaces(true);
-    fetchInterfaces(originNode || undefined, abortController.signal)
+    fetchInterfaces(undefined, abortController.signal)
       .then((ifaces) => {
         if (isMounted) {
-          setNodeInterfaces(ifaces);
-          setIface((prev) => (ifaces.includes(prev) ? prev : 'any'));
+          const list = ifaces && ifaces.length > 0 ? ifaces : ['any'];
+          const finalList = initialIface && initialIface !== 'any' && !list.includes(initialIface)
+            ? [...list, initialIface]
+            : list;
+          setNodeInterfaces(finalList);
+          setIface((prev) => (finalList.includes(prev) ? prev : initialIface || 'any'));
         }
       })
       .catch((requestError: unknown) => {
         if (isMounted) {
-          setNodeInterfaces(availableInterfaces);
-          setIface((prev) => (availableInterfaces.includes(prev) ? prev : 'any'));
-          if (availableInterfaces.length === 1) {
+          setNodeInterfaces(mergedBase);
+          if (mergedBase.length === 1 && mergedBase[0] === 'any') {
             setInterfaceError(
               requestError instanceof DOMException && requestError.name === 'AbortError'
                 ? t('modal_tunnel_interfaces_timeout')
@@ -96,12 +118,12 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
       abortController.abort();
       clearTimeout(timeout);
     };
-  }, [originNode, isOpen, type, t]);
+  }, [isOpen, type, interfaces, initialData, isRemoteIptablesEdit, t]);
 
   useEffect(() => {
     if (initialData && isEdit) {
       setName(initialData.TUNNEL_NAME || '');
-      setOriginNode((initialData as any)._node_ip || '');
+      setOriginNode(type === 'iptables' ? '' : (initialData as any)._node_ip || '');
       setTarget(initialData.TARGET_IP || '');
       setPorts(initialData.PORT_SPEC || '');
       if (type === 'iptables') {
@@ -140,6 +162,10 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isRemoteIptablesEdit) {
+      setError(t('modal_tunnel_iptables_remote_notice'));
+      return;
+    }
     if (!name.trim() || !target.trim() || !ports.trim()) {
       setError('Please fill in all required fields');
       return;
@@ -154,12 +180,13 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
       await onSubmit({
         isEdit,
         name: name.trim(),
-        originNode: originNode.trim() || undefined,
+        originNode: type === 'iptables' ? undefined : (originNode.trim() || undefined),
         target: target.trim(),
         ports: ports.trim(),
         protocol,
         interface: iface,
         sourceCidr: sourceCidr.trim(),
+        source_cidr: sourceCidr.trim(),
       });
       onClose();
     } catch (err: any) {
@@ -225,26 +252,78 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-          {/* Origin Server (Host Node) */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block font-medium text-text-muted">{t('tunnels_origin_server')}</label>
-              <span className="text-[10px] text-text-subtle">{t('tunnels_origin_server_desc')}</span>
+          {/* Remote edit warning banner for iptables */}
+          {isRemoteIptablesEdit && (
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold text-amber-200">
+                  {t('modal_tunnel_iptables_remote_warning_title')}
+                </p>
+                <p className="text-[11px] text-amber-300/90 leading-relaxed">
+                  {t('modal_tunnel_iptables_remote_notice')}
+                </p>
+              </div>
             </div>
-            <select
-              value={originNode}
-              onChange={(e) => setOriginNode(e.target.value)}
-              disabled={isEdit}
-              className="w-full px-3.5 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main focus:outline-none focus:border-primary disabled:opacity-60"
-            >
-              <option value="">{t('tunnels_origin_local')}</option>
-              {peers.filter((p) => !p.is_current).map((p) => (
-                <option key={p.ipv4} value={p.ipv4}>
-                  {p.hostname || p.ipv4} ({p.ipv4})
-                </option>
-              ))}
-            </select>
-          </div>
+          )}
+
+          {/* Origin Server (Host Node) */}
+          {type === 'iptables' ? (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block font-medium text-text-muted">{t('tunnels_origin_server')}</label>
+                <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span>
+                  {t('modal_tunnel_iptables_local_only_badge')}
+                </span>
+              </div>
+              <div className="p-3 bg-white/[0.03] border border-card-border rounded-xl space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Server className="w-3.5 h-3.5 text-text-muted shrink-0" />
+                    <span className="font-mono text-text-main font-semibold text-xs">
+                      {isRemoteIptablesEdit
+                        ? ((initialData as any)?._node_name || (initialData as any)?._node_ip || t('modal_tunnel_remote_server'))
+                        : (peers.find((p) => p.is_current)?.hostname || peers.find((p) => p.is_current)?.ipv4 || t('tunnels_origin_local'))}
+                    </span>
+                    <span className="text-[10px] text-text-subtle font-mono">
+                      {isRemoteIptablesEdit
+                        ? `(${(initialData as any)?._node_ip || ''})`
+                        : peers.find((p) => p.is_current)?.ipv4 ? `(${peers.find((p) => p.is_current)?.ipv4})` : ''}
+                    </span>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 font-medium">
+                    {t('modal_tunnel_iptables_kernel_level')}
+                  </span>
+                </div>
+                <p className="text-[11px] text-text-muted leading-relaxed">
+                  {isRemoteIptablesEdit
+                    ? t('modal_tunnel_iptables_remote_notice')
+                    : t('modal_tunnel_iptables_local_notice')}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block font-medium text-text-muted">{t('tunnels_origin_server')}</label>
+                <span className="text-[10px] text-text-subtle">{t('tunnels_origin_server_desc')}</span>
+              </div>
+              <select
+                value={originNode}
+                onChange={(e) => setOriginNode(e.target.value)}
+                disabled={isEdit || isRemoteIptablesEdit}
+                className="w-full px-3.5 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main focus:outline-none focus:border-primary disabled:opacity-60"
+              >
+                <option value="">{t('tunnels_origin_local')}</option>
+                {peers.filter((p) => !p.is_current).map((p) => (
+                  <option key={p.ipv4} value={p.ipv4}>
+                    {p.hostname || p.ipv4} ({p.ipv4})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Tunnel Name */}
           <div>
@@ -270,7 +349,8 @@ maxLength={32}
               <div className="space-y-2">
                 <select
                   onChange={(e) => handleTargetSelect(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main focus:outline-none focus:border-primary"
+                  disabled={isRemoteIptablesEdit}
+                  className="w-full px-3.5 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main focus:outline-none focus:border-primary disabled:opacity-50"
                   defaultValue=""
                 >
                   <option value="" disabled>
@@ -286,8 +366,9 @@ maxLength={32}
                   type="text"
                   value={target}
                   onChange={(e) => setTarget(e.target.value)}
+                  disabled={isRemoteIptablesEdit}
                   placeholder="Or enter target 10.x.x.x IP manually"
-                  className="w-full px-3.5 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                  className="w-full px-3.5 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary disabled:opacity-50"
                   required
                 />
               </div>
@@ -296,8 +377,9 @@ maxLength={32}
                 type="text"
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
+                disabled={isRemoteIptablesEdit}
                 placeholder="Target Virtual IP (10.x.x.x)"
-                className="w-full px-3.5 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+                className="w-full px-3.5 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary disabled:opacity-50"
                 required
               />
             )}
@@ -312,8 +394,9 @@ maxLength={32}
                   <button
                     key={p}
                     type="button"
+                    disabled={isRemoteIptablesEdit}
                     onClick={() => setProtocol(p)}
-                    className={`py-1.5 rounded-lg border text-xs font-mono uppercase transition-all ${
+                    className={`py-1.5 rounded-lg border text-xs font-mono uppercase transition-all disabled:opacity-50 ${
                       protocol === p
                         ? 'bg-primary/20 border-primary text-primary font-bold'
                         : 'bg-white/5 border-card-border text-text-muted hover:text-text-main'
@@ -361,8 +444,9 @@ maxLength={32}
               type="text"
               value={ports}
               onChange={(e) => setPorts(e.target.value)}
-placeholder="e.g. 80,443 · 8000-8010 · 1234:443"
-              className="w-full px-3.5 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary mb-1.5"
+              disabled={isRemoteIptablesEdit}
+              placeholder="e.g. 80,443 · 8000-8010 · 1234:443"
+              className="w-full px-3.5 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary mb-1.5 disabled:opacity-50"
               required
             />
             <p className="text-[10px] text-text-subtle mb-2">{t('modal_tunnel_ports_help')}</p>
@@ -398,6 +482,7 @@ placeholder="e.g. 80,443 · 8000-8010 · 1234:443"
                 <select
                   value={iface}
                   onChange={(e) => setIface(e.target.value)}
+                  disabled={isRemoteIptablesEdit}
                   aria-label={t('modal_tunnel_interface')}
                   className="w-full px-3 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main focus:outline-none focus:border-primary disabled:opacity-60"
                 >
@@ -420,8 +505,9 @@ placeholder="e.g. 80,443 · 8000-8010 · 1234:443"
                   type="text"
                   value={sourceCidr}
                   onChange={(e) => setSourceCidr(e.target.value)}
+                  disabled={isRemoteIptablesEdit}
                   placeholder="0.0.0.0/0"
-                  className="w-full px-3.5 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main focus:outline-none focus:border-primary"
+                  className="w-full px-3.5 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main focus:outline-none focus:border-primary disabled:opacity-50"
                 />
               </div>
             </div>
@@ -440,7 +526,7 @@ placeholder="e.g. 80,443 · 8000-8010 · 1234:443"
             </button>
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || isRemoteIptablesEdit}
               className="px-5 py-2 rounded-xl bg-primary text-black font-semibold hover:bg-primary-hover disabled:opacity-50 flex items-center gap-1.5 transition-all shadow-md"
             >
               {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}

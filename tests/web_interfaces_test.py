@@ -173,6 +173,15 @@ class WebInterfaceDiscoveryTests(unittest.TestCase):
         self.assertIn("Forbidden", error)
         self.assertIn("Connection refused", error)
 
+    def test_is_local_origin_accepts_local_values_and_rejects_remote(self):
+        with mock.patch.object(server, "load_env_file", return_value={"IPV4": "10.144.144.1"}):
+            self.assertTrue(server.is_local_origin(""))
+            self.assertTrue(server.is_local_origin(None))
+            self.assertTrue(server.is_local_origin("local"))
+            self.assertTrue(server.is_local_origin("127.0.0.1"))
+            self.assertTrue(server.is_local_origin("10.144.144.1"))
+            self.assertFalse(server.is_local_origin("10.144.144.2"))
+
 
 if __name__ == "__main__":
     unittest.main()

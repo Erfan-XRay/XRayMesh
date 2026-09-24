@@ -410,8 +410,8 @@ export default function App() {
             formData.ports,
             formData.protocol || 'tcp',
             formData.interface || 'any',
-            formData.source_cidr || '0.0.0.0/0',
-            formData.originNode
+            formData.source_cidr || formData.sourceCidr || '0.0.0.0/0',
+            undefined
           );
         } else if (tunnelModalType === 'gost') {
           msg = await api.saveGostTunnel(

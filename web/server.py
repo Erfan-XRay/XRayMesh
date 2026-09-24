@@ -1355,12 +1355,20 @@ def get_remote_network_interfaces(peer_ip, secret, timeout=2.0):
     return [], "; ".join(dict.fromkeys(errors))
 
 
+def is_local_origin(origin_node):
+    """Check if the provided origin_node represents the local machine."""
+    origin = (origin_node or "").strip()
+    if not origin or origin in ("local", "127.0.0.1"):
+        return True
+    cfg = load_env_file(CONFIG_FILE)
+    local_ip = cfg.get("IPV4", "").strip()
+    return bool(local_ip and origin == local_ip)
+
+
 def proxy_tunnel_if_remote(handler, data, tunnel_type, action):
     """If origin_node is specified and not local, forward tunnel request via HMAC-signed cluster request."""
     origin_node = (data.get("origin_node") or "").strip()
-    cfg = load_env_file(CONFIG_FILE)
-    local_ip = cfg.get("IPV4", "").strip()
-    if origin_node and origin_node not in ("local", "127.0.0.1", local_ip):
+    if not is_local_origin(origin_node):
         secret = cfg.get("NETWORK_SECRET", "").strip()
         payload = dict(data)
         payload["tunnel_type"] = tunnel_type
@@ -2362,7 +2370,12 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             return
 
         elif path == "/api/tunnels/iptables/create":
-            if proxy_tunnel_if_remote(self, data, "iptables", "create"):
+            origin_node = (data.get("origin_node") or "").strip()
+            if not is_local_origin(origin_node):
+                self.send_json({
+                    "ok": False,
+                    "error": "iptables tunnels can only be configured locally on the host server. Please manage iptables tunnels directly from that node's web panel."
+                }, status=400)
                 return
             name = data.get("name", "").strip()
             target = data.get("target", "").strip()
@@ -2387,7 +2400,12 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             return
 
         elif path == "/api/tunnels/iptables/edit":
-            if proxy_tunnel_if_remote(self, data, "iptables", "edit"):
+            origin_node = (data.get("origin_node") or "").strip()
+            if not is_local_origin(origin_node):
+                self.send_json({
+                    "ok": False,
+                    "error": "iptables tunnels can only be configured locally on the host server. Please manage iptables tunnels directly from that node's web panel."
+                }, status=400)
                 return
             name = data.get("name", "").strip()
             target = data.get("target", "").strip()

@@ -338,6 +338,13 @@ export const translations = {
     modal_tunnel_interfaces_error: "Could not load interfaces for the selected node",
     modal_tunnel_interfaces_timeout: "Interface request timed out",
     modal_tunnel_source_cidr: "Allowed Source CIDR",
+    modal_tunnel_iptables_local_only_badge: "Local Host Only",
+    modal_tunnel_iptables_this_server: "This Node",
+    modal_tunnel_iptables_kernel_level: "Kernel Level",
+    modal_tunnel_iptables_local_notice: "iptables tunnels operate at the Linux kernel level on the local host. To forward from another server, configure the iptables tunnel directly from that server's web panel.",
+    modal_tunnel_iptables_remote_warning_title: "Remote iptables Tunnel (Read-Only)",
+    modal_tunnel_iptables_remote_notice: "This iptables tunnel is hosted on a remote server. Because iptables rules run at the kernel level of the host machine, it must be edited directly from that server's web panel.",
+    modal_tunnel_remote_server: "Remote Server",
 
     // Onboarding Banner
     onboarding_banner_title: "Welcome to XRayMesh! Initialize Your First Mesh Node",
@@ -716,6 +723,13 @@ export const translations = {
     modal_tunnel_interfaces_error: "دریافت اینترفیس‌های نود انتخاب‌شده ممکن نشد",
     modal_tunnel_interfaces_timeout: "زمان دریافت اینترفیس‌ها به پایان رسید",
     modal_tunnel_source_cidr: "محدوده مجاز مبدا (CIDR)",
+    modal_tunnel_iptables_local_only_badge: "فقط سرور محلی",
+    modal_tunnel_iptables_this_server: "همین سرور",
+    modal_tunnel_iptables_kernel_level: "سطح هسته لینوکس",
+    modal_tunnel_iptables_local_notice: "تونل‌های iptables در سطح هسته لینوکس و پشته شبکه همین سرور اجرا می‌شوند. برای فوروارد ترافیک از سرور دیگر، باید مستقیماً از پنل وب همان سرور اقدام کنید.",
+    modal_tunnel_iptables_remote_warning_title: "تونل iptables سرور دیگر (فقط مشاهده)",
+    modal_tunnel_iptables_remote_notice: "این تونل iptables روی سرور مبدا دیگری اجرا می‌شود. به دلیل اجرای مستقیم در سطح هسته لینوکس، برای تغییر یا مدیریت آن باید مستقیماً به پنل وب همان سرور متصل شوید.",
+    modal_tunnel_remote_server: "سرور دیگر",
 
     // Onboarding Banner
     onboarding_banner_title: "به پنل مدیریت XRayMesh خوش آمدید! راه‌اندازی اولین نود مش",
