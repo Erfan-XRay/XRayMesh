@@ -55,6 +55,8 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
     if (!isOpen || type !== 'iptables') return;
 
     let isMounted = true;
+    const abortController = new AbortController();
+    const timeout = setTimeout(() => abortController.abort(), 8000);
     const selectedPeer = peers.find((peer) => peer.ipv4 === originNode && !peer.is_current);
     const availableInterfaces = originNode
       ? selectedPeer?.interfaces?.length ? selectedPeer.interfaces : ['any']
@@ -63,7 +65,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
     setIface((prev) => (availableInterfaces.includes(prev) ? prev : 'any'));
     setInterfaceError(null);
     setLoadingInterfaces(true);
-    fetchInterfaces(originNode || undefined)
+    fetchInterfaces(originNode || undefined, abortController.signal)
       .then((ifaces) => {
         if (isMounted) {
           setNodeInterfaces(ifaces);
@@ -75,7 +77,13 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
           setNodeInterfaces(availableInterfaces);
           setIface((prev) => (availableInterfaces.includes(prev) ? prev : 'any'));
           if (availableInterfaces.length === 1) {
-            setInterfaceError(requestError instanceof Error ? requestError.message : t('modal_tunnel_interfaces_error'));
+            setInterfaceError(
+              requestError instanceof DOMException && requestError.name === 'AbortError'
+                ? t('modal_tunnel_interfaces_timeout')
+                : requestError instanceof Error
+                  ? requestError.message
+                  : t('modal_tunnel_interfaces_error'),
+            );
           }
         }
       })
@@ -85,6 +93,8 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
 
     return () => {
       isMounted = false;
+      abortController.abort();
+      clearTimeout(timeout);
     };
   }, [originNode, isOpen, type, t]);
 
@@ -388,7 +398,6 @@ placeholder="e.g. 80,443 · 8000-8010 · 1234:443"
                 <select
                   value={iface}
                   onChange={(e) => setIface(e.target.value)}
-                  disabled={loadingInterfaces}
                   aria-label={t('modal_tunnel_interface')}
                   className="w-full px-3 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main focus:outline-none focus:border-primary disabled:opacity-60"
                 >

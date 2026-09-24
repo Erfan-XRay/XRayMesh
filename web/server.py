@@ -168,7 +168,7 @@ def get_peer_port_candidates(peer_ip, preferred_port=None):
     return ports
 
 
-def fetch_peer_cluster_info(peer_ip, preferred_port=None, timeout=2.0):
+def fetch_peer_cluster_info(peer_ip, preferred_port=None, timeout=2.0, strict_port=False):
     """Fetch public cluster metadata, preserving the responsive peer port."""
     insecure_ssl_ctx = ssl.create_default_context()
     insecure_ssl_ctx.check_hostname = False
@@ -176,7 +176,14 @@ def fetch_peer_cluster_info(peer_ip, preferred_port=None, timeout=2.0):
     schemes = ("https", "http") if is_ssl_enabled() else ("http", "https")
     last_err = "Failed to connect to cluster peer"
 
-    for port in get_peer_port_candidates(peer_ip, preferred_port):
+    if strict_port and preferred_port:
+        try:
+            ports_to_try = [int(preferred_port)]
+        except (TypeError, ValueError):
+            ports_to_try = get_peer_port_candidates(peer_ip, preferred_port)
+    else:
+        ports_to_try = get_peer_port_candidates(peer_ip, preferred_port)
+    for port in ports_to_try:
         for scheme in schemes:
             url = f"{scheme}://{peer_ip}:{port}/api/cluster/info"
             req = urllib.request.Request(url, headers={"User-Agent": f"XRayMesh-Cluster/{CURRENT_VERSION}"})
@@ -1243,7 +1250,7 @@ def apply_staged_cluster_config():
     return True, "Config committed. Service restarting with 90s rollback watchdog."
 
 
-def send_cluster_http(target_ip, target_port, endpoint, secret, payload, timeout=6):
+def send_cluster_http(target_ip, target_port, endpoint, secret, payload, timeout=6, strict_port=False):
     """Send signed HTTP/HTTPS POST request to a cluster peer over mesh network,
     probing candidate ports if connection to target_port fails."""
     body_bytes, headers = sign_cluster_request(secret, payload)
@@ -1252,7 +1259,13 @@ def send_cluster_http(target_ip, target_port, endpoint, secret, payload, timeout
     insecure_ssl_ctx.check_hostname = False
     insecure_ssl_ctx.verify_mode = ssl.CERT_NONE
 
-    ports_to_try = get_peer_port_candidates(target_ip, target_port)
+    if strict_port and target_port:
+        try:
+            ports_to_try = [int(target_port)]
+        except (TypeError, ValueError):
+            ports_to_try = get_peer_port_candidates(target_ip, target_port)
+    else:
+        ports_to_try = get_peer_port_candidates(target_ip, target_port)
 
     schemes = ("https", "http") if is_ssl_enabled() else ("http", "https")
     last_err = "Failed to connect to cluster peer"
@@ -1284,33 +1297,25 @@ def send_cluster_http(target_ip, target_port, endpoint, secret, payload, timeout
     return False, last_err
 
 
-def get_remote_network_interfaces(peer_ip, secret, timeout=3.0):
+def get_remote_network_interfaces(peer_ip, secret, timeout=2.0):
     """Resolve interfaces from the selected peer without degrading failures to any."""
-    signed_ok, signed_response = send_cluster_http(
-        peer_ip,
-        PORT,
-        "/api/cluster/interfaces",
-        secret,
-        {},
-        timeout=timeout,
-    )
-    if signed_ok and isinstance(signed_response, dict) and signed_response.get("ok"):
-        interfaces = normalize_network_interfaces(signed_response.get("interfaces"))
-        if interfaces:
-            cached_peer = PEER_VERSION_CACHE.setdefault(peer_ip, {})
-            cached_peer["interfaces"] = interfaces
-            cached_peer["timestamp"] = time.time()
-            return interfaces, ""
-
-    signed_error = str(signed_response) if not signed_ok else "Remote response did not include interfaces"
-
     cached_interfaces = normalize_network_interfaces(
         PEER_VERSION_CACHE.get(peer_ip, {}).get("interfaces")
     )
-    if cached_interfaces:
+    cached_peer = PEER_VERSION_CACHE.get(peer_ip, {})
+    cache_is_fresh = (
+        cached_interfaces
+        and time.time() - cached_peer.get("timestamp", 0) < 60.0
+    )
+    if cache_is_fresh:
         return cached_interfaces, "Used cached interface metadata from the peer probe."
 
-    peer_info, responsive_port, info_error = fetch_peer_cluster_info(peer_ip, timeout=timeout)
+    peer_info, responsive_port, info_error = fetch_peer_cluster_info(
+        peer_ip,
+        cached_peer.get("port") or PORT,
+        timeout,
+        strict_port=True,
+    )
     info_interfaces = normalize_network_interfaces(peer_info.get("interfaces") if peer_info else None)
     if info_interfaces:
         cached_peer = PEER_VERSION_CACHE.setdefault(peer_ip, {})
@@ -1319,6 +1324,32 @@ def get_remote_network_interfaces(peer_ip, secret, timeout=3.0):
             cached_peer["port"] = responsive_port
         cached_peer["timestamp"] = time.time()
         return info_interfaces, "Used public cluster metadata for interface discovery."
+
+
+    signed_target_port = responsive_port or PORT
+    signed_ok, signed_response = send_cluster_http(
+        peer_ip,
+        signed_target_port,
+        "/api/cluster/interfaces",
+        secret,
+        {},
+        timeout=timeout,
+        strict_port=True,
+    )
+    signed_interfaces = None
+    signed_error = str(signed_response) if not signed_ok else "Remote response did not include interfaces"
+    if signed_ok and isinstance(signed_response, dict) and signed_response.get("ok"):
+        signed_interfaces = normalize_network_interfaces(signed_response.get("interfaces"))
+        if signed_interfaces:
+            cached_peer = PEER_VERSION_CACHE.setdefault(peer_ip, {})
+            cached_peer["interfaces"] = signed_interfaces
+            if signed_target_port:
+                cached_peer["port"] = signed_target_port
+            cached_peer["timestamp"] = time.time()
+            return signed_interfaces, ""
+
+    if cached_interfaces:
+        return cached_interfaces, "Used cached interface metadata from the peer probe."
 
     errors = [error for error in (signed_error, info_error) if error]
     return [], "; ".join(dict.fromkeys(errors))

@@ -2,6 +2,6 @@
   "version": "2.2.4",
   "release_name": "XRayMesh v2.2.4 (Remote Interface Discovery Fix)",
   "release_date": "2026-09-24",
-  "changelog": "Reliable remote iptables interface discovery with peer metadata caching, custom Web UI port fallback, visible load errors, and regression coverage.",
+  "changelog": "Reliable remote iptables interface discovery with peer metadata caching, discovered-port fallback, bounded request timeouts, visible load errors, and regression coverage.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh) update"
 }

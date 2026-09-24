@@ -88,9 +88,9 @@ export async function fetchTunnels(): Promise<TunnelsData> {
   return d.data || { haproxy: [], iptables: [], gost: [] };
 }
 
-export async function fetchInterfaces(node?: string): Promise<string[]> {
+export async function fetchInterfaces(node?: string, signal?: AbortSignal): Promise<string[]> {
   const url = node && node !== 'local' ? `/api/interfaces?node=${encodeURIComponent(node)}` : '/api/interfaces';
-  const res = await fetch(url);
+  const res = await fetch(url, { signal });
   const d = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(d.error || `Failed to load interfaces (HTTP ${res.status})`);

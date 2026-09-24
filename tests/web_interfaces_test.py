@@ -92,10 +92,32 @@ class WebInterfaceDiscoveryTests(unittest.TestCase):
             "interfaces": ["any", "eth0"],
             "timestamp": 1,
         }
-        with mock.patch.object(server, "send_cluster_http", return_value=(False, "Cluster authentication failed")):
+        with mock.patch.object(server, "send_cluster_http", return_value=(False, "Cluster authentication failed")), mock.patch.object(
+            server,
+            "fetch_peer_cluster_info",
+            return_value=({}, None, "Connection refused"),
+        ):
             interfaces, warning = server.get_remote_network_interfaces("10.144.144.2", "secret")
 
         self.assertEqual(interfaces, ["any", "eth0"])
+        self.assertIn("cached", warning.lower())
+
+    def test_fresh_cached_interfaces_skip_network_requests(self):
+        server.PEER_VERSION_CACHE["10.144.144.2"] = {
+            "version": "2.2.4",
+            "port": 19090,
+            "interfaces": ["any", "eth0"],
+            "timestamp": server.time.time(),
+        }
+        with mock.patch.object(server, "send_cluster_http", side_effect=AssertionError("signed request should be skipped")) as signed, mock.patch.object(
+            server,
+            "fetch_peer_cluster_info",
+            side_effect=AssertionError("peer probe should be skipped"),
+        ):
+            interfaces, warning = server.get_remote_network_interfaces("10.144.144.2", "secret")
+
+        self.assertEqual(interfaces, ["any", "eth0"])
+        signed.assert_not_called()
         self.assertIn("cached", warning.lower())
 
     def test_remote_lookup_falls_back_to_public_peer_metadata(self):
@@ -114,6 +136,30 @@ class WebInterfaceDiscoveryTests(unittest.TestCase):
         self.assertEqual(interfaces, ["any", "enp1s0"])
         self.assertIn("public cluster metadata", warning.lower())
         self.assertEqual(server.PEER_VERSION_CACHE["10.144.144.2"]["port"], 19090)
+
+    def test_signed_fallback_targets_discovered_port_only(self):
+        peer_info = {
+            "ok": True,
+            "version": "2.2.4",
+        }
+        with mock.patch.object(server, "send_cluster_http", return_value=(False, "Forbidden")) as signed, mock.patch.object(
+            server,
+            "fetch_peer_cluster_info",
+            return_value=(peer_info, 19090, ""),
+        ):
+            interfaces, error = server.get_remote_network_interfaces("10.144.144.2", "secret")
+
+        signed.assert_called_once_with(
+            "10.144.144.2",
+            19090,
+            "/api/cluster/interfaces",
+            "secret",
+            {},
+            timeout=2.0,
+            strict_port=True,
+        )
+        self.assertEqual(interfaces, [])
+        self.assertIn("Forbidden", error)
 
     def test_remote_lookup_reports_failure_instead_of_faking_any(self):
         with mock.patch.object(server, "send_cluster_http", return_value=(False, "Forbidden")), mock.patch.object(

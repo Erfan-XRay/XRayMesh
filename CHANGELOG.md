@@ -6,6 +6,7 @@ All notable XRayMesh changes are documented here.
 
 ### Fixed
 - Remote iptables interface discovery now preserves interface metadata from peer probes and honors the responsive remote Web UI port, including custom ports.
+- Remote interface lookup is bounded to the discovered peer port, with an 8-second UI timeout, so a slow peer no longer leaves the selector stuck on “Loading interfaces…”.
 - Interface API failures no longer degrade silently to `any`; the Web UI shows the actual remote discovery error.
 - Added regression coverage for peer interface caching, custom-port fallback, and remote lookup failures.
 
