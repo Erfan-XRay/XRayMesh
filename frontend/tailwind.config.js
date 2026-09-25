@@ -8,32 +8,55 @@ export default {
   theme: {
     extend: {
       colors: {
+        // 60% Surfaces & Background Layers
+        bg: {
+          base: "var(--bg-base)",
+          subtle: "var(--bg-subtle)",
+          card: "var(--bg-card)",
+          elevated: "var(--bg-elevated)",
+        },
+        // Backward-compatible surface aliases
+        canvas: "var(--bg-base, var(--bg-dark))",
+        surface: "var(--bg-subtle, var(--surface-dark))",
+        input: "var(--input-bg)",
+        modal: "var(--modal-bg)",
+        card: {
+          DEFAULT: "var(--bg-card, var(--card-bg))",
+          border: "var(--card-border)",
+          "border-hover": "var(--card-border-hover)",
+        },
+
+        // Borders & Dividers Hierarchy
+        border: {
+          subtle: "var(--border-subtle)",
+          strong: "var(--border-strong)",
+        },
+
+        // 30% Text & Typography Hierarchy
+        text: {
+          primary: "var(--text-primary)",
+          secondary: "var(--text-secondary)",
+          muted: "var(--text-muted)",
+          subtle: "var(--text-subtle)",
+          main: "var(--text-primary, var(--text-main))",
+        },
+
+        // 10% Brand / Primary & Accent Tokens
         primary: {
           DEFAULT: "var(--primary)",
           hover: "var(--primary-hover)",
           subtle: "var(--primary-subtle)",
           border: "var(--primary-border)",
+          glow: "var(--accent-glow)",
         },
         "on-primary": "var(--on-primary, #000000)",
-        canvas: "var(--bg-dark)",
-        surface: "var(--surface-dark)",
-        input: "var(--input-bg)",
-        modal: "var(--modal-bg)",
-        card: {
-          DEFAULT: "var(--card-bg)",
-          border: "var(--card-border)",
-          "border-hover": "var(--card-border-hover)",
-        },
-        text: {
-          main: "var(--text-main)",
-          muted: "var(--text-muted)",
-          subtle: "var(--text-subtle)",
-        },
+
+        // Functional Indicators
         accent: {
           green: "var(--accent-green)",
           yellow: "var(--accent-yellow)",
           red: "var(--accent-red)",
-        }
+        },
       },
       fontFamily: {
         sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],

@@ -244,7 +244,7 @@ export const PeersTab: React.FC<PeersTabProps> = ({
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-xs text-text-muted">{t("version_title")}:</span>
                       <span className="font-mono font-semibold text-text-main tech-val">
-                        {p.xraymesh_version || "2.2.6-beta.2"}
+                        {p.xraymesh_version || "2.2.6-beta.3"}
                       </span>
                       {p.xraymesh_branch && (
                         <span className="px-1.5 py-0.5 rounded text-xs font-mono font-bold bg-white/10 text-text-muted border border-white/10 uppercase tracking-wide">

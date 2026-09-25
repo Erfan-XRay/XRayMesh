@@ -525,7 +525,7 @@ export default function App() {
   // ─── Loading / Auth Gate ────────────────────────────────
   if (isAuthenticated === null || (isAuthenticated && !initialLoaded)) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-5 bg-canvas px-4">
+      <div className="flex flex-col items-center justify-center min-h-screen gap-5 bg-transparent px-4">
         <LoadingSpinner
           size="xl"
           glow={true}
@@ -538,7 +538,7 @@ export default function App() {
 
   // ─── Render ─────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-canvas px-3 sm:px-6 py-3.5 sm:py-6 lg:px-8 max-w-7xl mx-auto pb-24 md:pb-12">
+    <div className="min-h-screen bg-transparent px-3 sm:px-6 py-3.5 sm:py-6 lg:px-8 max-w-7xl mx-auto pb-24 md:pb-12">
       {/* Login Modal */}
       <LoginModal
         isOpen={showLogin}

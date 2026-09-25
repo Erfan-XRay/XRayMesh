@@ -2,6 +2,15 @@
 
 All notable XRayMesh changes are documented here.
 
+## [2.2.6-beta.3] - 2026-09-25
+
+### Added
+- Complete Design System overhaul implementing mathematical 60-30-10 palette architecture across all 6 themes.
+- Re-architected Light Mode with high-contrast slate/zinc neutrals eliminating harsh glare and muddy grays (WCAG AA/AAA compliant).
+- Theme-matched dynamic ambient radial mesh gradients (`--bg-radial-1`, `--bg-radial-2`) and subtle dot-grid canvas depth (`--dot-pattern`).
+- Full semantic token architecture (`bg-base`, `bg-subtle`, `bg-card`, `bg-elevated`, `border-subtle`, `border-strong`, `text-primary`, `text-secondary`, `text-muted`, `accent-glow`).
+- Reusable glassmorphic classes (`.glass-panel`, `.glass-panel-elevated`, `.ambient-glow-card`) with calibrated opacity and backdrop blur.
+
 ## [2.2.6-beta.2] - 2026-09-25
 
 ### Added
