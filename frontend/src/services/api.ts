@@ -1,4 +1,4 @@
-import { StatusResponse, Peer, TunnelsData, PingResult, SpeedtestData, NodeConfig, MeshInviteData, JoinMeshResult, RollbackInfo, VersionInfo, UpdateSummary } from '../types';
+import { StatusResponse, Peer, TunnelsData, TunnelNodeState, TunnelNodeResponse, PingResult, SpeedtestData, NodeConfig, MeshInviteData, JoinMeshResult, RollbackInfo, VersionInfo, UpdateSummary } from '../types';
 
 export async function fetchAuthStatus(): Promise<{ authenticated: boolean; password_configured: boolean }> {
   const res = await fetch('/api/auth/status');
@@ -90,6 +90,21 @@ export async function fetchTunnels(): Promise<TunnelsData> {
   if (!res.ok) throw new Error('Failed to fetch tunnels');
   const d = await res.json();
   return d.data || { haproxy: [], iptables: [], gost: [] };
+}
+
+export async function fetchTunnelNodes(): Promise<TunnelNodeState[]> {
+  const res = await fetch('/api/tunnels/nodes');
+  if (!res.ok) throw new Error('Failed to fetch tunnel nodes');
+  const d = await res.json();
+  return (d.nodes || []).map((n: TunnelNodeState) => ({ ...n, status: 'idle' as const }));
+}
+
+/** One node's tunnels. Remote failures still resolve, carrying the cached copy and a status. */
+export async function fetchNodeTunnels(node: string, signal?: AbortSignal): Promise<TunnelNodeResponse> {
+  const res = await fetch(`/api/tunnels?node=${encodeURIComponent(node)}`, { signal });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to fetch tunnels');
+  return { data: d.data, node: d.node };
 }
 
 export async function fetchInterfaces(node?: string, signal?: AbortSignal): Promise<string[]> {

@@ -129,6 +129,31 @@ export interface TunnelsData {
   realm_service?: string;
 }
 
+export type TunnelType = 'realm' | 'haproxy' | 'iptables' | 'gost';
+
+/** idle = not requested yet (outside the current scope); the rest after ok are failure codes from the server. */
+export type TunnelNodeStatus = 'idle' | 'ok' | 'unreachable' | 'timeout' | 'auth_failed' | 'unsupported' | 'remote_error';
+
+export interface TunnelNodeState {
+  ip: string;
+  name: string;
+  is_local: boolean;
+  status: TunnelNodeStatus;
+  /** A request for this node is in flight; any tunnels already shown stay visible meanwhile. */
+  loading?: boolean;
+  /** True when the tunnels shown are the last good copy, not a live answer. */
+  stale?: boolean;
+  /** Unix seconds of the data being shown. */
+  fetched_at?: number | null;
+  latency_ms?: number;
+  error?: string;
+}
+
+export interface TunnelNodeResponse {
+  data: TunnelsData;
+  node: TunnelNodeState;
+}
+
 export interface VersionInfo {
   current_version: string;
   latest_version: string;

@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   StatusResponse,
   Peer,
-  TunnelsData,
   SpeedtestData,
   PingResult,
   ToastItem,
@@ -17,6 +16,7 @@ import {
 import { useTheme } from './theme/useTheme';
 import { useTranslation } from './i18n/useTranslation';
 import { useNodeUpdates } from './hooks/useNodeUpdates';
+import { useTunnels } from './hooks/useTunnels';
 import * as api from './services/api';
 
 import { Header } from './components/Header';
@@ -65,8 +65,9 @@ export default function App() {
   const [status, setStatus] = useState<StatusResponse>(EMPTY_STATUS);
   const [peers, setPeers] = useState<Peer[]>([]);
   const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
-  const [tunnels, setTunnels] = useState<TunnelsData>({ haproxy: [], iptables: [], gost: [], realm: [] });
   const [interfaces, setInterfaces] = useState<string[]>(['any']);
+  const tunnelStore = useTunnels(isAuthenticated === true);
+  const { tunnels } = tunnelStore;
 
   // Active tab (Default to Node & Mesh Config)
   const [activeTab, setActiveTab] = useState<TabId>('node');
@@ -168,10 +169,9 @@ export default function App() {
   // ─── Data Fetching ──────────────────────────────────────
   const loadDashboard = useCallback(async () => {
     try {
-      const [statusData, peersResult, tunnelsData, verData] = await Promise.all([
+      const [statusData, peersResult, verData] = await Promise.all([
         api.fetchStatus(),
         api.fetchPeersData(),
-        api.fetchTunnels(),
         api.fetchVersionInfo(),
       ]);
       setStatus(statusData);
@@ -182,7 +182,6 @@ export default function App() {
       }));
       markedPeers.sort((a, b) => Number(b.is_current ?? false) - Number(a.is_current ?? false));
       setPeers(markedPeers);
-      setTunnels(tunnelsData);
       setVersionInfo(verData);
     } catch {
       // Silent fail on periodic poll
@@ -201,10 +200,10 @@ export default function App() {
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await loadDashboard();
+    await Promise.all([loadDashboard(), tunnelStore.refresh()]);
     setIsRefreshing(false);
     addToast(t('btn_refresh') + ' ✓', 'success');
-  }, [loadDashboard, addToast, t]);
+  }, [loadDashboard, tunnelStore, addToast, t]);
 
   // ─── Auth ───────────────────────────────────────────────
   useEffect(() => {
@@ -429,15 +428,13 @@ export default function App() {
         }
         addToast(msg || '✓ Saved', 'success');
         setTunnelModalOpen(false);
-        // Refresh tunnels list
-        const updated = await api.fetchTunnels();
-        setTunnels(updated);
+        await tunnelStore.reloadNode(formData.originNode || (tunnelModalEdit ? tunnelModalData?._node_ip : undefined));
       } catch (e: any) {
         addToast(e.message || 'Save failed', 'error');
         throw e;
       }
     },
-    [tunnelModalType, tunnelModalEdit, addToast]
+    [tunnelModalType, tunnelModalEdit, tunnelModalData, addToast, tunnelStore]
   );
 
   const handleDeleteTunnelRequest = useCallback(
@@ -465,15 +462,13 @@ export default function App() {
       addToast(msg || '✓ Deleted', 'success');
       setDeleteModalOpen(false);
       setDeleteTarget(null);
-      // Refresh
-      const updated = await api.fetchTunnels();
-      setTunnels(updated);
+      await tunnelStore.reloadNode(deleteTarget.originNode);
     } catch (e: any) {
       addToast(e.message || 'Delete failed', 'error');
     } finally {
       setIsDeleting(false);
     }
-  }, [deleteTarget, addToast]);
+  }, [deleteTarget, addToast, tunnelStore]);
 
 
   // ─── Computed Values ────────────────────────────────────
@@ -705,7 +700,12 @@ export default function App() {
             {activeTab === 'tunnels' && (
               <TunnelsTab
                 tunnels={tunnels}
-                onRefresh={handleRefresh}
+                nodes={tunnelStore.nodes}
+                byNode={tunnelStore.byNode}
+                scope={tunnelStore.scope}
+                onScopeChange={tunnelStore.setScope}
+                onRetryNode={tunnelStore.loadNode}
+                onRefresh={() => tunnelStore.refresh()}
                 onOpenCreateHaproxy={() => openCreateTunnel('haproxy')}
                 onOpenEditHaproxy={(t) => openEditTunnel('haproxy', t)}
                 onOpenCreateIptables={() => openCreateTunnel('iptables')}
@@ -727,6 +727,10 @@ export default function App() {
             isEdit={tunnelModalEdit}
             initialData={tunnelModalData}
             peers={peers}
+            nodeStates={tunnelStore.nodes}
+            defaultOriginNode={
+              tunnelStore.scope !== 'local' && tunnelStore.scope !== 'all' ? tunnelStore.scope : ''
+            }
             interfaces={interfaces}
             onClose={() => setTunnelModalOpen(false)}
             onSubmit={handleTunnelSubmit}

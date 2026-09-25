@@ -2,6 +2,23 @@
 
 All notable XRayMesh changes are documented here.
 
+## [2.2.6-beta.6] - 2026-09-25
+
+### Added
+- Tunnels tab scope switch: this server (default), all servers, or a single server. The choice is remembered per browser.
+- Per-server health strip in the Tunnels tab with status, tunnel count, latency or data age, and a retry button for servers that did not respond.
+- Tunnel search by name, destination, port or server.
+- New endpoints `GET /api/tunnels?node=<ip|local>` (one server's tunnels plus its status) and `GET /api/tunnels/nodes`.
+
+### Changed
+- Tunnels load server by server instead of in one blocking request, so a slow or lossy server only delays its own tunnels.
+- Remote tunnel lists are fetched with a retry (known port first, then a wider port search), and the last good list is kept. A server that stops responding shows its cached tunnels marked as cached and read-only until it reconnects, instead of its tunnels silently disappearing.
+- The combined `GET /api/tunnels` now has an 8 second overall deadline and reports each server's status.
+- Redesigned tunnel cards and sections, fully translated and RTL-safe. New tunnels default their origin to the server the view is scoped to, and unreachable servers are flagged in the origin list.
+
+### Fixed
+- Loading network interfaces of a remote server used only the first character of its IP.
+
 ## [2.2.6-beta.5] - 2026-09-25
 
 ### Added

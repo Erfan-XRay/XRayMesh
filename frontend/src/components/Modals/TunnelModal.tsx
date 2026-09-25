@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Peer, HaproxyTunnel, IptablesTunnel, GostTunnel, RealmTunnel } from '../../types';
+import { Peer, HaproxyTunnel, IptablesTunnel, GostTunnel, RealmTunnel, TunnelNodeState } from '../../types';
 import { fetchInterfaces } from '../../services/api';
 import { X, Server, AlertCircle, Loader2 } from 'lucide-react';
 import { LoadingDots } from '../LoadingSpinner';
@@ -12,6 +12,10 @@ interface TunnelModalProps {
   isEdit: boolean;
   initialData?: HaproxyTunnel | IptablesTunnel | GostTunnel | RealmTunnel | null;
   peers: Peer[];
+  /** Per-node reachability from the tunnels view, used to flag unreachable origins. */
+  nodeStates?: TunnelNodeState[];
+  /** Origin preselected for new tunnels (the node the tunnels view is scoped to). */
+  defaultOriginNode?: string;
   interfaces: string[];
   onClose: () => void;
   onSubmit: (formData: any) => Promise<void>;
@@ -24,6 +28,8 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
   isEdit,
   initialData,
   peers,
+  nodeStates = [],
+  defaultOriginNode = '',
   interfaces,
   onClose,
   onSubmit,
@@ -141,7 +147,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
       }
     } else {
       setName('');
-      setOriginNode('');
+      setOriginNode(type === 'iptables' ? '' : defaultOriginNode);
       setTarget('');
       setPorts('');
       setProtocol(type === 'gost' || type === 'realm' ? 'both' : 'udp');
@@ -149,7 +155,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
       setSourceCidr('0.0.0.0/0');
     }
     setError(null);
-  }, [initialData, isEdit, type, isOpen]);
+  }, [initialData, isEdit, type, isOpen, defaultOriginNode]);
 
   if (!isOpen) return null;
 
@@ -317,12 +323,22 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
                 className="w-full px-3.5 py-2 bg-input border border-card-border rounded-xl font-mono text-text-main focus:outline-none focus:border-primary disabled:opacity-60"
               >
                 <option value="">{t('tunnels_origin_local')}</option>
-                {peers.filter((p) => !p.is_current).map((p) => (
-                  <option key={p.ipv4} value={p.ipv4}>
-                    {p.hostname || p.ipv4} ({p.ipv4})
-                  </option>
-                ))}
+                {peers.filter((p) => !p.is_current).map((p) => {
+                  const st = nodeStates.find((n) => n.ip === p.ipv4)?.status;
+                  const down = Boolean(st && st !== 'ok' && st !== 'idle');
+                  return (
+                    <option key={p.ipv4} value={p.ipv4}>
+                      {p.hostname || p.ipv4} ({p.ipv4}){down ? ` - ${t('tunnels_node_unreachable_short')}` : ''}
+                    </option>
+                  );
+                })}
               </select>
+              {(() => {
+                const st = nodeStates.find((n) => n.ip === originNode)?.status;
+                return originNode && st && st !== 'ok' && st !== 'idle' ? (
+                  <p className="mt-1.5 text-xs text-amber-400">{t('tunnels_origin_unreachable_warning')}</p>
+                ) : null;
+              })()}
             </div>
           )}
 

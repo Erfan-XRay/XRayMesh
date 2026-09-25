@@ -1,8 +1,8 @@
 {
-  "version": "2.2.6-beta.5",
+  "version": "2.2.6-beta.6",
   "branch": "beta",
-  "release_name": "XRayMesh v2.2.6-beta.5 (Peers Redesign, One-Click Updates & Beta Channel)",
+  "release_name": "XRayMesh v2.2.6-beta.6 (Resilient Multi-Node Tunnels)",
   "release_date": "2026-09-25",
-  "changelog": "Redesigned Peers & Nodes with a clean server list and a This server card. Any server can now be updated with one click from any panel: files are verified before install, the previous version is restored automatically if the update is unhealthy, and progress is shown live. Each server can opt into beta updates from any panel.",
+  "changelog": "Tunnels now load server by server, so a slow or lossy server no longer hides tunnels or slows the whole list. The Tunnels tab opens on this server by default, can show all servers or a single one, shows each server's health with a retry button, and keeps showing the last known tunnels of a server that stops responding (read-only until it reconnects). Adds search and a cleaner card layout.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update"
 }

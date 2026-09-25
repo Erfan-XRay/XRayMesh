@@ -33,7 +33,7 @@ import ssl
 from pathlib import Path
 
 # Paths & Defaults
-CURRENT_VERSION = "2.2.6-beta.5"
+CURRENT_VERSION = "2.2.6-beta.6"
 CURRENT_BRANCH = "beta"
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/xraymesh")
 BIN_DIR = os.path.join(INSTALL_DIR, "bin")
@@ -1703,6 +1703,94 @@ def is_local_origin(origin_node):
     return bool(local_ip and origin == local_ip)
 
 
+TUNNEL_TYPES = ("haproxy", "iptables", "gost", "realm")
+TUNNEL_CACHE = {}  # peer ip -> {"tunnels": {...}, "name": str, "fetched_at": ts}
+TUNNEL_CACHE_LOCK = threading.Lock()
+TUNNEL_FETCH_TIMEOUT = 3.0
+TUNNEL_FETCH_DEADLINE = 8.0
+
+
+def get_tunnel_nodes():
+    """Return (local node, reachable mesh peers) for the tunnels view."""
+    cfg = load_env_file(CONFIG_FILE)
+    local_ip = cfg.get("IPV4", "127.0.0.1")
+    local_node = {"ip": local_ip, "name": cfg.get("HOSTNAME", "local")}
+
+    peers_raw = get_easytier_peers() or []
+    if isinstance(peers_raw, dict):
+        peers_raw = peers_raw.get("peers", []) or []
+
+    peers, seen = [], set()
+    for p in peers_raw:
+        if not isinstance(p, dict):
+            continue
+        vip = str(p.get("ipv4", "")).strip()
+        cost = str(p.get("cost", "0"))
+        if vip and vip != local_ip and vip not in seen and cost not in ("0", "Local", "none", ""):
+            seen.add(vip)
+            peers.append({"ip": vip, "name": p.get("hostname") or vip})
+    return local_node, peers
+
+
+def tag_remote_tunnels(tunnels, ip, name):
+    out = {}
+    for t_type in TUNNEL_TYPES:
+        items = []
+        for item in tunnels.get(t_type, []) or []:
+            if isinstance(item, dict):
+                items.append(dict(item, _node_ip=ip, _node_name=name, _is_local=False))
+        out[t_type] = items
+    return out
+
+
+def tunnel_cache_fallback(peer, status, error):
+    """Serve the last good tunnel list for a peer that failed to answer."""
+    with TUNNEL_CACHE_LOCK:
+        cached = TUNNEL_CACHE.get(peer["ip"])
+    node = {
+        "ip": peer["ip"],
+        "name": (cached or {}).get("name") or peer["name"],
+        "is_local": False,
+        "status": status,
+        "error": error,
+        "stale": bool(cached),
+        "fetched_at": (cached or {}).get("fetched_at"),
+    }
+    data = (cached or {}).get("tunnels") or {t: [] for t in TUNNEL_TYPES}
+    return data, node
+
+
+def fetch_remote_tunnels(peer):
+    """Fetch one peer's tunnels with a retry; fall back to the cached copy on failure."""
+    cfg = load_env_file(CONFIG_FILE)
+    secret = cfg.get("NETWORK_SECRET", "").strip()
+    known_port = PEER_VERSION_CACHE.get(peer["ip"], {}).get("port")
+    # Lossy links: first try the port that answered before, then widen the search once.
+    attempts = [(known_port, True), (PORT, False)] if known_port else [(PORT, False), (PORT, False)]
+
+    status, error = "unreachable", "Failed to connect to cluster peer"
+    for port, strict in attempts:
+        started = time.time()
+        ok, res, http_status = cluster_request(
+            peer["ip"], port, "/api/cluster/tunnels", secret, {}, TUNNEL_FETCH_TIMEOUT, strict
+        )
+        if ok and isinstance(res, dict) and res.get("ok"):
+            name = res.get("node_name") or peer["name"]
+            data = tag_remote_tunnels(res.get("tunnels") or {}, peer["ip"], name)
+            now = time.time()
+            with TUNNEL_CACHE_LOCK:
+                TUNNEL_CACHE[peer["ip"]] = {"tunnels": data, "name": name, "fetched_at": now}
+            return data, {
+                "ip": peer["ip"], "name": name, "is_local": False, "status": "ok",
+                "stale": False, "fetched_at": now, "latency_ms": int((now - started) * 1000),
+            }
+        status = cluster_error_code(http_status)
+        error = res.get("error") if isinstance(res, dict) else str(res)
+        if status in ("auth_failed", "unsupported"):
+            break  # Retrying will not change a definitive answer.
+    return tunnel_cache_fallback(peer, status, error)
+
+
 def proxy_tunnel_if_remote(handler, data, tunnel_type, action):
     """If origin_node is specified and not local, forward tunnel request via HMAC-signed cluster request."""
     origin_node = (data.get("origin_node") or "").strip()
@@ -2131,63 +2219,69 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             })
             return
 
+        elif path == "/api/tunnels/nodes":
+            local_node, peers = get_tunnel_nodes()
+            nodes = [dict(local_node, is_local=True)]
+            for p in peers:
+                cached = TUNNEL_CACHE.get(p["ip"]) or {}
+                nodes.append({
+                    "ip": p["ip"],
+                    "name": cached.get("name") or p["name"],
+                    "is_local": False,
+                })
+            self.send_json({"ok": True, "local_ip": local_node["ip"], "nodes": nodes})
+            return
+
         elif path == "/api/tunnels":
-            cfg = load_env_file(CONFIG_FILE)
-            local_ip = cfg.get("IPV4", "127.0.0.1")
-            local_hostname = cfg.get("HOSTNAME", "local")
+            query_node = (query.get("node") or "").strip()
+            local_node, peers = get_tunnel_nodes()
+
+            if query_node in ("local", "127.0.0.1", local_node["ip"]):
+                self.send_json({
+                    "ok": True,
+                    "data": get_tunnels(),
+                    "node": dict(local_node, is_local=True, status="ok", stale=False,
+                                 fetched_at=time.time(), latency_ms=0),
+                })
+                return
+
+            if query_node:
+                peer = next((p for p in peers if p["ip"] == query_node), None)
+                if peer is None and query_node not in TUNNEL_CACHE:
+                    self.send_json({"ok": False, "error": "Unknown mesh node", "code": "unknown_node"}, status=404)
+                    return
+                peer = peer or {"ip": query_node, "name": TUNNEL_CACHE[query_node].get("name") or query_node}
+                data, node = fetch_remote_tunnels(peer)
+                self.send_json({"ok": True, "data": data, "node": node})
+                return
+
+            # Legacy aggregate view: every node, bounded by one overall deadline.
             local_tunnels = get_tunnels()
-
-            for t_type in ("haproxy", "iptables", "gost", "realm"):
+            for t_type in TUNNEL_TYPES:
                 for item in local_tunnels.get(t_type, []):
-                    item["_node_ip"] = local_ip
-                    item["_node_name"] = local_hostname
+                    item["_node_ip"] = local_node["ip"]
+                    item["_node_name"] = local_node["name"]
                     item["_is_local"] = True
+            node_states = [dict(local_node, is_local=True, status="ok", stale=False)]
+            if peers:
+                executor = concurrent.futures.ThreadPoolExecutor(max_workers=8)
+                futures = {executor.submit(fetch_remote_tunnels, p): p for p in peers}
+                done, _ = concurrent.futures.wait(futures, timeout=TUNNEL_FETCH_DEADLINE)
+                for fut, p in futures.items():
+                    if fut in done:
+                        data, node = fut.result()
+                    else:
+                        data, node = tunnel_cache_fallback(p, "timeout", "Node did not answer in time")
+                    node_states.append(node)
+                    for t_type in TUNNEL_TYPES:
+                        local_tunnels.setdefault(t_type, []).extend(data.get(t_type, []))
+                executor.shutdown(wait=False)
 
-            peers_raw = get_easytier_peers() or []
-            if isinstance(peers_raw, dict):
-                peers_raw = peers_raw.get("peers", []) or []
-
-            active_peers = []
-            for p in peers_raw:
-                if not isinstance(p, dict):
-                    continue
-                vip = p.get("ipv4", "").strip()
-                cost = str(p.get("cost", "0"))
-                if vip and vip != local_ip and cost not in ("0", "Local", "none", ""):
-                    active_peers.append({"ipv4": vip, "hostname": p.get("hostname", vip)})
-
-            if active_peers:
-                secret = cfg.get("NETWORK_SECRET", "").strip()
-                with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-                    futures = {
-                        executor.submit(send_cluster_http, p["ipv4"], PORT, "/api/cluster/tunnels", secret, {}, 2.0): p
-                        for p in active_peers
-                    }
-                    for fut in concurrent.futures.as_completed(futures):
-                        p = futures[fut]
-                        try:
-                            ok, res = fut.result()
-                            if ok and isinstance(res, dict) and res.get("ok"):
-                                r_tunnels = res.get("tunnels", {})
-                                p_name = res.get("node_name") or p["hostname"]
-                                p_ip = res.get("node_ip") or p["ipv4"]
-                                for t_type in ("haproxy", "iptables", "gost", "realm"):
-                                    for item in r_tunnels.get(t_type, []):
-                                        item["_node_ip"] = p_ip
-                                        item["_node_name"] = p_name
-                                        item["_is_local"] = False
-                                        local_tunnels[t_type].append(item)
-                        except Exception:
-                            pass
-
-            self.send_json({
-                "ok": True,
-                "data": local_tunnels
-            })
+            self.send_json({"ok": True, "data": local_tunnels, "nodes": node_states})
             return
 
         elif path == "/api/interfaces":
-            query_node = (query.get("node", [None])[0] or "").strip()
+            query_node = (query.get("node") or "").strip()
             cfg = load_env_file(CONFIG_FILE)
             local_ip = cfg.get("IPV4", "127.0.0.1")
 

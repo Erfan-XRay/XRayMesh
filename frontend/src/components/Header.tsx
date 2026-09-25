@@ -51,7 +51,7 @@ export const Header: React.FC<HeaderProps> = ({
               {t("brand_title")}
             </h1>
             <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-primary/10 text-primary border border-primary/20 shrink-0">
-              v{node.xraymesh_version || "2.2.6-beta.5"}
+              v{node.xraymesh_version || "2.2.6-beta.6"}
             </span>
             {node.branch === "beta" && (
               <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0 uppercase tracking-wider">
