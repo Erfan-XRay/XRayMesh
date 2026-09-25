@@ -1,8 +1,8 @@
 {
-  "version": "2.2.6-beta.4",
+  "version": "2.2.6-beta.5",
   "branch": "beta",
-  "release_name": "XRayMesh v2.2.6-beta.4 (Node Setup Redesign & Join Fix)",
+  "release_name": "XRayMesh v2.2.6-beta.5 (Peers Redesign, One-Click Updates & Beta Channel)",
   "release_date": "2026-09-25",
-  "changelog": "Redesigned Node setup and settings: a two-step setup, one settings form with a single save bar, and a Peers & invite tab. Joining another mesh now asks for confirmation, replaces the old configuration and restores it automatically if the service fails. Fixed the join error in the web panel and the Stop button shutting down the panel.",
+  "changelog": "Redesigned Peers & Nodes with a clean server list and a This server card. Any server can now be updated with one click from any panel: files are verified before install, the previous version is restored automatically if the update is unhealthy, and progress is shown live. Each server can opt into beta updates from any panel.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update"
 }

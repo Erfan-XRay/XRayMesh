@@ -11,6 +11,12 @@ export const btnPrimary = `${BTN} bg-primary text-on-primary hover:bg-primary-ho
 export const btnSecondary = `${BTN} bg-surface border border-card-border text-text-main hover:border-card-border-hover`;
 export const btnGhost = `${BTN} text-text-muted hover:text-text-main hover:bg-surface`;
 export const btnDanger = `${BTN} bg-accent-red text-white hover:opacity-90`;
+export const btnWarning = `${BTN} bg-amber-500 text-black hover:bg-amber-400`;
+// Compact variants for dense rows (tables, lists).
+const BTN_SM = 'inline-flex items-center justify-center gap-1.5 min-h-8 px-3 rounded-lg text-xs font-semibold transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap';
+export const btnPrimarySm = `${BTN_SM} bg-primary text-on-primary hover:bg-primary-hover`;
+export const btnSecondarySm = `${BTN_SM} bg-surface border border-card-border text-text-main hover:border-card-border-hover`;
+export const btnGhostSm = `${BTN_SM} text-text-muted hover:text-text-main hover:bg-surface`;
 export const btnDangerSoft = `${BTN} border border-rose-500/30 text-rose-400 hover:bg-rose-500/10`;
 export const iconBtn = 'inline-flex items-center justify-center w-10 h-10 rounded-xl text-text-muted hover:text-text-main hover:bg-surface transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer';
 export const cardClass = 'rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg';
@@ -37,7 +43,7 @@ export const ErrorPanel: React.FC<{ message: string; details?: string; t: Transl
     {details && (
       <details className="mt-2 ms-6">
         <summary className="text-xs text-text-muted cursor-pointer select-none">{t('join_err_details')}</summary>
-        <pre dir="ltr" className="mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-text-muted">
+        <pre dir="ltr" className="mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-xs text-text-muted">
           {details}
         </pre>
       </details>

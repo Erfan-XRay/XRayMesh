@@ -16,6 +16,7 @@ import {
 } from './types';
 import { useTheme } from './theme/useTheme';
 import { useTranslation } from './i18n/useTranslation';
+import { useNodeUpdates } from './hooks/useNodeUpdates';
 import * as api from './services/api';
 
 import { Header } from './components/Header';
@@ -63,7 +64,6 @@ export default function App() {
   // Dashboard data
   const [status, setStatus] = useState<StatusResponse>(EMPTY_STATUS);
   const [peers, setPeers] = useState<Peer[]>([]);
-  const [clusterVersionDrift, setClusterVersionDrift] = useState<boolean>(false);
   const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
   const [tunnels, setTunnels] = useState<TunnelsData>({ haproxy: [], iptables: [], gost: [], realm: [] });
   const [interfaces, setInterfaces] = useState<string[]>(['any']);
@@ -182,7 +182,6 @@ export default function App() {
       }));
       markedPeers.sort((a, b) => Number(b.is_current ?? false) - Number(a.is_current ?? false));
       setPeers(markedPeers);
-      setClusterVersionDrift(!!peersResult.clusterVersionDrift);
       setTunnels(tunnelsData);
       setVersionInfo(verData);
     } catch {
@@ -191,6 +190,9 @@ export default function App() {
       setInitialLoaded(true);
     }
   }, []);
+
+  // Update runs live here so their progress survives switching tabs.
+  const { runs: updateRuns, start: startUpdate, dismiss: dismissUpdate } = useNodeUpdates(loadDashboard);
 
   const loadInterfaces = useCallback(async () => {
     const ifaces = await api.fetchInterfaces();
@@ -274,31 +276,22 @@ export default function App() {
 
   // ─── Login Handlers ─────────────────────────────────────
   const handleLoginPassword = useCallback(
+    // Errors propagate to the login page, which shows them inline.
     async (password: string) => {
-      try {
-        await api.loginWithPassword(password);
-        setIsAuthenticated(true);
-        setShowLogin(false);
-        addToast('✓ Logged in', 'success');
-      } catch (e: any) {
-        addToast(e.message || 'Login failed', 'error');
-        throw e;
-      }
+      await api.loginWithPassword(password);
+      setIsAuthenticated(true);
+      setShowLogin(false);
+      addToast('✓ Logged in', 'success');
     },
     [addToast]
   );
 
   const handleLoginToken = useCallback(
     async (token: string) => {
-      try {
-        await api.loginWithToken(token);
-        setIsAuthenticated(true);
-        setShowLogin(false);
-        addToast('✓ Token accepted', 'success');
-      } catch (e: any) {
-        addToast(e.message || 'Token invalid', 'error');
-        throw e;
-      }
+      await api.loginWithToken(token);
+      setIsAuthenticated(true);
+      setShowLogin(false);
+      addToast('✓ Token accepted', 'success');
     },
     [addToast]
   );
@@ -548,6 +541,10 @@ export default function App() {
         onLoginToken={handleLoginToken}
         onCopy={handleCopy}
         copiedKey={copiedKey}
+        lang={lang}
+        onSelectLang={setLang}
+        themeMode={themeMode}
+        onSelectThemeMode={setThemeMode}
         t={t}
       />
 
@@ -574,38 +571,31 @@ export default function App() {
             />
           </div>
 
-          {/* Version Update Notification Banner */}
-          {versionInfo?.update_available && (
-            <div className="relative z-20 mb-4 sm:mb-6 p-3.5 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-950/40 via-purple-900/30 to-slate-900/50 border border-purple-500/30 backdrop-blur-xl shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4 animate-fade-in">
-              <div className="flex items-start md:items-center gap-3">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center justify-center shrink-0 mt-0.5 md:mt-0">
-                  <ArrowUpCircle className="w-5 h-5 animate-pulse" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className="text-xs sm:text-sm font-bold text-text-main">
-                      {t('version_update_available')}: v{versionInfo.latest_version}
-                    </h4>
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-primary/20 text-primary border border-primary/30">
-                      Current: v{versionInfo.current_version}
-                    </span>
-                  </div>
-                  <p className="text-xs text-text-muted mt-1 max-w-2xl leading-relaxed">
-                    {versionInfo.release_notes || 'A new update is available for XRayMesh.'}
+          {/* Update notice for this server; the Peers tab holds the one-click update. */}
+          {isNodeConfigured && versionInfo?.update_available && activeTab !== 'peers' && (
+            <div className="relative z-20 mb-4 sm:mb-6 p-3.5 sm:p-4 rounded-2xl bg-card border border-primary-border backdrop-blur-xl shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-3 animate-fade-in">
+              <div className="flex items-start gap-3 min-w-0">
+                <span className="w-9 h-9 rounded-xl bg-primary-subtle text-primary flex items-center justify-center shrink-0" aria-hidden="true">
+                  <ArrowUpCircle className="w-5 h-5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-text-main">
+                    {t('version_update_available')}: <bdi dir="ltr" className="font-mono">{versionInfo.latest_version}</bdi>
                   </p>
+                  {(versionInfo.release_notes || typeof versionInfo.changelog === 'string') && (
+                    <p className="text-xs text-text-muted mt-0.5 max-w-2xl leading-relaxed" dir="auto">
+                      {versionInfo.release_notes || (versionInfo.changelog as unknown as string)}
+                    </p>
+                  )}
                 </div>
               </div>
-              <div className="flex items-center gap-2 w-full md:w-auto shrink-0">
-                {versionInfo.update_command && (
-                  <button
-                    onClick={() => handleCopy(versionInfo.update_command!)}
-                    className="w-full md:w-auto flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-primary text-black font-semibold text-xs shadow-md shadow-primary/20 hover:opacity-90 active:scale-95 transition-all cursor-pointer"
-                    title={versionInfo.update_command}
-                  >
-                    <span>{t('version_copy_update_cmd')}</span>
-                  </button>
-                )}
-              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('peers')}
+                className="w-full md:w-auto shrink-0 inline-flex items-center justify-center gap-2 min-h-10 px-4 rounded-xl bg-primary text-on-primary text-sm font-semibold hover:bg-primary-hover transition-colors cursor-pointer"
+              >
+                {t('version_view_updates')}
+              </button>
             </div>
           )}
 
@@ -678,11 +668,13 @@ export default function App() {
             {activeTab === 'peers' && (
               <PeersTab
                 peers={peers}
-                clusterVersionDrift={clusterVersionDrift}
-                updateCommand={versionInfo?.update_command}
-                onRefresh={handleRefresh}
+                updateRuns={updateRuns}
+                onStartUpdate={startUpdate}
+                onDismissUpdate={dismissUpdate}
+                onRefresh={loadDashboard}
                 onQuickPing={handleQuickPing}
                 onQuickSpeedtest={handleQuickSpeedtest}
+                onNotify={addToast}
                 onCopy={handleCopy}
                 copiedKey={copiedKey}
                 t={t}

@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="2.2.6-beta.4"
+readonly VERSION="2.2.6-beta.5"
 readonly DEFAULT_BRANCH="beta"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
@@ -33,6 +33,9 @@ readonly FALLBACK_REALM_VERSION="v2.6.2"
 readonly WEB_DIR="${INSTALL_DIR}/web"
 readonly WEB_CONFIG_FILE="/etc/xraymesh/web.env"
 readonly WEB_SERVICE_FILE="/etc/systemd/system/xraymesh-web.service"
+readonly UPDATE_STATUS_FILE="${XRAYMESH_UPDATE_STATUS_FILE:-/var/lib/xraymesh/update-status.json}"
+readonly UPDATE_LOCK_FILE="${XRAYMESH_UPDATE_LOCK_FILE:-/run/xraymesh-update.lock}"
+readonly UPDATE_BACKUP_DIR="${INSTALL_DIR}/backups"
 readonly IPERF_SERVICE_FILE="/etc/systemd/system/xraymesh-iperf.service"
 readonly IPERF_RUNNER="${INSTALL_DIR}/xraymesh-iperf-runner"
 readonly WEB_TOKEN_FILE="/etc/xraymesh/web-tokens.json"
@@ -2620,15 +2623,8 @@ download_file_with_mirrors() {
   local rel_path="$2"
   local mode="${3:-0644}"
   local branch; branch="$(get_active_branch)"
-  local ts
-  ts="$(date +%s)"
-
-  local urls=(
-    "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/${branch}/${rel_path}?t=${ts}"
-    "https://cdn.jsdelivr.net/gh/Erfan-XRay/XRayMesh@${branch}/${rel_path}"
-    "https://fastly.jsdelivr.net/gh/Erfan-XRay/XRayMesh@${branch}/${rel_path}"
-    "https://raw.gitmirror.com/Erfan-XRay/XRayMesh/${branch}/${rel_path}"
-  )
+  local -a urls
+  mapfile -t urls < <(release_mirror_urls "$rel_path" "$branch")
 
   local tmp
   tmp="$(mktemp)"
@@ -2727,39 +2723,413 @@ update_web_assets() {
   fi
 }
 
-update_node_full() {
-  require_root
-  require_linux
-  local branch; branch="$(get_active_branch)"
-  info "Starting node update (branch: ${branch})..."
+# ---------------------------------------------------------------------------
+# Safe self-update
+# Files are downloaded to a staging directory and verified (syntax + exact
+# release version) before anything is replaced. The previous files are backed
+# up, and if the restarted services are not healthy they are restored.
+# Progress is written to UPDATE_STATUS_FILE so the web panel can follow it.
+# ---------------------------------------------------------------------------
 
-  # 1. Update CLI, Web Server, frontend assets, runner and services
-  update_web_assets
+release_mirror_urls() {
+  local rel_path="$1" branch="$2" ts
+  ts="$(date +%s)"
+  printf '%s\n' \
+    "https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/${branch}/${rel_path}?t=${ts}" \
+    "https://cdn.jsdelivr.net/gh/Erfan-XRay/XRayMesh@${branch}/${rel_path}" \
+    "https://fastly.jsdelivr.net/gh/Erfan-XRay/XRayMesh@${branch}/${rel_path}" \
+    "https://raw.gitmirror.com/Erfan-XRay/XRayMesh/${branch}/${rel_path}"
+}
 
-  # 2. Check and update EasyTier binary if a new release is available
-  local current_et=""
+# Exit 0 when version $1 is newer than $2 (same rules as is_newer_version in web/server.py).
+version_is_newer() {
+  python3 - "$1" "$2" <<'PY'
+import re
+import sys
+
+
+def parse(v):
+    m = re.match(r'^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-?([a-zA-Z]+)(?:\.?(\d+))?)?', str(v).strip().lstrip('v'))
+    if not m:
+        return (0, 0, 0, 0, "", 0)
+    tag = m.group(4)
+    return (int(m.group(1) or 0), int(m.group(2) or 0), int(m.group(3) or 0),
+            1 if tag is None else 0, (tag or "").lower(), int(m.group(5) or 0))
+
+
+sys.exit(0 if parse(sys.argv[1]) > parse(sys.argv[2]) else 1)
+PY
+}
+
+# Version of the installed CLI, which may differ from $VERSION when this
+# script was piped from GitHub (bash <(curl ...) update).
+installed_version() {
+  local v=""
+  if [[ -f "${INSTALL_DIR}/xraymesh.sh" ]]; then
+    v="$(sed -n 's/^readonly VERSION="\(.*\)"$/\1/p' "${INSTALL_DIR}/xraymesh.sh" | head -n1)"
+  fi
+  printf '%s\n' "${v:-$VERSION}"
+}
+
+# update_status <state> <step> [error] [rolled_back]
+update_status() {
+  local state="$1" step="$2" error="${3:-}" rolled_back="${4:-false}"
+  mkdir -p "$(dirname "$UPDATE_STATUS_FILE")" 2>/dev/null || true
+  python3 - "$UPDATE_STATUS_FILE" "$state" "$step" "$error" "$rolled_back" \
+    "${UPDATE_FROM:-}" "${UPDATE_TARGET:-}" "${UPDATE_BRANCH:-}" <<'PY' || true
+import json
+import os
+import sys
+import time
+
+path, state, step, error, rolled_back, from_v, target_v, branch = sys.argv[1:9]
+try:
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+except Exception:
+    data = {}
+now = int(time.time())
+# A job queued by the web panel keeps its start time; anything else starts now.
+if state == "running" and data.get("state") not in ("queued", "running"):
+    data["started_at"] = now
+data.setdefault("started_at", now)
+data.update({
+    "state": state,
+    "step": step,
+    "error": error,
+    "rolled_back": rolled_back == "true",
+    "from_version": from_v,
+    "target_version": target_v,
+    "branch": branch,
+    "updated_at": now,
+})
+if state in ("success", "failed", "up_to_date"):
+    data["finished_at"] = now
+else:
+    data.pop("finished_at", None)
+tmp = path + ".tmp"
+with open(tmp, "w", encoding="utf-8") as f:
+    json.dump(data, f)
+os.replace(tmp, path)
+PY
+}
+
+# Highest release version any mirror reports for the channel (mirrors can lag).
+fetch_channel_version() {
+  local branch="$1" url tmp v best=""
+  local -a urls
+  mapfile -t urls < <(release_mirror_urls "version.json" "$branch")
+  tmp="$(mktemp)"
+  for url in "${urls[@]}"; do
+    if curl -fsSL -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+      --connect-timeout 6 --max-time 20 "$url" -o "$tmp" 2>/dev/null; then
+      v="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1])).get("version", ""))' "$tmp" 2>/dev/null || true)"
+      if [[ "$v" =~ ^[0-9]+\.[0-9]+ ]] && { [[ -z "$best" ]] || version_is_newer "$v" "$best"; }; then
+        best="$v"
+      fi
+    fi
+  done
+  rm -f "$tmp"
+  [[ -n "$best" ]] || return 1
+  printf '%s\n' "$best"
+}
+
+# A staged file must parse and carry exactly the expected release version,
+# so a lagging mirror can never mix files from two releases.
+stage_file_ok() {
+  local file="$1" rel_path="$2" expected="$3"
+  [[ -s "$file" ]] || return 1
+  case "$rel_path" in
+    xraymesh.sh)
+      bash -n "$file" 2>/dev/null || return 1
+      [[ "$(sed -n 's/^readonly VERSION="\(.*\)"$/\1/p' "$file" | head -n1)" == "$expected" ]]
+      ;;
+    web/server.py)
+      python3 -c 'import ast, sys; ast.parse(open(sys.argv[1], encoding="utf-8").read())' "$file" 2>/dev/null || return 1
+      [[ "$(sed -n 's/^CURRENT_VERSION = "\(.*\)"$/\1/p' "$file" | head -n1)" == "$expected" ]]
+      ;;
+    web/static/index.html)
+      grep -qi '<html' "$file" && grep -qF "name=\"xraymesh-version\" content=\"${expected}\"" "$file"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+fetch_release_file() {
+  local target="$1" rel_path="$2" branch="$3" expected="$4" url
+  local -a urls
+  mapfile -t urls < <(release_mirror_urls "$rel_path" "$branch")
+  mkdir -p "$(dirname "$target")"
+  for url in "${urls[@]}"; do
+    if curl -fsSL -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+      --connect-timeout 6 --max-time 90 --retry 1 "$url" -o "$target" 2>/dev/null \
+      && stage_file_ok "$target" "$rel_path" "$expected"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+update_app_files() {
+  printf '%s\n' "${INSTALL_DIR}/xraymesh.sh" "${WEB_DIR}/server.py" \
+    "${WEB_DIR}/static/index.html" "${INSTALL_DIR}/xraymesh-runner"
+}
+
+backup_app_files() {
+  local backup="$1" f
+  mkdir -p "$backup" || return 1
+  while IFS= read -r f; do
+    [[ -f "$f" ]] || continue
+    mkdir -p "${backup}$(dirname "$f")" && cp -p "$f" "${backup}${f}" || return 1
+  done < <(update_app_files)
+}
+
+restore_app_files() {
+  local backup="$1" f
+  while IFS= read -r f; do
+    [[ -f "${backup}${f}" ]] || continue
+    cp -p "${backup}${f}" "${f}.restore" && mv -f "${f}.restore" "$f"
+  done < <(update_app_files)
+}
+
+prune_update_backups() {
+  local old
+  [[ -d "$UPDATE_BACKUP_DIR" ]] || return 0
+  while IFS= read -r old; do
+    [[ -n "$old" ]] && rm -rf -- "$old"
+  done < <(find "$UPDATE_BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' 2>/dev/null | sort -rn | tail -n +4 | cut -d' ' -f2-)
+}
+
+# mv onto a new inode, so the copy of this script that bash is executing is never overwritten.
+install_staged_file() {
+  local src="$1" dst="$2" mode="$3"
+  mkdir -p "$(dirname "$dst")" && install -m "$mode" "$src" "${dst}.new" && mv -f "${dst}.new" "$dst"
+}
+
+# Regenerate the runner and units with the freshly installed script's code.
+refresh_generated_files() {
+  bash "${INSTALL_DIR}/xraymesh.sh" write-runner >/dev/null 2>&1 || true
+  [[ -f "$WEB_SERVICE_FILE" ]] && write_web_services >/dev/null 2>&1 || true
+  systemctl daemon-reload 2>/dev/null || true
+}
+
+inside_web_service() {
+  grep -q 'xraymesh-web.service' /proc/self/cgroup 2>/dev/null
+}
+
+# Wait until the web panel reports the target version and, if it was running
+# before, the mesh service is active again.
+update_services_healthy() {
+  local target="$1" mesh_expected="$2" port bind host scheme version="" i
+  port="$(get_web_port)"
+  bind="$(awk -F= '/^WEB_BIND=/ {gsub(/[" '\''\r\n]/, "", $2); print $2}' "$WEB_CONFIG_FILE" 2>/dev/null || true)"
+  host="127.0.0.1"
+  [[ -n "$bind" && "$bind" != "0.0.0.0" && "$bind" != *:* ]] && host="$bind"
+  for (( i = 0; i < 45; i++ )); do
+    sleep 1
+    if [[ -f "$WEB_SERVICE_FILE" ]]; then
+      version=""
+      for scheme in http https; do
+        version="$(curl -fsSk --max-time 3 "${scheme}://${host}:${port}/api/cluster/info" 2>/dev/null \
+          | python3 -c 'import json, sys; print(json.load(sys.stdin).get("version", ""))' 2>/dev/null || true)"
+        [[ "$version" == "$target" ]] && break
+      done
+      [[ "$version" == "$target" ]] || continue
+    fi
+    if (( mesh_expected )) && ! systemctl is-active --quiet xraymesh.service 2>/dev/null; then
+      continue
+    fi
+    return 0
+  done
+  return 1
+}
+
+restart_updated_services() {
+  local mesh_was_active="$1"
+  (( mesh_was_active )) && systemctl restart xraymesh.service >/dev/null 2>&1 || true
+  systemctl restart xraymesh-iperf.service >/dev/null 2>&1 || true
+  [[ -f "$WEB_SERVICE_FILE" ]] && systemctl restart xraymesh-web.service >/dev/null 2>&1 || true
+}
+
+persist_update_branch() {
+  local branch="$1"
+  [[ -f "$WEB_CONFIG_FILE" ]] || return 0
+  if grep -q '^XRAYMESH_BRANCH=' "$WEB_CONFIG_FILE" 2>/dev/null; then
+    sed -i "s|^XRAYMESH_BRANCH=.*|XRAYMESH_BRANCH=\"${branch}\"|" "$WEB_CONFIG_FILE"
+  else
+    echo "XRAYMESH_BRANCH=\"${branch}\"" >> "$WEB_CONFIG_FILE"
+  fi
+}
+
+# Returns 0 on success or when already up to date, 3 when another update runs, 1 on failure.
+update_app_safe() {
+  local lock_fd stage backup rel mesh_was_active=0 mode
+  mkdir -p "$(dirname "$UPDATE_LOCK_FILE")" 2>/dev/null || true
+  exec {lock_fd}>"$UPDATE_LOCK_FILE"
+  if ! flock -n "$lock_fd"; then
+    fail "Another update is already running on this server."
+    return 3
+  fi
+
+  UPDATE_BRANCH="$(get_active_branch)"
+  UPDATE_FROM="$(installed_version)"
+  UPDATE_TARGET=""
+  update_status running download
+  info "Checking the '${UPDATE_BRANCH}' channel for a newer release..."
+
+  if ! UPDATE_TARGET="$(fetch_channel_version "$UPDATE_BRANCH")"; then
+    UPDATE_TARGET=""
+    update_status failed download "Could not read the latest version from any mirror. Check this server's internet access."
+    fail "Could not read the latest version from any mirror."
+    exec {lock_fd}>&-
+    return 1
+  fi
+
+  if [[ "${XRAYMESH_FORCE_UPDATE:-0}" != "1" ]] && ! version_is_newer "$UPDATE_TARGET" "$UPDATE_FROM"; then
+    update_status up_to_date complete
+    ok "Already up to date (${UPDATE_FROM}; latest on '${UPDATE_BRANCH}': ${UPDATE_TARGET})."
+    exec {lock_fd}>&-
+    return 0
+  fi
+
+  stage="$(mktemp -d)"
+  for rel in xraymesh.sh web/server.py web/static/index.html; do
+    info "Downloading ${rel} (${UPDATE_TARGET})..."
+    if ! fetch_release_file "${stage}/${rel}" "$rel" "$UPDATE_BRANCH" "$UPDATE_TARGET"; then
+      update_status failed verify "Could not download a verified copy of ${rel} for ${UPDATE_TARGET}. Mirrors may still be syncing; try again in a few minutes."
+      fail "No mirror served a valid ${rel} for ${UPDATE_TARGET}. Nothing was changed."
+      rm -rf -- "$stage"
+      exec {lock_fd}>&-
+      return 1
+    fi
+  done
+  update_status running verify
+  ok "All files for ${UPDATE_TARGET} downloaded and verified."
+
+  # set -e is off inside "update_app_safe || ...", so every step below is checked explicitly.
+  update_status running backup
+  backup="${UPDATE_BACKUP_DIR}/$(date +%Y%m%d-%H%M%S)-${UPDATE_FROM}"
+  if ! backup_app_files "$backup"; then
+    update_status failed backup "Could not back up the current files to ${backup} (disk full?). Nothing was changed."
+    fail "Backup failed; nothing was changed."
+    rm -rf -- "$stage" "$backup"
+    exec {lock_fd}>&-
+    return 1
+  fi
+
+  update_status running install
+  for rel in xraymesh.sh web/server.py web/static/index.html; do
+    mode=0644
+    [[ "$rel" == "web/static/index.html" ]] || mode=0755
+    if ! install_staged_file "${stage}/${rel}" "${INSTALL_DIR}/${rel}" "$mode"; then
+      restore_app_files "$backup"
+      update_status failed install "Could not install ${rel}; the previous files were restored." true
+      fail "Installing ${rel} failed; the previous files were restored."
+      rm -rf -- "$stage"
+      exec {lock_fd}>&-
+      return 1
+    fi
+  done
+  rm -rf -- "$stage"
+  ln -sf "${INSTALL_DIR}/xraymesh.sh" /usr/local/bin/xraymesh 2>/dev/null || true
+  persist_update_branch "$UPDATE_BRANCH"
+  refresh_generated_files
+
+  update_status running restart
+  systemctl is-active --quiet xraymesh.service 2>/dev/null && mesh_was_active=1
+
+  if inside_web_service; then
+    # Restarting the web unit would kill this process, so hand the restart off
+    # and finish without a health check (only on hosts without systemd-run).
+    (( mesh_was_active )) && systemctl restart xraymesh.service >/dev/null 2>&1 || true
+    update_status success complete
+    ok "Updated to ${UPDATE_TARGET}. The web panel restarts in a few seconds."
+    exec {lock_fd}>&-
+    ( sleep 3 && systemctl restart xraymesh-web.service ) >/dev/null 2>&1 &
+    return 0
+  fi
+
+  restart_updated_services "$mesh_was_active"
+  update_status running health
+  if update_services_healthy "$UPDATE_TARGET" "$mesh_was_active"; then
+    update_status success complete
+    prune_update_backups
+    ok "Updated ${UPDATE_FROM} -> ${UPDATE_TARGET}."
+    exec {lock_fd}>&-
+    return 0
+  fi
+
+  warn "The updated services did not come back healthy. Restoring ${UPDATE_FROM}..."
+  update_status running rollback
+  restore_app_files "$backup"
+  refresh_generated_files
+  restart_updated_services "$mesh_was_active"
+  update_status failed rollback \
+    "The services did not report ${UPDATE_TARGET} as healthy within 45 seconds, so ${UPDATE_FROM} was restored." true
+  fail "Update failed; ${UPDATE_FROM} was restored."
+  exec {lock_fd}>&-
+  return 1
+}
+
+# Update the EasyTier core if a newer release exists, restoring the previous
+# binaries when the mesh service does not start with the new ones.
+update_easytier_core_safe() {
+  local current_et latest_et latest_et_json tmp mesh_was_active=0
   current_et="$(cat "${INSTALL_DIR}/easytier.version" 2>/dev/null || echo "0.0.0")"
-  # Normalize leading 'v' (install_core stores tag_name like v2.6.4,
-  # while latest lookup strips it) so equal versions don't trigger re-download.
   current_et="${current_et#v}"
   current_et="${current_et#V}"
-  local latest_et_json
   latest_et_json="$(curl -fsSL --connect-timeout 5 --max-time 12 https://api.github.com/repos/EasyTier/EasyTier/releases/latest 2>/dev/null || true)"
-  local latest_et=""
+  latest_et=""
   if [[ -n "$latest_et_json" ]]; then
     latest_et="$(printf '%s' "$latest_et_json" | grep -Po '"tag_name":\s*"v?\K[0-9.]+' | head -n1 || true)"
   fi
-  latest_et="${latest_et#v}"
-  latest_et="${latest_et#V}"
-  if [[ -n "$latest_et" && "$latest_et" != "$current_et" ]]; then
-    info "Updating EasyTier core (${current_et} → ${latest_et})..."
-    install_core || true
-    if systemctl is-active --quiet xraymesh.service 2>/dev/null; then
-      ( sleep 1 && systemctl restart xraymesh.service ) >/dev/null 2>&1 &
+  [[ -n "$latest_et" && "$latest_et" != "$current_et" ]] || return 0
+
+  info "Updating EasyTier core (${current_et} -> ${latest_et})..."
+  systemctl is-active --quiet xraymesh.service 2>/dev/null && mesh_was_active=1
+  tmp="$(mktemp -d)"
+  cp -p "${BIN_DIR}/easytier-core" "${BIN_DIR}/easytier-cli" "${INSTALL_DIR}/easytier.version" "$tmp/" 2>/dev/null || true
+  if ! install_core; then
+    warn "EasyTier core update failed; keeping ${current_et}."
+    restore_easytier_binaries "$tmp"
+  elif (( mesh_was_active )); then
+    systemctl restart xraymesh.service >/dev/null 2>&1 || true
+    sleep 3
+    if ! systemctl is-active --quiet xraymesh.service 2>/dev/null; then
+      warn "The mesh service did not start with EasyTier ${latest_et}; restoring ${current_et}."
+      restore_easytier_binaries "$tmp"
+      systemctl restart xraymesh.service >/dev/null 2>&1 || true
     fi
   fi
+  rm -rf -- "$tmp"
+}
 
-  ok "Node update completed successfully."
+restore_easytier_binaries() {
+  local saved="$1"
+  [[ -f "$saved/easytier-core" ]] && cp -p "$saved/easytier-core" "${BIN_DIR}/easytier-core"
+  [[ -f "$saved/easytier-cli" ]] && cp -p "$saved/easytier-cli" "${BIN_DIR}/easytier-cli"
+  [[ -f "$saved/easytier.version" ]] && cp -p "$saved/easytier.version" "${INSTALL_DIR}/easytier.version"
+  return 0
+}
+
+update_node_full() {
+  require_root
+  require_linux
+  local rc=0
+  info "Starting node update (channel: $(get_active_branch))..."
+  # Without systemd-run the updater shares the web unit's cgroup, and the
+  # delayed web restart at the end of update_app_safe would cut the core update short.
+  if inside_web_service; then
+    update_easytier_core_safe || true
+    update_app_safe || rc=$?
+    return "$rc"
+  fi
+  update_app_safe || rc=$?
+  (( rc == 0 )) || return "$rc"
+  update_easytier_core_safe || true
+  ok "Node update finished."
 }
 
 install_web_runtime() {
@@ -3373,7 +3743,7 @@ update_core() {
   after="$(cat "${INSTALL_DIR}/easytier.version")"
   [[ -f "$SERVICE_FILE" ]] && ( sleep 1 && systemctl restart xraymesh.service ) >/dev/null 2>&1 &
   if [[ -d "$WEB_DIR" || -f "$WEB_SERVICE_FILE" ]]; then
-    update_web_assets
+    update_app_safe || warn "The XRayMesh update did not complete; see the messages above."
   fi
   ok "EasyTier: ${before} → ${after}"
   [[ -t 0 ]] && pause || true

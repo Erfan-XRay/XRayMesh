@@ -40,5 +40,7 @@ jobs:
         run: |
           python3 tests/web_interfaces_test.py
           python3 tests/node_join_test.py
+          python3 tests/update_flow_test.py
+          bash tests/update_verify_test.sh
           python3 -m py_compile web/server.py
           bash tests/web_api_test.sh

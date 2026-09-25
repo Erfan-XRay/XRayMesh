@@ -45,6 +45,36 @@ export interface Peer {
   update_available?: boolean;
   version_drift?: boolean;
   is_current?: boolean;
+  /** Reported by each server for its own update channel (2.2.6-beta.5+). */
+  channel?: UpdateChannel;
+  latest_version?: string;
+  update?: UpdateJob;
+  connection?: 'direct' | 'relay' | 'local';
+  /** Runs the pre-2.2.6-beta.5 updater: no step reports, no remote channel change. */
+  legacy?: boolean;
+  loss_rate?: string | number;
+}
+
+export type UpdateChannel = 'stable' | 'beta' | 'custom';
+
+/** Self-update job recorded by xraymesh.sh node-update. */
+export interface UpdateJob {
+  state?: 'idle' | 'queued' | 'running' | 'success' | 'failed' | 'up_to_date';
+  step?: string;
+  target_version?: string;
+  error?: string;
+  rolled_back?: boolean;
+  started_at?: number;
+  finished_at?: number;
+}
+
+export interface UpdateSummary {
+  version?: string;
+  branch?: string;
+  channel?: UpdateChannel;
+  latest_version?: string;
+  update_available?: boolean;
+  update?: UpdateJob;
 }
 
 export interface HaproxyTunnel {
@@ -103,6 +133,7 @@ export interface VersionInfo {
   current_version: string;
   latest_version: string;
   branch?: string;
+  channel?: UpdateChannel;
   update_available: boolean;
   changelog?: string[];
   release_notes?: string;

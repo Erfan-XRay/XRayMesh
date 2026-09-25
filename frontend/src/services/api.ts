@@ -1,4 +1,4 @@
-import { StatusResponse, Peer, TunnelsData, PingResult, SpeedtestData, NodeConfig, MeshInviteData, JoinMeshResult, RollbackInfo, VersionInfo } from '../types';
+import { StatusResponse, Peer, TunnelsData, PingResult, SpeedtestData, NodeConfig, MeshInviteData, JoinMeshResult, RollbackInfo, VersionInfo, UpdateSummary } from '../types';
 
 export async function fetchAuthStatus(): Promise<{ authenticated: boolean; password_configured: boolean }> {
   const res = await fetch('/api/auth/status');
@@ -447,26 +447,47 @@ export async function fetchVersionInfo(): Promise<VersionInfo> {
   return d.data;
 }
 
-export async function updateNode(targetIp?: string): Promise<{ ok: boolean; message: string }> {
-  const res = await fetch('/api/cluster/update', {
+/** Error from a node action; `code` explains why (unreachable, auth_failed, unsupported, already_running...). */
+export class NodeActionError extends Error {
+  code: string;
+
+  constructor(message: string, code = '') {
+    super(message);
+    this.name = 'NodeActionError';
+    this.code = code;
+  }
+}
+
+async function postNodeAction(path: string, body: object): Promise<any> {
+  const res = await fetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target_ip: targetIp || 'local' }),
+    body: JSON.stringify(body),
   });
-  const d = await res.json();
-  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to update node');
+  const d = await readJson(res);
+  if (!res.ok || !d.ok) throw new NodeActionError(d.error || 'The request failed', d.code || '');
   return d;
 }
 
-export async function updateAllNodes(): Promise<{ ok: boolean; message: string; results?: Record<string, any> }> {
-  const res = await fetch('/api/cluster/update', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target_ip: 'all' }),
-  });
-  const d = await res.json();
-  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to update all nodes');
-  return d;
+/** Start a verified self-update on any mesh server (this one included). */
+export async function startNodeUpdate(
+  targetIp: string
+): Promise<{ legacy: boolean; status: UpdateSummary }> {
+  const d = await postNodeAction('/api/cluster/update', { target_ip: targetIp });
+  return { legacy: Boolean(d.legacy), status: d.status || {} };
+}
+
+/** Poll a server's update job. `reachable` is false while it restarts. */
+export async function fetchNodeUpdateStatus(
+  targetIp: string
+): Promise<{ reachable: boolean; legacy: boolean; status: UpdateSummary }> {
+  const d = await postNodeAction('/api/cluster/update/status', { target_ip: targetIp });
+  return { reachable: d.reachable !== false, legacy: Boolean(d.legacy), status: d.status || {} };
+}
+
+export async function setNodeUpdateChannel(targetIp: string, channel: 'stable' | 'beta'): Promise<UpdateSummary> {
+  const d = await postNodeAction('/api/cluster/channel', { target_ip: targetIp, channel });
+  return d.status || {};
 }
 
 

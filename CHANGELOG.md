@@ -2,6 +2,25 @@
 
 All notable XRayMesh changes are documented here.
 
+## [2.2.6-beta.5] - 2026-09-25
+
+### Added
+- One-click update for any server in the mesh, from any panel. Progress is shown live (downloading, verifying, installing, restarting), and the result is reported back: updated, already up to date, or failed with the reason.
+- Safe self-updater (`xraymesh update` and `node-update`): every file is downloaded to a staging directory and must parse and carry exactly the target release version before anything is replaced, so lagging mirrors can never mix two releases. The current files are backed up, a lock prevents two updates at once, and if the web panel or mesh service is not healthy within 45 seconds the previous version is restored automatically.
+- Update channels: each server can opt into beta updates, with a clear warning, from its own panel or from any other panel in the mesh. Switching back to stable never downgrades; the server waits for the next newer stable release.
+- `index.html` now carries a `xraymesh-version` marker injected at build time, used by the updater to verify the web UI.
+
+### Changed
+- Redesigned Peers & Nodes: a "This server" card with version, update and beta switch, and a clean server list (connection type, latency quality, traffic, version and channel) with search and filters for updates and relayed peers. Fully translated and RTL-safe.
+- Each server now reports its own channel, latest release and update job, so update availability is always judged against that server's own channel.
+- The update banner links to the Peers tab instead of copying a terminal command.
+- Redesigned sign-in page: full-screen layout with ambient background, animated password/token switch, show/hide password, Caps Lock warning, token paste button, inline errors, and language and theme switches before sign-in.
+
+### Fixed
+- Older servers are updated through their legacy updater, with success detected from the version change; failures that the panel cannot fix offer the terminal command as a fallback.
+- Changing the update channel now applies immediately instead of after a web service restart.
+- Unreachable peers are re-probed after 15 seconds instead of showing an unknown version for a full minute.
+
 ## [2.2.6-beta.4] - 2026-09-25
 
 ### Changed

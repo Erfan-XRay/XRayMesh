@@ -33,7 +33,7 @@ import ssl
 from pathlib import Path
 
 # Paths & Defaults
-CURRENT_VERSION = "2.2.6-beta.4"
+CURRENT_VERSION = "2.2.6-beta.5"
 CURRENT_BRANCH = "beta"
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/xraymesh")
 BIN_DIR = os.path.join(INSTALL_DIR, "bin")
@@ -58,12 +58,15 @@ SESSIONS = {}  # session_id -> {"expires": timestamp, "user": "admin"}
 SESSION_LOCK = False
 
 # Version & Release Caching
-VERSION_CACHE = {
-    "data": None,
-    "last_checked": 0
-}
+VERSION_CACHE = {}  # branch -> {"data": version info, "last_checked": ts}
 VERSION_CACHE_TTL = 900  # 15 minutes
+VERSION_REFRESHING = set()  # branches with a background refresh in flight
 PEER_VERSION_CACHE = {}  # ip -> {"version": ver, "timestamp": ts}
+
+# Update channels map to the GitHub branch each server downloads releases from.
+CHANNEL_BRANCHES = {"stable": "main", "beta": "beta"}
+UPDATE_STATUS_FILE = os.environ.get("XRAYMESH_UPDATE_STATUS_FILE", "/var/lib/xraymesh/update-status.json")
+UPDATE_STALE_SEC = 900  # a job that stops reporting for this long is treated as failed
 
 
 def is_ssl_enabled():
@@ -120,14 +123,63 @@ def is_newer_version(remote_ver, local_ver):
         return False
 
 
-def get_version_info():
-    """Fetch version info from GitHub version.json, with 15-minute caching."""
+def branch_channel(branch):
+    """Name of the update channel a branch belongs to ("custom" for anything else)."""
+    for channel, channel_branch in CHANNEL_BRANCHES.items():
+        if branch == channel_branch:
+            return channel
+    return "custom"
+
+
+def set_env_file_value(path, key, value):
+    """Set KEY="value" in a shell-style env file, keeping every other line."""
+    lines = []
+    if os.path.isfile(path):
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()
+    entry = f'{key}="{value}"\n'
+    for i, line in enumerate(lines):
+        if line.strip().startswith(f"{key}="):
+            lines[i] = entry
+            break
+    else:
+        if lines and not lines[-1].endswith("\n"):
+            lines[-1] += "\n"
+        lines.append(entry)
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+    try:
+        os.chmod(tmp, 0o600)
+    except Exception:
+        pass
+    os.replace(tmp, path)
+
+
+def set_update_channel(channel):
+    """Persist the update channel for this server and apply it without a restart."""
+    branch = CHANNEL_BRANCHES[channel]
+    set_env_file_value(WEB_ENV_FILE, "XRAYMESH_BRANCH", branch)
+    # The service's environment is a snapshot of web.env from start-up; keep it in sync.
+    os.environ["XRAYMESH_BRANCH"] = branch
+    VERSION_CACHE.pop(branch, None)
+    return branch
+
+
+def get_version_info(branch=None):
+    """Fetch version info from the branch's version.json, with 15-minute caching per branch."""
     now = time.time()
-    if VERSION_CACHE["data"] and (now - VERSION_CACHE["last_checked"] < VERSION_CACHE_TTL):
-        return VERSION_CACHE["data"]
+    branch = branch or get_active_branch()
+    cached = VERSION_CACHE.get(branch)
+    if cached and cached.get("data") and (now - cached.get("last_checked", 0) < VERSION_CACHE_TTL):
+        # Compare against the running version at read time; it changes after a self-update.
+        data = dict(cached["data"])
+        data["current_version"] = CURRENT_VERSION
+        data["update_available"] = is_newer_version(data.get("latest_version", ""), CURRENT_VERSION)
+        return data
 
     remote_data = None
-    branch = get_active_branch()
     url = f"https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/{branch}/version.json?t={int(now)}"
     try:
         req = urllib.request.Request(
@@ -159,14 +211,78 @@ def get_version_info():
         "current_version": CURRENT_VERSION,
         "latest_version": latest_ver,
         "branch": branch,
+        "channel": branch_channel(branch),
         "update_available": is_newer_version(latest_ver, CURRENT_VERSION),
         "changelog": changelog,
         "release_notes": release_notes,
-        "update_command": update_cmd
+        "update_command": update_cmd,
+        "checked": isinstance(remote_data, dict),
     }
-    VERSION_CACHE["data"] = result
-    VERSION_CACHE["last_checked"] = now
+    VERSION_CACHE[branch] = {"data": result, "last_checked": now}
     return result
+
+
+def get_cached_version_info():
+    """Non-blocking variant for latency-sensitive probes: serve the cache and refresh it in the background."""
+    branch = get_active_branch()
+    cached = VERSION_CACHE.get(branch) or {}
+    fresh = cached.get("data") and time.time() - cached.get("last_checked", 0) < VERSION_CACHE_TTL
+    if not fresh and branch not in VERSION_REFRESHING:
+        VERSION_REFRESHING.add(branch)
+
+        def refresh():
+            try:
+                get_version_info(branch)
+            finally:
+                VERSION_REFRESHING.discard(branch)
+
+        threading.Thread(target=refresh, daemon=True).start()
+    return cached.get("data")
+
+
+def read_update_status():
+    """Last self-update job recorded by xraymesh.sh, with stalled jobs reported as failed."""
+    try:
+        with open(UPDATE_STATUS_FILE, "r", encoding="utf-8") as f:
+            status = json.load(f)
+    except Exception:
+        return {"state": "idle"}
+    if not isinstance(status, dict):
+        return {"state": "idle"}
+    last_seen = status.get("updated_at") or status.get("started_at") or 0
+    if status.get("state") in ("queued", "running") and time.time() - last_seen > UPDATE_STALE_SEC:
+        status["state"] = "failed"
+        status["error"] = status.get("error") or "The updater stopped reporting progress. Check /var/log/xraymesh-update.log or journalctl -u xraymesh-updater-temp."
+    return status
+
+
+def write_update_status(status):
+    """Record an update job state from the web side (queued / failed to launch)."""
+    os.makedirs(os.path.dirname(UPDATE_STATUS_FILE), exist_ok=True)
+    tmp = UPDATE_STATUS_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(status, f)
+    os.replace(tmp, UPDATE_STATUS_FILE)
+
+
+def update_job_running():
+    return read_update_status().get("state") in ("queued", "running")
+
+
+def local_update_summary():
+    """Version, channel and update job of this server, as shown in every panel of the mesh."""
+    info = get_cached_version_info() or {}
+    branch = get_active_branch()
+    latest = info.get("latest_version") or ""
+    job = read_update_status()
+    return {
+        "version": CURRENT_VERSION,
+        "branch": branch,
+        "channel": branch_channel(branch),
+        "latest_version": latest,
+        "update_available": bool(latest) and is_newer_version(latest, CURRENT_VERSION),
+        "update": {k: job.get(k) for k in ("state", "step", "target_version", "error", "rolled_back", "started_at", "finished_at")},
+    }
 
 
 def normalize_network_interfaces(raw_interfaces):
@@ -240,7 +356,12 @@ def get_peer_version(peer_ip, port=None, timeout=1.0):
     """Probe peer's /api/cluster/info or cached version across candidate ports."""
     now = time.time()
     cached = PEER_VERSION_CACHE.get(peer_ip, {})
-    if cached and (now - cached.get("timestamp", 0) < 60.0) and cached.get("version"):
+    # Unreachable results expire sooner, so a peer that just came up shows its version quickly
+    # without re-probing offline peers (seconds of timeouts) on every poll.
+    # Same for a peer that has not finished checking its own channel for updates yet.
+    incomplete = cached.get("version") in (None, "", "unknown") or ("channel" in cached and not cached.get("latest_version"))
+    ttl = 15.0 if incomplete else 60.0
+    if cached and (now - cached.get("timestamp", 0) < ttl) and cached.get("version"):
         return cached.get("version", "unknown")
 
     peer_info, responsive_port, _ = fetch_peer_cluster_info(peer_ip, port, timeout)
@@ -263,6 +384,11 @@ def get_peer_version(peer_ip, port=None, timeout=1.0):
     }
     if peer_branch:
         cache_entry["branch"] = peer_branch
+    # Peers from 2.2.6-beta.5 on report their own channel, latest release and update job.
+    source = peer_info if peer_info else cached
+    for key in ("channel", "latest_version", "update_available", "update"):
+        if key in source:
+            cache_entry[key] = source[key]
     PEER_VERSION_CACHE[peer_ip] = cache_entry
     return version_found
 
@@ -824,53 +950,87 @@ def run_xraymesh_cmd(args, timeout=45):
         return False, str(e)
 
 
+UPDATER_UNIT = "xraymesh-updater-temp"
+
+
 def spawn_detached_node_update():
-    """Execute node update completely detached from xraymesh-web.service cgroup.
-    This prevents systemd from killing the updater process mid-execution when
-    xraymesh-web restarts, avoiding self-restart deadlock.
+    """Start `xraymesh.sh node-update` outside the web service's cgroup and record it as queued.
+
+    The web service is restarted during the update, so the updater must not be its child.
+    Returns (ok, message, code) with code queued, already_running or launch_failed.
     """
+    if update_job_running():
+        return False, "An update is already running on this server.", "already_running"
+
     ensure_cli_and_runner_fixed()
     script = get_xraymesh_script()
     if not os.path.isfile(script):
-        return False, f"XRayMesh CLI script not found at {script}"
+        return False, f"XRayMesh CLI script not found at {script}", "launch_failed"
 
-    # 1. Try systemd-run so update executes in its own transient unit
+    branch = get_active_branch()
+    now = int(time.time())
+    job = {
+        "state": "queued",
+        "step": "queued",
+        "branch": branch,
+        "from_version": CURRENT_VERSION,
+        "target_version": (get_cached_version_info() or {}).get("latest_version", ""),
+        "error": "",
+        "rolled_back": False,
+        "started_at": now,
+        "updated_at": now,
+    }
+    try:
+        write_update_status(job)
+    except Exception:
+        pass
+
+    # 1. A transient systemd unit survives the web service restart. The branch is passed
+    #    explicitly because systemd-run does not inherit this process's environment.
     if shutil.which("systemd-run"):
-        try:
-            subprocess.run(["systemctl", "stop", "xraymesh-updater-temp.service"],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
-            cmd = [
-                "systemd-run",
-                "--unit=xraymesh-updater-temp",
-                "--description=XRayMesh Background Node Updater",
-                "--remain-after-exit=no",
-                "bash", script, "node-update"
-            ]
-            r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5)
-            if r.returncode == 0:
-                return True, "Update initiated via detached systemd-run unit."
-        except Exception:
-            pass
+        for cmd in (["systemctl", "stop", f"{UPDATER_UNIT}.service"], ["systemctl", "reset-failed", f"{UPDATER_UNIT}.service"]):
+            try:
+                subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
+            except Exception:
+                pass
+        base = [
+            "systemd-run",
+            f"--unit={UPDATER_UNIT}",
+            "--description=XRayMesh Background Node Updater",
+            "--remain-after-exit=no",
+            f"--setenv=XRAYMESH_BRANCH={branch}",
+        ]
+        # --collect (systemd 236+) cleans up failed runs; retry without it on older hosts.
+        for extra in (["--collect"], []):
+            try:
+                r = subprocess.run(base + extra + ["bash", script, "node-update"],
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5)
+                if r.returncode == 0:
+                    return True, "Update started in a detached systemd unit.", "queued"
+            except Exception:
+                pass
 
-    # 2. Fallback: double-forked setsid detached process with output logging
+    # 2. Fallback: a new session outside this request, logging to a file.
     try:
         log_file = "/var/log/xraymesh-update.log"
-        fallback_cmd = f"nohup bash {script} node-update >{log_file} 2>&1 &"
-        subprocess.Popen(
-            ["bash", "-c", fallback_cmd],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            stdin=subprocess.DEVNULL,
-            start_new_session=True,
-            close_fds=True
-        )
-        return True, f"Update initiated in background (log: {log_file})."
+        with open(log_file, "ab") as log:
+            subprocess.Popen(
+                ["bash", script, "node-update"],
+                stdout=log,
+                stderr=log,
+                stdin=subprocess.DEVNULL,
+                start_new_session=True,
+                close_fds=True,
+                env=dict(os.environ, XRAYMESH_BRANCH=branch),
+            )
+        return True, f"Update started in the background (log: {log_file}).", "queued"
     except Exception as e:
-        def run_thread():
-            time.sleep(0.5)
-            run_xraymesh_cmd(["node-update"])
-        threading.Thread(target=run_thread, daemon=True).start()
-        return True, "Update initiated in fallback thread."
+        job.update({"state": "failed", "step": "queued", "error": f"Could not start the updater: {e}", "finished_at": int(time.time())})
+        try:
+            write_update_status(job)
+        except Exception:
+            pass
+        return False, f"Could not start the updater: {e}", "launch_failed"
 
 
 _public_ip_cache = {"ip": "", "time": 0.0}
@@ -1407,6 +1567,15 @@ def apply_staged_cluster_config():
 def send_cluster_http(target_ip, target_port, endpoint, secret, payload, timeout=6, strict_port=False):
     """Send signed HTTP/HTTPS POST request to a cluster peer over mesh network,
     probing candidate ports if connection to target_port fails."""
+    ok, data, _ = cluster_request(target_ip, target_port, endpoint, secret, payload, timeout, strict_port)
+    if not ok and isinstance(data, dict):
+        data = data.get("error") or str(data)
+    return ok, data
+
+
+def cluster_request(target_ip, target_port, endpoint, secret, payload, timeout=6, strict_port=False):
+    """Like send_cluster_http, but also returns the HTTP status of the last reply
+    (None when the peer could not be reached at all)."""
     body_bytes, headers = sign_cluster_request(secret, payload)
 
     insecure_ssl_ctx = ssl.create_default_context()
@@ -1423,6 +1592,7 @@ def send_cluster_http(target_ip, target_port, endpoint, secret, payload, timeout
 
     schemes = ("https", "http") if is_ssl_enabled() else ("http", "https")
     last_err = "Failed to connect to cluster peer"
+    last_status = None
 
     for port in ports_to_try:
         for scheme in schemes:
@@ -1434,21 +1604,35 @@ def send_cluster_http(target_ip, target_port, endpoint, secret, payload, timeout
                     data = json.loads(resp.read().decode("utf-8"))
                     if target_ip in PEER_VERSION_CACHE:
                         PEER_VERSION_CACHE[target_ip]["port"] = port
-                    return True, data
+                    return True, data, resp.status
             except urllib.error.HTTPError as e:
+                last_status = e.code
                 try:
                     err_data = json.loads(e.read().decode("utf-8"))
-                    last_err = err_data.get("error", str(e))
+                    last_err = err_data.get("error", str(e)) if isinstance(err_data, dict) else str(e)
+                    if isinstance(err_data, dict) and err_data.get("code"):
+                        return False, err_data, e.code
                 except Exception:
                     last_err = str(e)
-                # If peer responded with 403, we definitely reached the right port/server
-                if e.code == 403:
-                    return False, last_err
+                # 403 and 404 mean we reached an XRayMesh panel: wrong secret, or too old for this endpoint.
+                if e.code in (403, 404):
+                    return False, last_err, e.code
                 continue
             except Exception as e:
                 last_err = str(e)
                 continue
-    return False, last_err
+    return False, last_err, last_status
+
+
+def cluster_error_code(http_status):
+    """Map a failed cluster_request to a stable code the UI can explain."""
+    if http_status == 403:
+        return "auth_failed"
+    if http_status == 404:
+        return "unsupported"
+    if http_status is None:
+        return "unreachable"
+    return "remote_error"
 
 
 def get_remote_network_interfaces(peer_ip, secret, timeout=2.0):
@@ -1752,14 +1936,15 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
         # Mesh inter-node version/node info probe (unauthenticated for cluster peers)
         if path == "/api/cluster/info":
             config = load_env_file(CONFIG_FILE)
-            self.send_json({
+            info = {
                 "ok": True,
-                "version": CURRENT_VERSION,
-                "branch": get_active_branch(),
                 "hostname": config.get("HOSTNAME", ""),
                 "ipv4": config.get("IPV4", ""),
                 "interfaces": get_network_interfaces()
-            })
+            }
+            # version, branch, channel, latest_version, update_available and the update job summary.
+            info.update(local_update_summary())
+            self.send_json(info)
             return
 
         # Protected API endpoints below
@@ -1772,6 +1957,15 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 "ok": True,
                 "data": get_version_info()
             })
+            return
+
+        elif path == "/api/update/status":
+            info = get_version_info()
+            summary = local_update_summary()
+            summary["latest_version"] = info.get("latest_version", "")
+            summary["update_available"] = bool(info.get("update_available"))
+            summary["checked"] = bool(info.get("checked"))
+            self.send_json({"ok": True, "data": summary})
             return
 
         elif path == "/api/status":
@@ -1839,6 +2033,8 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             for p in peers_list:
                 if isinstance(p, dict) and p.get("ipv4"):
                     p["is_current"] = bool(local_ip and p.get("ipv4", "").strip() == local_ip)
+                    cost = str(p.get("cost", "")).strip().lower()
+                    p["connection"] = "local" if p["is_current"] or cost == "local" else ("relay" if cost.startswith("relay") else "direct")
 
             if peers_list:
                 with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
@@ -1856,7 +2052,22 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                         peer_cache = PEER_VERSION_CACHE.get(p.get("ipv4", ""), {})
                         p["interfaces"] = normalize_network_interfaces(peer_cache.get("interfaces"))
                         p["xraymesh_branch"] = peer_cache.get("branch", "")
-                        p["update_available"] = is_newer_version(latest_v, p_ver)
+                        # Unknown until the peer tells us; never guess from this server's channel.
+                        p["channel"] = peer_cache.get("channel") or (branch_channel(p["xraymesh_branch"]) if p["xraymesh_branch"] else "")
+                        if "update_available" in peer_cache:
+                            # The peer checked its own channel.
+                            p["update_available"] = bool(peer_cache.get("update_available"))
+                            p["latest_version"] = peer_cache.get("latest_version", "")
+                        elif (p["xraymesh_branch"] or active_branch) == active_branch and p_ver != "unknown":
+                            # Older peers do not report it; our channel's release is only valid for the same branch.
+                            p["update_available"] = is_newer_version(latest_v, p_ver)
+                            p["latest_version"] = latest_v
+                        else:
+                            p["update_available"] = False
+                            p["latest_version"] = ""
+                        p["update"] = peer_cache.get("update") or {}
+                        # Reachable peers that do not report a channel run the untracked pre-2.2.6-beta.5 updater.
+                        p["legacy"] = p_ver != "unknown" and "channel" not in peer_cache
                         p["version_drift"] = (p_ver != CURRENT_VERSION)
 
             # Always include the current node so the Web UI can highlight it,
@@ -1867,20 +2078,36 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                     "hostname": local_hostname,
                     "tunnel_proto": local_proto,
                     "cost": "Local",
+                    "connection": "local",
                     "lat_ms": 0,
                     "rx_bytes": "0 B",
                     "tx_bytes": "0 B",
                     "xraymesh_version": CURRENT_VERSION,
                     "xraymesh_branch": active_branch,
                     "interfaces": get_network_interfaces(),
-                    "update_available": is_newer_version(latest_v, CURRENT_VERSION),
                     "version_drift": False,
                     "is_current": True,
                 }] + peers_list
-                if isinstance(peers_data, dict):
-                    peers_data["peers"] = peers_list
-                elif isinstance(peers_data, list):
-                    peers_data = peers_list
+            # This server's own entry always reflects its live channel and update job.
+            local_summary = local_update_summary()
+            local_summary["latest_version"] = local_summary["latest_version"] or latest_v
+            local_summary["update_available"] = is_newer_version(local_summary["latest_version"], CURRENT_VERSION)
+            for p in peers_list:
+                if isinstance(p, dict) and p.get("is_current"):
+                    p.update({
+                        "xraymesh_version": CURRENT_VERSION,
+                        "xraymesh_branch": active_branch,
+                        "channel": local_summary["channel"],
+                        "latest_version": local_summary["latest_version"],
+                        "update_available": local_summary["update_available"],
+                        "update": local_summary["update"],
+                        "version_drift": False,
+                    })
+            if isinstance(peers_data, dict):
+                peers_data["peers"] = peers_list
+            else:
+                # Also covers easytier-cli being unavailable: still show this server.
+                peers_data = peers_list
 
             has_drift = any(isinstance(p, dict) and p.get("version_drift") for p in peers_list)
             self.send_json({
@@ -2162,7 +2389,8 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
         if path in (
             "/api/cluster/prepare", "/api/cluster/commit", "/api/cluster/confirm", "/api/cluster/rollback",
             "/api/cluster/tunnels", "/api/cluster/tunnel/create", "/api/cluster/tunnel/edit", "/api/cluster/tunnel/delete",
-            "/api/cluster/node/update", "/api/cluster/interfaces", "/api/cluster/iperf/run", "/api/cluster/ping/run"
+            "/api/cluster/node/update", "/api/cluster/node/update-status", "/api/cluster/node/channel",
+            "/api/cluster/interfaces", "/api/cluster/iperf/run", "/api/cluster/ping/run"
         ):
             valid, err_msg = verify_cluster_hmac(self.headers, body)
             if not valid:
@@ -2314,13 +2542,33 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 return
 
             elif path == "/api/cluster/node/update":
-                ok, msg = spawn_detached_node_update()
+                ok, msg, code = spawn_detached_node_update()
                 cur_cfg = load_env_file(CONFIG_FILE)
                 self.send_json({
                     "ok": ok,
+                    "code": code,
                     "message": f"Update initiated on node '{cur_cfg.get('HOSTNAME', 'node')}': {msg}",
-                    "node": cur_cfg.get("HOSTNAME", "node")
+                    "error": "" if ok else msg,
+                    "node": cur_cfg.get("HOSTNAME", "node"),
+                    "status": local_update_summary(),
                 })
+                return
+
+            elif path == "/api/cluster/node/update-status":
+                self.send_json({"ok": True, "status": local_update_summary()})
+                return
+
+            elif path == "/api/cluster/node/channel":
+                channel = str(data.get("channel", "")).strip().lower()
+                if channel not in CHANNEL_BRANCHES:
+                    self.send_json({"ok": False, "code": "invalid_channel", "error": "Channel must be 'stable' or 'beta'."}, status=400)
+                    return
+                try:
+                    set_update_channel(channel)
+                except OSError as e:
+                    self.send_json({"ok": False, "code": "save_failed", "error": f"Could not save the update channel: {e}"}, status=500)
+                    return
+                self.send_json({"ok": True, "status": local_update_summary()})
                 return
 
             elif path == "/api/cluster/interfaces":
@@ -3120,76 +3368,97 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": msg or "Failed to delete node configuration."}, status=400)
             return
 
-        elif path == "/api/node/update":
-            ok, msg = spawn_detached_node_update()
-            self.send_json({"ok": ok, "message": "Local node update initiated. Web UI and services will reload shortly."})
+        elif path in ("/api/update/start", "/api/node/update"):
+            ok, msg, code = spawn_detached_node_update()
+            self.send_json({"ok": ok, "code": code, "message": msg, "error": "" if ok else msg,
+                            "status": local_update_summary()}, status=200 if ok else 409 if code == "already_running" else 500)
             return
 
-        elif path == "/api/cluster/update":
-            target_ip = (data.get("target_ip") or "").strip()
+        elif path == "/api/update/channel":
+            channel = str(data.get("channel", "")).strip().lower()
+            if channel not in CHANNEL_BRANCHES:
+                self.send_json({"ok": False, "code": "invalid_channel", "error": "Channel must be 'stable' or 'beta'."}, status=400)
+                return
+            try:
+                set_update_channel(channel)
+            except OSError as e:
+                self.send_json({"ok": False, "code": "save_failed", "error": f"Could not save the update channel: {e}"}, status=500)
+                return
+            get_version_info()  # warm the new channel's cache so the next status is accurate
+            self.send_json({"ok": True, "status": local_update_summary()})
+            return
+
+        elif path in ("/api/cluster/update", "/api/cluster/update/status", "/api/cluster/channel"):
+            # Proxy a node action to another mesh server (signed with the network secret),
+            # or handle it here when the target is this server.
+            target_ip = str(data.get("target_ip") or "").strip()
             cfg = load_env_file(CONFIG_FILE)
-            local_ip = cfg.get("IPV4", "127.0.0.1")
+            local_ip = cfg.get("IPV4", "").strip()
             secret = cfg.get("NETWORK_SECRET", "").strip()
-
-            if not target_ip:
-                self.send_json({"ok": False, "error": "Missing target_ip parameter"}, status=400)
+            if not valid_ipv4(target_ip):
+                self.send_json({"ok": False, "code": "invalid_target", "error": "Missing or invalid target_ip."}, status=400)
+                return
+            channel = str(data.get("channel", "")).strip().lower()
+            if path == "/api/cluster/channel" and channel not in CHANNEL_BRANCHES:
+                self.send_json({"ok": False, "code": "invalid_channel", "error": "Channel must be 'stable' or 'beta'."}, status=400)
                 return
 
-            if target_ip in ("local", "127.0.0.1", local_ip):
-                ok, msg = spawn_detached_node_update()
-                self.send_json({"ok": ok, "message": f"Local node ({local_ip}) update initiated."})
+            if target_ip == local_ip or target_ip == "127.0.0.1":
+                if path == "/api/cluster/update":
+                    ok, msg, code = spawn_detached_node_update()
+                    self.send_json({"ok": ok, "code": code, "error": "" if ok else msg, "status": local_update_summary()},
+                                   status=200 if ok else 409 if code == "already_running" else 500)
+                elif path == "/api/cluster/channel":
+                    try:
+                        set_update_channel(channel)
+                    except OSError as e:
+                        self.send_json({"ok": False, "code": "save_failed", "error": f"Could not save the update channel: {e}"}, status=500)
+                        return
+                    get_version_info()
+                    self.send_json({"ok": True, "status": local_update_summary()})
+                else:
+                    self.send_json({"ok": True, "reachable": True, "status": local_update_summary()})
                 return
 
-            if target_ip == "all":
-                peers_raw = get_easytier_peers() or []
-                if isinstance(peers_raw, dict):
-                    peers_raw = peers_raw.get("peers", []) or []
-
-                active_peers = []
-                for p in peers_raw:
-                    if not isinstance(p, dict):
-                        continue
-                    vip = p.get("ipv4", "").strip()
-                    cost = str(p.get("cost", "0"))
-                    if vip and vip != local_ip and cost not in ("0", "Local", "none", ""):
-                        cached_peer = PEER_VERSION_CACHE.get(vip, {})
-                        peer_port = cached_peer.get("port", PORT)
-                        active_peers.append({"ipv4": vip, "hostname": p.get("hostname", vip), "port": peer_port})
-
-                results = {}
-                with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-                    futures = {
-                        executor.submit(send_cluster_http, p["ipv4"], p["port"], "/api/cluster/node/update", secret, {}, 8): p
-                        for p in active_peers
-                    }
-                    for fut in concurrent.futures.as_completed(futures):
-                        p = futures[fut]
-                        try:
-                            ok, res = fut.result()
-                            results[p["ipv4"]] = {"ok": ok, "hostname": p["hostname"], "response": res}
-                        except Exception as e:
-                            results[p["ipv4"]] = {"ok": False, "hostname": p["hostname"], "error": str(e)}
-
-                # Also initiate local update detached
-                spawn_detached_node_update()
-                results[local_ip] = {"ok": True, "hostname": cfg.get("HOSTNAME", "local"), "response": "Local update initiated"}
-
-                successful_count = sum(1 for r in results.values() if r.get("ok"))
-                self.send_json({
-                    "ok": True,
-                    "message": f"Cluster update initiated across {successful_count}/{len(results)} node(s).",
-                    "results": results
-                })
+            if not secret:
+                self.send_json({"ok": False, "code": "not_configured", "error": "This server has no mesh secret to sign the request."}, status=400)
                 return
 
-            cached_peer = PEER_VERSION_CACHE.get(target_ip, {})
-            target_port = cached_peer.get("port", PORT)
-            ok, res = send_cluster_http(target_ip, target_port, "/api/cluster/node/update", secret, {}, 8)
-            if ok:
-                msg = res.get("message", f"Update triggered on node {target_ip}.") if isinstance(res, dict) else f"Update triggered on node {target_ip}."
-                self.send_json({"ok": True, "message": msg, "target": target_ip})
+            port = PEER_VERSION_CACHE.get(target_ip, {}).get("port", PORT)
+            if path == "/api/cluster/update":
+                ok, res, http_status = cluster_request(target_ip, port, "/api/cluster/node/update", secret, {}, 10)
+                if ok and isinstance(res, dict):
+                    # Peers before 2.2.6-beta.5 answer without a code; their update runs untracked.
+                    legacy = "code" not in res
+                    self.send_json({"ok": bool(res.get("ok", True)), "code": res.get("code") or "queued", "legacy": legacy,
+                                    "error": res.get("error", ""), "status": res.get("status") or {}},
+                                   status=200 if res.get("ok", True) else 409)
+                    return
+            elif path == "/api/cluster/channel":
+                ok, res, http_status = cluster_request(target_ip, port, "/api/cluster/node/channel", secret, {"channel": channel}, 6)
+                if ok and isinstance(res, dict):
+                    PEER_VERSION_CACHE.pop(target_ip, None)  # re-probe with the new channel
+                    self.send_json({"ok": True, "status": res.get("status") or {}})
+                    return
             else:
-                self.send_json({"ok": False, "error": f"Failed to trigger update on {target_ip}: {res}"}, status=400)
+                ok, res, http_status = cluster_request(target_ip, port, "/api/cluster/node/update-status", secret, {}, 4)
+                if ok and isinstance(res, dict):
+                    status = res.get("status") or {}
+                    if (status.get("update") or {}).get("state") in ("success", "failed", "up_to_date"):
+                        PEER_VERSION_CACHE.pop(target_ip, None)  # the peers list must show the new version now
+                    self.send_json({"ok": True, "reachable": True, "status": status})
+                    return
+                if http_status == 404 or http_status is None:
+                    # Too old for status reports, or restarting mid-update: fall back to its public version probe.
+                    PEER_VERSION_CACHE.pop(target_ip, None)
+                    info, _, _ = fetch_peer_cluster_info(target_ip, port, timeout=2.0)
+                    self.send_json({"ok": True, "reachable": bool(info), "legacy": http_status == 404,
+                                    "status": {"version": info.get("version", "")} if info else {}})
+                    return
+
+            code = res.get("code") if isinstance(res, dict) and res.get("code") else cluster_error_code(http_status)
+            error = res.get("error") if isinstance(res, dict) else str(res)
+            self.send_json({"ok": False, "code": code, "error": error or "Request to the peer failed."}, status=502)
             return
 
         self.send_error(404, "Endpoint not found")
