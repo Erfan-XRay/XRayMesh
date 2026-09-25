@@ -158,7 +158,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
               >
                 <Rocket className="w-4 h-4 text-primary mb-1" />
                 <span className="font-semibold text-text-main">{t('speed_profile_quick')}</span>
-                <span className="text-[10px] text-text-muted">{t('speed_profile_quick_sub')}</span>
+                <span className="text-xs text-text-muted">{t('speed_profile_quick_sub')}</span>
               </button>
               <button
                 type="button"
@@ -167,7 +167,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
               >
                 <Zap className="w-4 h-4 text-amber-400 mb-1" />
                 <span className="font-semibold text-text-main">{t('speed_profile_max')}</span>
-                <span className="text-[10px] text-text-muted">{t('speed_profile_max_sub')}</span>
+                <span className="text-xs text-text-muted">{t('speed_profile_max_sub')}</span>
               </button>
               <button
                 type="button"
@@ -176,7 +176,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
               >
                 <Target className="w-4 h-4 text-emerald-400 mb-1" />
                 <span className="font-semibold text-text-main">{t('speed_profile_udp')}</span>
-                <span className="text-[10px] text-text-muted">{t('speed_profile_udp_sub')}</span>
+                <span className="text-xs text-text-muted">{t('speed_profile_udp_sub')}</span>
               </button>
             </div>
           </div>
@@ -193,7 +193,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
                   type="button"
                   onClick={handleSwap}
                   title={t('speed_swap_nodes')}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-[11px] font-medium transition-all"
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-xs font-medium transition-all"
                 >
                   <ArrowLeftRight className="w-3 h-3" />
                   <span>{t('speed_swap_nodes')}</span>
@@ -203,7 +203,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
 
             {/* Source Node Selector */}
             <div>
-              <label className="block text-[11px] font-medium text-text-muted mb-1">
+              <label className="block text-xs font-medium text-text-muted mb-1">
                 {t('speed_source_label')}
               </label>
               <select
@@ -222,7 +222,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
 
             {/* Destination Node Selector */}
             <div>
-              <label className="block text-[11px] font-medium text-text-muted mb-1">
+              <label className="block text-xs font-medium text-text-muted mb-1">
                 {t('speed_dest_label')}
               </label>
               <select
@@ -243,14 +243,14 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
             {sourceIp && targetIp && (
               <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-primary/10 border border-primary/20 text-xs">
                 <div className="flex items-center gap-1.5 truncate">
-                  <span className="text-[10px] uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-card-border">
+                  <span className="text-xs uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-card-border">
                     {t('speed_source_chip_prefix')}
                   </span>
                   <span className="font-mono font-semibold text-text-main truncate">
                     {sourcePeer?.hostname || sourceIp}
                   </span>
                   {sourcePeer?.is_current && (
-                    <span className="text-[10px] text-primary font-bold">(Local)</span>
+                    <span className="text-xs text-primary font-bold">(Local)</span>
                   )}
                 </div>
 
@@ -259,14 +259,14 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1.5 truncate">
-                  <span className="text-[10px] uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-card-border">
+                  <span className="text-xs uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-card-border">
                     {t('speed_target_chip_prefix')}
                   </span>
                   <span className="font-mono font-semibold text-text-main truncate">
                     {selectedPeer?.hostname || targetIp}
                   </span>
                   {selectedPeer?.lat_ms !== undefined && (
-                    <span className="text-primary font-mono text-[10px] font-bold">
+                    <span className="text-primary font-mono text-xs font-bold">
                       {selectedPeer.lat_ms}ms
                     </span>
                   )}
@@ -304,7 +304,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
                 {t('speed_proto_udp')}
               </button>
             </div>
-            <p className="text-[11px] text-text-subtle mt-1.5">
+            <p className="text-xs text-text-subtle mt-1.5">
               {protocol === 'tcp' ? t('speed_proto_help_tcp') : t('speed_proto_help_udp')}
             </p>
           </div>
@@ -366,7 +366,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
           </button>
 
           {/* Footer note */}
-          <div className="pt-3 border-t border-white/5 text-[11px] text-text-muted leading-relaxed">
+          <div className="pt-3 border-t border-white/5 text-xs text-text-muted leading-relaxed">
             {t('speed_footer_note')}
           </div>
         </div>
@@ -381,7 +381,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
                 {sourcePeer?.hostname || sourceIp} ──► {selectedPeer?.hostname || targetIp}
               </p>
               {isRemoteRunner && (
-                <span className="mt-2 text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                <span className="mt-2 text-xs uppercase font-semibold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
                   Remote Runner via Node {sourceIp}
                 </span>
               )}
@@ -401,7 +401,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
                   {peers.find((p) => p.ipv4 === (lastResult?.target || targetIp))?.hostname || (lastResult?.target || targetIp)}
                 </span>
                 {lastResult?.source && !peers.find((p) => p.ipv4 === lastResult?.source)?.is_current && (
-                  <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300">
+                  <span className="text-xs uppercase font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300">
                     Cluster
                   </span>
                 )}
@@ -423,7 +423,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
             {/* Metrics Chips Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-6 w-full">
               <div className="p-2.5 rounded-xl bg-black/30 border border-white/5 text-center">
-                <div className="text-[10px] text-text-muted">{t('speed_metric_transferred')}</div>
+                <div className="text-xs text-text-muted">{t('speed_metric_transferred')}</div>
                 <div className="text-sm font-bold font-mono text-text-main mt-0.5 tabular-nums">
                   {lastResult
                     ? formatBytes(
@@ -436,21 +436,21 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
               </div>
 
               <div className="p-2.5 rounded-xl bg-black/30 border border-white/5 text-center">
-                <div className="text-[10px] text-text-muted">{t('speed_metric_jitter')}</div>
+                <div className="text-xs text-text-muted">{t('speed_metric_jitter')}</div>
                 <div className="text-sm font-bold font-mono text-text-main mt-0.5 tabular-nums">
                   {lastResult?.summary.jitter_ms !== undefined ? `${lastResult.summary.jitter_ms} ms` : 'N/A (TCP)'}
                 </div>
               </div>
 
               <div className="p-2.5 rounded-xl bg-black/30 border border-white/5 text-center">
-                <div className="text-[10px] text-text-muted">{t('speed_metric_loss')}</div>
+                <div className="text-xs text-text-muted">{t('speed_metric_loss')}</div>
                 <div className="text-sm font-bold font-mono text-text-main mt-0.5 tabular-nums">
                   {lastResult?.summary.loss_percent !== undefined ? `${lastResult.summary.loss_percent}%` : '0%'}
                 </div>
               </div>
 
               <div className="p-2.5 rounded-xl bg-black/30 border border-white/5 text-center">
-                <div className="text-[10px] text-text-muted">{t('speed_metric_retrans')}</div>
+                <div className="text-xs text-text-muted">{t('speed_metric_retrans')}</div>
                 <div className="text-sm font-bold font-mono text-text-main mt-0.5 tabular-nums">
                   {lastResult?.summary.retransmits ?? lastResult?.summary.lost_packets ?? 0}
                 </div>

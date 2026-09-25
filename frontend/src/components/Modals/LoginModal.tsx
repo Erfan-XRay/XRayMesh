@@ -99,7 +99,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             }`}
           >
             {t('modal_login_tab_pw')}
-            {!passwordConfigured && <span className="ms-1 text-[10px] opacity-75">({t('modal_login_disabled')})</span>}
+            {!passwordConfigured && <span className="ms-1 text-xs opacity-75">({t('modal_login_disabled')})</span>}
           </button>
           <button
             type="button"
@@ -161,7 +161,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         {/* Token helper note */}
         <div className="mt-5 p-3 rounded-xl bg-primary/10 border border-dashed border-primary/30 flex items-center justify-between text-left">
           <div>
-            <div className="text-[10px] text-text-muted">{t('modal_login_tip_title')}</div>
+            <div className="text-xs text-text-muted">{t('modal_login_tip_title')}</div>
             <div className="text-xs font-mono font-semibold text-primary mt-0.5">{tipCmd}</div>
           </div>
           <button

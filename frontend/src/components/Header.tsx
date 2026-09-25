@@ -50,29 +50,29 @@ export const Header: React.FC<HeaderProps> = ({
             <h1 className="text-sm sm:text-base font-bold text-text-main tracking-tight leading-tight truncate">
               {t("brand_title")}
             </h1>
-            <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-primary/10 text-primary border border-primary/20 shrink-0">
-              v{node.xraymesh_version || "2.2.6-beta.1"}
+            <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-primary/10 text-primary border border-primary/20 shrink-0">
+              v{node.xraymesh_version || "2.2.6-beta.2"}
             </span>
             {node.branch === "beta" && (
-              <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0 uppercase tracking-wider">
+              <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0 uppercase tracking-wider">
                 Beta
               </span>
             )}
             {node.ssl_enabled && (
-              <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0" title="SSL/TLS Active">
-                <Lock className="w-3 h-3 text-emerald-400" aria-hidden="true" />
+              <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0" title="SSL/TLS Active">
+                <Lock className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
                 <span>SSL</span>
               </span>
             )}
           </div>
-          <p className="text-[10px] sm:text-xs text-text-muted mt-0.5 truncate">
+          <p className="text-xs text-text-muted mt-0.5 truncate">
             {node.configured ? (
               <>
                 {t("network_prefix")}: <span className="font-mono text-primary font-medium">{node.network_name || "XRayMesh"}</span>
               </>
             ) : (
               <span className="inline-flex items-center gap-1.5 text-amber-400 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                <span className="w-2 h-2 rounded-full bg-amber-400" />
                 {t("header_status_setup_mode")}
               </span>
             )}
@@ -110,12 +110,12 @@ export const Header: React.FC<HeaderProps> = ({
                 className={`absolute ${isRtl ? "left-0" : "right-0"} top-full mt-2 w-60 rounded-xl bg-card border border-card-border shadow-2xl p-2 z-50 animate-modal-in`}
               >
                 <div className="mb-2">
-                  <div className="px-1 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-text-subtle">
+                  <div className="px-1 mb-1.5 text-xs font-bold uppercase tracking-wider text-text-subtle">
                     {t("theme_mode")}
                   </div>
                   <ThemeModeSwitch value={themeMode} onChange={onSelectThemeMode} t={t} />
                 </div>
-                <div className="px-1 mb-1 text-[10px] font-bold uppercase tracking-wider text-text-subtle">
+                <div className="px-1 mb-1 text-xs font-bold uppercase tracking-wider text-text-subtle">
                   {t("theme_selector")}
                 </div>
                 {availablePalettes.map((p) => (
@@ -218,12 +218,12 @@ export const Header: React.FC<HeaderProps> = ({
                 className={`absolute ${isRtl ? "left-0" : "right-0"} top-full mt-2 w-72 rounded-xl bg-card border border-card-border shadow-2xl p-2 z-50 animate-modal-in`}
               >
                 <div className="mb-2">
-                  <div className="px-1 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-text-subtle">
+                  <div className="px-1 mb-1.5 text-xs font-bold uppercase tracking-wider text-text-subtle">
                     {t("theme_mode")}
                   </div>
                   <ThemeModeSwitch value={themeMode} onChange={onSelectThemeMode} t={t} />
                 </div>
-                <div className="px-1 mb-1 text-[10px] font-bold uppercase tracking-wider text-text-subtle">
+                <div className="px-1 mb-1 text-xs font-bold uppercase tracking-wider text-text-subtle">
                   {t("theme_selector")}
                 </div>
                 {availablePalettes.map((p) => (

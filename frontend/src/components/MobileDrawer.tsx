@@ -103,16 +103,16 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className="font-bold text-sm text-text-main tracking-tight truncate">XRayMesh</span>
-                  <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-primary/15 text-primary border border-primary/25 shrink-0">
-                    v{node.xraymesh_version || "2.2.6-beta.1"}
+                  <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-primary/15 text-primary border border-primary/25 shrink-0">
+                    v{node.xraymesh_version || "2.2.6-beta.2"}
                   </span>
                   {node.branch === "beta" && (
-                    <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0 uppercase tracking-wider">
+                    <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0 uppercase tracking-wider">
                       Beta
                     </span>
                   )}
                 </div>
-                <div className="text-[10px] text-text-muted font-mono truncate max-w-[170px] tech-val">
+                <div className="text-xs text-text-muted font-mono truncate max-w-[170px] tech-val mt-0.5">
                   {node.network_name || "XRayMesh Network"}
                 </div>
               </div>
@@ -130,14 +130,14 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
           {/* Node Status Banner */}
           <div className="p-2.5 rounded-xl bg-black/30 border border-white/5 flex items-center justify-between text-xs gap-2 min-w-0">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="badge-pulse shrink-0" />
-              <div className="font-mono font-semibold text-text-main text-[11px] truncate tech-val">
+              <div className="badge-status-dot shrink-0" />
+              <div className="font-mono font-semibold text-text-main text-xs truncate tech-val">
                 {node.ipv4 || node.hostname || t("mesh_active")}
               </div>
             </div>
             {node.ssl_enabled && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
-                <ShieldCheck className="w-3 h-3 text-emerald-400" />
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                 <span>SSL</span>
               </span>
             )}
@@ -146,7 +146,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
 
         {/* Navigation Tabs List */}
         <div className="flex-1 p-3 space-y-1">
-          <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-text-subtle">
+          <div className="px-2 py-1 text-xs font-bold uppercase tracking-wider text-text-subtle">
             {t("drawer_tabs")}
           </div>
 
@@ -222,14 +222,14 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
                 <Palette className="w-4 h-4 text-primary shrink-0" />
                 <span className="truncate">{t("theme_selector")}</span>
               </div>
-              <span className="text-[10px] font-mono text-primary font-semibold shrink-0">
+              <span className="text-xs font-mono text-primary font-semibold shrink-0">
                 {lang === "fa"
                   ? availablePalettes.find((p) => p.id === paletteId)?.nameFa
                   : availablePalettes.find((p) => p.id === paletteId)?.nameEn}
               </span>
             </div>
             <div>
-              <div className="px-1 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-text-subtle">
+              <div className="px-1 mb-1.5 text-xs font-bold uppercase tracking-wider text-text-subtle">
                 {t("theme_mode")}
               </div>
               <ThemeModeSwitch value={themeMode} onChange={onSelectThemeMode} t={t} />

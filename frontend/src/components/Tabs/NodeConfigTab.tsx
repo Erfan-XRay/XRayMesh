@@ -700,7 +700,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
 
   const renderInlineActions = () => (
     <div className="pt-4 mt-5 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3">
-      <p className="text-[11px] text-text-muted">{t('node_save_card_hint')}</p>
+      <p className="text-xs text-text-muted">{t('node_save_card_hint')}</p>
       <div className="flex items-center gap-2 w-full sm:w-auto">
         <button
           type="button"
@@ -853,7 +853,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
               <h4 className="font-bold text-sm text-amber-200">
                 {t('cluster_rollback_alert_title')}
               </h4>
-              <span className="font-mono text-[10px] text-amber-400/90 bg-amber-500/25 px-2 py-0.5 rounded border border-amber-500/30 font-semibold">
+              <span className="font-mono text-xs text-amber-400/90 bg-amber-500/25 px-2 py-0.5 rounded border border-amber-500/30 font-semibold">
                 Self-Healing Watchdog
               </span>
             </div>
@@ -861,7 +861,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
               {t('cluster_rollback_alert_desc')}
             </p>
             {lastRollback.reason && (
-              <div className="p-2.5 rounded-lg bg-black/40 border border-amber-500/20 font-mono text-[11px] text-amber-400 mb-3 leading-relaxed">
+              <div className="p-2.5 rounded-lg bg-black/40 border border-amber-500/20 font-mono text-xs text-amber-400 mb-3 leading-relaxed">
                 {lastRollback.reason}
               </div>
             )}
@@ -907,19 +907,19 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
             </h2>
             {config?.node_configured && (
               config.service_active ? (
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shadow-sm">
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shadow-sm">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   {t('node_service_online')}
                 </span>
               ) : (
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1.5 shadow-sm">
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1.5 shadow-sm">
                   <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
                   {t('node_service_offline')}
                 </span>
               )
             )}
             {ipv4 && (
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-primary/10 text-primary border border-primary/25">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-primary/10 text-primary border border-primary/25">
                 {ipv4}
               </span>
             )}
@@ -1145,7 +1145,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       <div className="w-10 h-10 rounded-xl bg-primary/20 text-primary flex items-center justify-center">
                         <Radio className="w-5 h-5" />
                       </div>
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-primary/15 text-primary border border-primary/30">
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-primary/15 text-primary border border-primary/30">
                         Seed / First Node
                       </span>
                     </div>
@@ -1176,7 +1176,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       <div className="w-10 h-10 rounded-xl bg-accent-green/20 text-accent-green flex items-center justify-center">
                         <Share2 className="w-5 h-5" />
                       </div>
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-accent-green/15 text-emerald-400 border border-accent-green/30">
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-accent-green/15 text-emerald-400 border border-accent-green/30">
                         1-Click Connect
                       </span>
                     </div>
@@ -1201,7 +1201,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     <label className="block text-xs font-bold text-emerald-400">
                       {t('wizard_token_label')}
                     </label>
-                    <span className="text-[10px] text-text-muted font-mono">Format: xrmesh://...</span>
+                    <span className="text-xs text-text-muted font-mono">Format: xrmesh://...</span>
                   </div>
                   <textarea
                     rows={2}
@@ -1218,30 +1218,30 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                         <CheckCircle2 className="w-4 h-4" />
                         <span>{t('wizard_token_detected_title')}</span>
                       </div>
-                      <p className="text-[11px] text-text-muted mb-2.5">
+                      <p className="text-xs text-text-muted mb-2.5">
                         {t('wizard_token_detected_desc')}
                       </p>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-[11px]">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-xs">
                         <div className="p-2 rounded-lg bg-black/40 border border-white/5">
-                          <span className="text-text-muted block text-[10px]">Network:</span>
+                          <span className="text-text-muted block text-xs">Network:</span>
                           <span className="text-text-main font-semibold truncate block">
                             {decodedInvite.net}
                           </span>
                         </div>
                         <div className="p-2 rounded-lg bg-black/40 border border-white/5">
-                          <span className="text-text-muted block text-[10px]">Protocol:</span>
+                          <span className="text-text-muted block text-xs">Protocol:</span>
                           <span className="text-emerald-400 font-semibold block uppercase">
                             {decodedInvite.proto}
                           </span>
                         </div>
                         <div className="p-2 rounded-lg bg-black/40 border border-white/5">
-                          <span className="text-text-muted block text-[10px]">Peer Endpoint:</span>
+                          <span className="text-text-muted block text-xs">Peer Endpoint:</span>
                           <span className="text-text-main font-semibold truncate block">
                             {decodedInvite.endpoint || 'Relayed Node'}
                           </span>
                         </div>
                         <div className="p-2 rounded-lg bg-black/40 border border-white/5">
-                          <span className="text-text-muted block text-[10px]">Secret:</span>
+                          <span className="text-text-muted block text-xs">Secret:</span>
                           <span className="text-text-muted font-semibold block">••••••••</span>
                         </div>
                       </div>
@@ -1302,17 +1302,17 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     <Server className={`w-4 h-4 transition-colors ${isFieldInvalid('hostname') ? 'text-rose-400' : 'text-primary'}`} />
                     <span>{t('node_hostname')}</span>
                     {isFieldInvalid('hostname') ? (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse flex items-center gap-1">
+                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse flex items-center gap-1">
                         <AlertCircle className="w-3 h-3" />
                         {t('wizard_required_tag')} *
                       </span>
                     ) : isFieldValid('hostname', hostname) ? (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
                         <Check className="w-3 h-3" />
                         {t('wizard_valid_tag')}
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
                         {t('wizard_hostname_required_badge')} *
                       </span>
                     )}
@@ -1336,12 +1336,12 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                   }`}
                 />
                 {isFieldInvalid('hostname') ? (
-                  <p className="text-[11px] text-rose-400 mt-2 flex items-center gap-1.5 font-medium animate-pulse">
+                  <p className="text-xs text-rose-400 mt-2 flex items-center gap-1.5 font-medium animate-pulse">
                     <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
                     <span>{step2Errors.hostname || t('wizard_hostname_required_hint')}</span>
                   </p>
                 ) : (
-                  <p className="text-[11px] text-text-muted mt-1.5">
+                  <p className="text-xs text-text-muted mt-1.5">
                     This friendly name will appear in peer listings and speedtest targets across all nodes.
                   </p>
                 )}
@@ -1356,17 +1356,17 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       <span>{t('node_vip')}</span>
                     </label>
                     {isFieldInvalid('ipv4') ? (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse flex items-center gap-0.5">
+                      <span className="px-1.5 py-0.5 rounded text-xs font-mono font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse flex items-center gap-0.5">
                         <AlertCircle className="w-2.5 h-2.5" />
                         {t('wizard_required_tag')} *
                       </span>
                     ) : isFieldValid('ipv4', ipv4) ? (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-0.5">
+                      <span className="px-1.5 py-0.5 rounded text-xs font-mono font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-0.5">
                         <Check className="w-2.5 h-2.5" />
                         {t('wizard_valid_tag')}
                       </span>
                     ) : (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono text-text-subtle">
+                      <span className="px-1.5 py-0.5 rounded text-xs font-mono text-text-subtle">
                         {t('wizard_required_tag')} *
                       </span>
                     )}
@@ -1386,12 +1386,12 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     }`}
                   />
                   {isFieldInvalid('ipv4') ? (
-                    <p className="text-[11px] text-rose-400 flex items-center gap-1 font-medium">
+                    <p className="text-xs text-rose-400 flex items-center gap-1 font-medium">
                       <AlertCircle className="w-3 h-3 flex-shrink-0" />
                       <span>{step2Errors.ipv4}</span>
                     </p>
                   ) : (
-                    <span className="text-[10px] text-text-muted block">
+                    <span className="text-xs text-text-muted block">
                       Unique private IP inside the encrypted mesh overlay.
                     </span>
                   )}
@@ -1404,17 +1404,17 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       <span>{t('node_port')}</span>
                     </label>
                     {isFieldInvalid('port') ? (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse flex items-center gap-0.5">
+                      <span className="px-1.5 py-0.5 rounded text-xs font-mono font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse flex items-center gap-0.5">
                         <AlertCircle className="w-2.5 h-2.5" />
                         {t('wizard_required_tag')} *
                       </span>
                     ) : isFieldValid('port', port) ? (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-0.5">
+                      <span className="px-1.5 py-0.5 rounded text-xs font-mono font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-0.5">
                         <Check className="w-2.5 h-2.5" />
                         {t('wizard_valid_tag')}
                       </span>
                     ) : (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono text-text-subtle">
+                      <span className="px-1.5 py-0.5 rounded text-xs font-mono text-text-subtle">
                         {t('wizard_required_tag')} *
                       </span>
                     )}
@@ -1434,12 +1434,12 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     }`}
                   />
                   {isFieldInvalid('port') ? (
-                    <p className="text-[11px] text-rose-400 flex items-center gap-1 font-medium">
+                    <p className="text-xs text-rose-400 flex items-center gap-1 font-medium">
                       <AlertCircle className="w-3 h-3 flex-shrink-0" />
                       <span>{step2Errors.port}</span>
                     </p>
                   ) : (
-                    <span className="text-[10px] text-text-muted block">
+                    <span className="text-xs text-text-muted block">
                       WAN listen port for mesh peer connections.
                     </span>
                   )}
@@ -1452,17 +1452,17 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       <span>{t('node_net_name')}</span>
                     </label>
                     {isFieldInvalid('networkName') ? (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse flex items-center gap-0.5">
+                      <span className="px-1.5 py-0.5 rounded text-xs font-mono font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse flex items-center gap-0.5">
                         <AlertCircle className="w-2.5 h-2.5" />
                         {t('wizard_required_tag')} *
                       </span>
                     ) : isFieldValid('networkName', networkName) ? (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-0.5">
+                      <span className="px-1.5 py-0.5 rounded text-xs font-mono font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-0.5">
                         <Check className="w-2.5 h-2.5" />
                         {t('wizard_valid_tag')}
                       </span>
                     ) : (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono text-text-subtle">
+                      <span className="px-1.5 py-0.5 rounded text-xs font-mono text-text-subtle">
                         {t('wizard_required_tag')} *
                       </span>
                     )}
@@ -1482,7 +1482,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     }`}
                   />
                   {isFieldInvalid('networkName') && (
-                    <p className="text-[11px] text-rose-400 flex items-center gap-1 font-medium">
+                    <p className="text-xs text-rose-400 flex items-center gap-1 font-medium">
                       <AlertCircle className="w-3 h-3 flex-shrink-0" />
                       <span>{step2Errors.networkName}</span>
                     </p>
@@ -1495,17 +1495,17 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     <div className="flex items-center gap-2">
                       <label className="font-medium text-text-muted">{t('node_net_secret')}</label>
                       {isFieldInvalid('networkSecret') ? (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse flex items-center gap-0.5">
+                        <span className="px-1.5 py-0.5 rounded text-xs font-mono font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse flex items-center gap-0.5">
                           <AlertCircle className="w-2.5 h-2.5" />
                           {t('wizard_required_tag')} *
                         </span>
                       ) : isFieldValid('networkSecret', networkSecret) ? (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-0.5">
+                        <span className="px-1.5 py-0.5 rounded text-xs font-mono font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-0.5">
                           <Check className="w-2.5 h-2.5" />
                           {t('wizard_valid_tag')}
                         </span>
                       ) : (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono text-text-subtle">
+                        <span className="px-1.5 py-0.5 rounded text-xs font-mono text-text-subtle">
                           {t('wizard_required_tag')} *
                         </span>
                       )}
@@ -1513,7 +1513,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     <button
                       type="button"
                       onClick={generateRandomSecret}
-                      className="text-[11px] text-primary hover:underline"
+                      className="text-xs text-primary hover:underline"
                     >
                       Generate New
                     </button>
@@ -1542,7 +1542,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     </button>
                   </div>
                   {isFieldInvalid('networkSecret') && (
-                    <p className="text-[11px] text-rose-400 flex items-center gap-1 font-medium">
+                    <p className="text-xs text-rose-400 flex items-center gap-1 font-medium">
                       <AlertCircle className="w-3 h-3 flex-shrink-0" />
                       <span>{step2Errors.networkSecret}</span>
                     </p>
@@ -1573,7 +1573,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                           <span className="text-xs font-bold truncate">{p.badge}</span>
                           {isSelected && <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" />}
                         </div>
-                        <span className="text-[10px] text-text-muted block leading-tight truncate">
+                        <span className="text-xs text-text-muted block leading-tight truncate">
                           {p.id === 'dual' ? 'Auto hybrid' : p.id.toUpperCase()}
                         </span>
                       </button>
@@ -1595,7 +1595,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       <Zap className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
                       <span className="font-bold text-xs text-text-main">{t('node_kcp_label')}</span>
                     </div>
-                    <p className="text-[11px] text-text-muted leading-relaxed">{t('node_kcp_desc')}</p>
+                    <p className="text-xs text-text-muted leading-relaxed">{t('node_kcp_desc')}</p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                     <input
@@ -1635,7 +1635,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                   }`}>
                     <div className="flex items-center gap-2">
                       <Sliders className="w-3.5 h-3.5 text-text-muted flex-shrink-0" />
-                      <span className="text-[11px] text-text-muted flex-shrink-0">MTU:</span>
+                      <span className="text-xs text-text-muted flex-shrink-0">MTU:</span>
                       <input
                         type="number"
                         value={mtu}
@@ -1647,7 +1647,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       />
                     </div>
                     {isFieldInvalid('mtu') && (
-                      <span className="text-[10px] text-rose-400 mt-1 font-medium">{step2Errors.mtu}</span>
+                      <span className="text-xs text-rose-400 mt-1 font-medium">{step2Errors.mtu}</span>
                     )}
                   </div>
                 </div>
@@ -1691,7 +1691,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
               <div className="p-5 rounded-2xl bg-black/40 border border-card-border space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
                   <div className="p-3 rounded-xl bg-surface border border-white/5">
-                    <span className="text-[10px] text-text-muted uppercase font-sans block mb-1">
+                    <span className="text-xs text-text-muted uppercase font-sans block mb-1">
                       {t('node_hostname')} (Server Name)
                     </span>
                     <span className="text-sm font-bold text-primary flex items-center gap-1.5">
@@ -1701,7 +1701,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                   </div>
 
                   <div className="p-3 rounded-xl bg-surface border border-white/5">
-                    <span className="text-[10px] text-text-muted uppercase font-sans block mb-1">
+                    <span className="text-xs text-text-muted uppercase font-sans block mb-1">
                       {t('node_vip')} (Virtual Mesh IP)
                     </span>
                     <span className="text-sm font-bold text-emerald-400 flex items-center gap-1.5">
@@ -1711,7 +1711,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                   </div>
 
                   <div className="p-3 rounded-xl bg-surface border border-white/5">
-                    <span className="text-[10px] text-text-muted uppercase font-sans block mb-1">
+                    <span className="text-xs text-text-muted uppercase font-sans block mb-1">
                       {t('node_net_name')} & Port
                     </span>
                     <span className="text-xs text-text-main font-semibold">
@@ -1720,7 +1720,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                   </div>
 
                   <div className="p-3 rounded-xl bg-surface border border-white/5">
-                    <span className="text-[10px] text-text-muted uppercase font-sans block mb-1">
+                    <span className="text-xs text-text-muted uppercase font-sans block mb-1">
                       Protocol & Security
                     </span>
                     <span className="text-xs text-text-main font-semibold flex items-center gap-1.5">
@@ -1733,7 +1733,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     <div className="flex items-center gap-2">
                       <Zap className={`w-4 h-4 ${enableKcp ? 'text-amber-400' : 'text-text-muted'}`} />
                       <div>
-                        <span className="text-[10px] text-text-muted uppercase font-sans block">
+                        <span className="text-xs text-text-muted uppercase font-sans block">
                           Acceleration & Tunnel Tuning
                         </span>
                         <span className="text-xs text-text-main font-semibold">
@@ -1741,7 +1741,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                         </span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] font-mono">
+                    <div className="flex items-center gap-2 text-xs font-mono">
                       <span className="px-2 py-0.5 rounded bg-white/5 border border-card-border text-text-muted">
                         MTU: <strong className="text-text-main">{mtu}</strong>
                       </span>
@@ -1756,14 +1756,14 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
 
                 {peers.length > 0 && (
                   <div className="pt-3 border-t border-white/5 text-xs">
-                    <span className="text-[10px] text-text-muted uppercase block mb-1.5">
+                    <span className="text-xs text-text-muted uppercase block mb-1.5">
                       Target Connected Peers ({peers.length}):
                     </span>
                     <div className="flex flex-wrap gap-1.5">
                       {peers.map((p) => (
                         <span
                           key={p}
-                          className="px-2.5 py-1 rounded-lg bg-white/5 border border-card-border font-mono text-[11px] text-primary"
+                          className="px-2.5 py-1 rounded-lg bg-white/5 border border-card-border font-mono text-xs text-primary"
                         >
                           {p}
                         </span>
@@ -1846,7 +1846,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
               <span>{t('node_subtab_cluster')}</span>
               {peers.length > 0 && (
                 <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold leading-none ${
+                  className={`px-1.5 py-0.2 rounded-full text-xs font-mono font-bold leading-none ${
                     subTab === 'cluster'
                       ? 'bg-black/25 text-black'
                       : 'bg-primary/20 text-primary border border-primary/30'
@@ -1899,7 +1899,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       <span className="text-rose-400">*</span>
                     </label>
                     {!hostname.trim() && hostnameTouched && (
-                      <span className="text-[10px] text-rose-400 font-medium">Required</span>
+                      <span className="text-xs text-rose-400 font-medium">Required</span>
                     )}
                   </div>
                   <input
@@ -1961,7 +1961,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     <button
                       type="button"
                       onClick={generateRandomSecret}
-                      className="text-[11px] text-primary hover:underline cursor-pointer"
+                      className="text-xs text-primary hover:underline cursor-pointer"
                     >
                       Generate
                     </button>
@@ -2051,12 +2051,12 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       <div className="flex items-center justify-between gap-2 mb-1.5">
                         <span className="font-bold text-xs text-text-main">{p.label}</span>
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold border ${p.badgeColor}`}
+                          className={`px-2 py-0.5 rounded-full text-xs font-mono font-semibold border ${p.badgeColor}`}
                         >
                           {p.badge}
                         </span>
                       </div>
-                      <p className="text-[11px] text-text-muted leading-relaxed line-clamp-2">{p.desc}</p>
+                      <p className="text-xs text-text-muted leading-relaxed line-clamp-2">{p.desc}</p>
                     </button>
                   );
                 })}
@@ -2065,7 +2065,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
               {protocol === 'udp' && (
                 <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-300 animate-fade-in">
                   <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-400 mt-0.5" />
-                  <p className="leading-relaxed text-[11px]">
+                  <p className="leading-relaxed text-xs">
                     {t('node_proto_udp_hint')}
                   </p>
                 </div>
@@ -2080,7 +2080,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                       <Zap className="w-3.5 h-3.5 text-amber-400" />
                       <span className="font-bold text-text-main">{t('node_kcp_label')}</span>
                     </div>
-                    <p className="text-[11px] text-text-muted leading-relaxed">{t('node_kcp_desc')}</p>
+                    <p className="text-xs text-text-muted leading-relaxed">{t('node_kcp_desc')}</p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                     <input
@@ -2117,7 +2117,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
 
                   <div className="flex items-center gap-2 p-2 rounded-xl bg-surface border border-white/5">
                     <Sliders className="w-3.5 h-3.5 text-text-muted flex-shrink-0" />
-                    <span className="text-[11px] text-text-muted flex-shrink-0">MTU:</span>
+                    <span className="text-xs text-text-muted flex-shrink-0">MTU:</span>
                     <input
                       type="number"
                       value={mtu}
@@ -2137,11 +2137,11 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                   <div>
                     <h4 className="text-xs font-bold text-text-main flex items-center gap-1.5">
                       <span>{t('cluster_quick_sync_title')}</span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                      <span className="text-xs font-mono px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
                         Mesh-Wide
                       </span>
                     </h4>
-                    <p className="text-[11px] text-text-muted mt-0.5 leading-relaxed">
+                    <p className="text-xs text-text-muted mt-0.5 leading-relaxed">
                       {t('cluster_quick_sync_desc')}
                     </p>
                   </div>
@@ -2175,7 +2175,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
 
                     {inviteData && (
                       <div className="mb-3">
-                        <label className="block text-[11px] text-text-muted mb-1 font-medium">
+                        <label className="block text-xs text-text-muted mb-1 font-medium">
                           {t('node_invite_public_endpoint_label')}
                         </label>
                         <input
@@ -2187,7 +2187,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                         />
                         {!overrideEndpoint &&
                           (!computedInvite?.details.endpoint || computedInvite.details.endpoint.startsWith(':')) && (
-                            <p className="text-[10px] text-amber-400 mt-1 font-medium leading-normal">
+                            <p className="text-xs text-amber-400 mt-1 font-medium leading-normal">
                               {t('node_invite_no_ip_warning')}
                             </p>
                           )}
@@ -2197,14 +2197,14 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
                     {computedInvite ? (
                       <div className="p-3.5 rounded-xl bg-black/40 border border-card-border mb-4">
                         <div className="flex items-center justify-between gap-2 mb-2">
-                          <span className="text-[11px] font-mono text-accent-green font-semibold">
+                          <span className="text-xs font-mono text-accent-green font-semibold">
                             {computedInvite.details.net} ({computedInvite.details.proto.toUpperCase()})
                           </span>
-                          <span className="text-[10px] text-text-muted font-mono">
+                          <span className="text-xs text-text-muted font-mono">
                             {computedInvite.details.endpoint || 'No endpoint (relay only)'}
                           </span>
                         </div>
-                        <div className="p-2 rounded bg-input border border-card-border font-mono text-[11px] text-text-main whitespace-pre-wrap break-all select-all" dir="ltr">
+                        <div className="p-2 rounded bg-input border border-card-border font-mono text-xs text-text-main whitespace-pre-wrap break-all select-all" dir="ltr">
                           {computedInvite.invite}
                         </div>
                       </div>
@@ -2259,7 +2259,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
 
                     {/* Detected token hint */}
                     {parseInviteToken(joinInput) && (
-                      <div className="mb-3 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-[11px] text-emerald-400 flex items-center gap-2">
+                      <div className="mb-3 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-400 flex items-center gap-2">
                         <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
                         <span>Invite token recognized! Fields auto-populated. Click Join.</span>
                       </div>

@@ -40,19 +40,47 @@ export default {
         mono: ["JetBrains Mono", "monospace"],
         persian: ["Vazirmatn", "Shabnam", "Tahoma", "sans-serif"],
       },
+      transitionTimingFunction: {
+        "spring": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "bounce-soft": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+      },
       animation: {
-        "pulse-subtle": "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
-        "modal-in": "modalIn 150ms ease-out forwards",
-        "fade-in": "fadeIn 150ms ease-out forwards",
+        "pulse-subtle": "pulseSubtle 2.5s ease-in-out infinite",
+        "modal-in": "modalIn 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
+        "fade-in": "fadeIn 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
+        "tab-in": "tabEnter 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
+        "card-in": "cardEnter 240ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
+        "radar-ping": "radarPing 2.5s cubic-bezier(0, 0, 0.2, 1) infinite",
+        "shimmer": "shimmer 2s linear infinite",
       },
       keyframes: {
         modalIn: {
-          from: { opacity: "0", transform: "scale(0.97)" },
-          to: { opacity: "1", transform: "scale(1)" },
+          from: { opacity: "0", transform: "scale(0.96) translateY(6px)" },
+          to: { opacity: "1", transform: "scale(1) translateY(0)" },
         },
         fadeIn: {
           from: { opacity: "0", transform: "translateY(4px)" },
           to: { opacity: "1", transform: "translateY(0)" },
+        },
+        tabEnter: {
+          from: { opacity: "0", transform: "translateY(8px) scale(0.995)" },
+          to: { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
+        cardEnter: {
+          from: { opacity: "0", transform: "translateY(10px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        pulseSubtle: {
+          "0%, 100%": { opacity: "1", transform: "scale(1)" },
+          "50%": { opacity: "0.55", transform: "scale(1.08)" },
+        },
+        radarPing: {
+          "0%": { transform: "scale(1)", opacity: "0.6" },
+          "75%, 100%": { transform: "scale(2.2)", opacity: "0" },
+        },
+        shimmer: {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
         },
       }
     },

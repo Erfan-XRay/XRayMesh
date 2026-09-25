@@ -2,6 +2,14 @@
 
 All notable XRayMesh changes are documented here.
 
+## [2.2.6-beta.2] - 2026-09-25
+
+### Added
+- Anti-Slop Frontend Modernization based on Taste Skill v2 framework.
+- Upgraded all micro-typography scales to standard ergonomic text-xs (12px) and text-sm (14px).
+- Fluid cubic-bezier tab transition motion, status indicators, and live telemetry animations.
+- Clean matte engineering canvas background replacing generic AI grid lines.
+
 ## [2.2.6-beta.1] - 2026-09-25
 
 ### Added

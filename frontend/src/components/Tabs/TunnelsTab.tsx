@@ -151,7 +151,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
           {uniqueNodes.length > 1 && (
             <div className="flex items-center gap-1.5 bg-white/5 px-2.5 py-1.5 rounded-lg border border-card-border text-xs">
               <Server className="w-3.5 h-3.5 text-primary" />
-              <span className="text-text-muted text-[11px] hidden sm:inline">{t('tunnels_filter_server')}:</span>
+              <span className="text-text-muted text-xs hidden sm:inline">{t('tunnels_filter_server')}:</span>
               <select
                 value={serverFilter}
                 onChange={(e) => setServerFilter(e.target.value)}
@@ -227,7 +227,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                           {t('tunnels_col_destination')}: {tItem.TARGET_IP || '--'}
                         </div>
                         {tItem._node_name && (
-                          <div className="flex items-center gap-1 mt-1 text-[11px] font-mono text-text-muted">
+                          <div className="flex items-center gap-1 mt-1 text-xs font-mono text-text-muted">
                             <Server className="w-2.5 h-2.5 text-primary" />
                             <span className="text-text-subtle">{t('tunnels_badge_origin')}:</span>
                             <span className="text-primary font-medium">{tItem._node_name}</span>
@@ -235,7 +235,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                           </div>
                         )}
                       </div>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                      <span className="px-2 py-0.5 rounded text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
                         {proto} Relay
                       </span>
                     </div>
@@ -245,7 +245,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                         <span className="text-text-muted">{t('tunnels_col_ports')}: </span>
                         <span className="font-mono text-text-main font-medium">{tItem.PORT_SPEC}</span>
                       </div>
-                      <div className="text-[11px] text-text-subtle">
+                      <div className="text-xs text-text-subtle">
                         {t('tunnels_col_protocol')}: {proto}
                       </div>
                     </div>
@@ -321,7 +321,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                         {t('tunnels_col_destination')}: {tItem.TARGET_IP || '--'}
                       </div>
                       {tItem._node_name && (
-                        <div className="flex items-center gap-1 mt-1 text-[11px] font-mono text-text-muted">
+                        <div className="flex items-center gap-1 mt-1 text-xs font-mono text-text-muted">
                           <Server className="w-2.5 h-2.5 text-primary" />
                           <span className="text-text-subtle">{t('tunnels_badge_origin')}:</span>
                           <span className="text-primary font-medium">{tItem._node_name}</span>
@@ -329,7 +329,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                         </div>
                       )}
                     </div>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-sky-500/10 text-sky-400 border border-sky-500/25">
+                    <span className="px-2 py-0.5 rounded text-xs font-mono bg-sky-500/10 text-sky-400 border border-sky-500/25">
                       TCP Proxy
                     </span>
                   </div>
@@ -411,7 +411,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                           {t('tunnels_col_destination')}: {tItem.TARGET_IP || '--'}
                         </div>
                         {tItem._node_name && (
-                          <div className="flex items-center gap-1 mt-1 text-[11px] font-mono text-text-muted">
+                          <div className="flex items-center gap-1 mt-1 text-xs font-mono text-text-muted">
                             <Server className="w-2.5 h-2.5 text-primary" />
                             <span className="text-text-subtle">{t('tunnels_badge_origin')}:</span>
                             <span className="text-primary font-medium">{tItem._node_name}</span>
@@ -419,7 +419,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                           </div>
                         )}
                       </div>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                      <span className="px-2 py-0.5 rounded text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
                         {proto} DNAT
                       </span>
                     </div>
@@ -429,7 +429,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                         <span className="text-text-muted">{t('tunnels_col_ports')}: </span>
                         <span className="font-mono text-text-main font-medium">{tItem.PORT_SPEC}</span>
                       </div>
-                      <div className="flex justify-between text-[11px] text-text-subtle">
+                      <div className="flex justify-between text-xs text-text-subtle">
                         <span>{t('tunnels_col_interface')}: {tItem.IN_IF || 'any'}</span>
                         <span>{t('tunnels_col_source_cidr')}: {tItem.SOURCE_CIDR || '0.0.0.0/0'}</span>
                       </div>
@@ -508,7 +508,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                           {t('tunnels_col_destination')}: {tItem.TARGET_IP || '--'}
                         </div>
                         {tItem._node_name && (
-                          <div className="flex items-center gap-1 mt-1 text-[11px] font-mono text-text-muted">
+                          <div className="flex items-center gap-1 mt-1 text-xs font-mono text-text-muted">
                             <Server className="w-2.5 h-2.5 text-primary" />
                             <span className="text-text-subtle">{t('tunnels_badge_origin')}:</span>
                             <span className="text-primary font-medium">{tItem._node_name}</span>
@@ -516,7 +516,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                           </div>
                         )}
                       </div>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/25">
+                      <span className="px-2 py-0.5 rounded text-xs font-mono bg-amber-500/10 text-amber-400 border border-amber-500/25">
                         {proto} Forwarder
                       </span>
                     </div>
@@ -526,7 +526,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                         <span className="text-text-muted">{t('tunnels_col_ports')}: </span>
                         <span className="font-mono text-text-main font-medium">{tItem.PORT_SPEC}</span>
                       </div>
-                      <div className="text-[11px] text-text-subtle">
+                      <div className="text-xs text-text-subtle">
                         {t('tunnels_col_protocol')}: {proto}
                       </div>
                     </div>

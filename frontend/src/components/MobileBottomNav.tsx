@@ -25,7 +25,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     <nav
       role="navigation"
       aria-label={t("drawer_tabs")}
-      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-card/95 backdrop-blur-2xl border-t border-card-border pb-safe pt-1 px-1.5 shadow-[0_-8px_30px_rgba(0,0,0,0.5)] transition-all"
+      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-card/95 backdrop-blur-2xl border-t border-card-border pb-safe pt-1.5 px-2 shadow-[0_-8px_30px_rgba(0,0,0,0.5)] transition-all"
     >
       <div className="flex items-center justify-around gap-1 max-w-lg mx-auto">
         {tabs.map((tab) => {
@@ -35,7 +35,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
               key={tab.id}
               onClick={() => onSelectTab(tab.id)}
               aria-current={isActive ? "page" : undefined}
-              className={`relative flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all duration-200 active:scale-90 ${
+              className={`relative flex-1 flex flex-col items-center justify-center min-h-[48px] py-1 px-1 rounded-xl transition-all duration-200 active:scale-95 ${
                 isActive
                   ? "text-primary font-bold"
                   : "text-text-muted hover:text-text-main"
@@ -43,7 +43,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             >
               {/* Active pill background */}
               {isActive && (
-                <span className="absolute inset-x-1 inset-y-0.5 rounded-xl bg-primary/15 border border-primary/25 -z-10 animate-fade-in" />
+                <span className="absolute inset-x-1 inset-y-1 rounded-xl bg-primary/15 border border-primary/25 -z-10 animate-fade-in" />
               )}
 
               {/* Icon with optional badge */}
@@ -52,14 +52,14 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                   {tab.icon}
                 </span>
                 {tab.badge !== undefined && (
-                  <span className="absolute -top-1 -end-2 min-w-[15px] h-[15px] px-1 rounded-full text-[9px] font-mono font-bold leading-none flex items-center justify-center bg-primary text-black shadow-sm">
+                  <span className="absolute -top-1.5 -end-2.5 min-w-[18px] h-[18px] px-1 rounded-full text-xs font-mono font-bold leading-none flex items-center justify-center bg-primary text-black shadow-sm">
                     {tab.badge}
                   </span>
                 )}
               </div>
 
               {/* Label */}
-              <span className="text-[10px] mt-0.5 font-medium truncate max-w-[64px] leading-tight">
+              <span className="text-xs mt-1 font-medium truncate max-w-[72px] leading-tight">
                 {tab.label}
               </span>
             </button>

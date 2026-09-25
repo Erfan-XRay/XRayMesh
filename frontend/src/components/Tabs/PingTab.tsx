@@ -90,7 +90,7 @@ export const PingTab: React.FC<PingTabProps> = ({
         </div>
 
         {isRemoteRunner && (
-          <span className="text-[10px] font-semibold uppercase px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30">
+          <span className="text-xs font-semibold uppercase px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30">
             Remote Runner
           </span>
         )}
@@ -121,7 +121,7 @@ export const PingTab: React.FC<PingTabProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* Source Node Selector */}
             <div>
-              <label className="block text-[11px] font-medium text-text-muted mb-1">
+              <label className="block text-xs font-medium text-text-muted mb-1">
                 {t('ping_source_label')}
               </label>
               <select
@@ -140,7 +140,7 @@ export const PingTab: React.FC<PingTabProps> = ({
 
             {/* Destination Node Quick Selector */}
             <div>
-              <label className="block text-[11px] font-medium text-text-muted mb-1">
+              <label className="block text-xs font-medium text-text-muted mb-1">
                 {t('ping_dest_label')}
               </label>
               <select
@@ -163,7 +163,7 @@ export const PingTab: React.FC<PingTabProps> = ({
           {/* Target IP Manual Input & Packet Count */}
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1">
             <div className="sm:col-span-8">
-              <label className="block text-[11px] font-medium text-text-muted mb-1">
+              <label className="block text-xs font-medium text-text-muted mb-1">
                 Target IP Address
               </label>
               <input
@@ -176,7 +176,7 @@ export const PingTab: React.FC<PingTabProps> = ({
             </div>
 
             <div className="sm:col-span-4">
-              <label className="block text-[11px] font-medium text-text-muted mb-1">
+              <label className="block text-xs font-medium text-text-muted mb-1">
                 {t('ping_count_label')}
               </label>
               <select
@@ -195,14 +195,14 @@ export const PingTab: React.FC<PingTabProps> = ({
           {sourceIp && targetIp && (
             <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-primary/10 border border-primary/20 text-xs">
               <div className="flex items-center gap-1.5 truncate">
-                <span className="text-[10px] uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-card-border">
+                <span className="text-xs uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-card-border">
                   {t('ping_source_chip_prefix')}
                 </span>
                 <span className="font-mono font-semibold text-text-main truncate">
                   {sourcePeer?.hostname || sourceIp}
                 </span>
                 {sourcePeer?.is_current && (
-                  <span className="text-[10px] text-primary font-bold">(Local)</span>
+                  <span className="text-xs text-primary font-bold">(Local)</span>
                 )}
               </div>
 
@@ -211,14 +211,14 @@ export const PingTab: React.FC<PingTabProps> = ({
               </div>
 
               <div className="flex items-center gap-1.5 truncate">
-                <span className="text-[10px] uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-card-border">
+                <span className="text-xs uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-card-border">
                   {t('ping_dest_chip_prefix')}
                 </span>
                 <span className="font-mono font-semibold text-text-main truncate">
                   {targetPeer?.hostname || targetIp}
                 </span>
                 {targetPeer?.lat_ms !== undefined && (
-                  <span className="text-primary font-mono text-[10px] font-bold">
+                  <span className="text-primary font-mono text-xs font-bold">
                     {targetPeer.lat_ms}ms
                   </span>
                 )}
@@ -260,7 +260,7 @@ export const PingTab: React.FC<PingTabProps> = ({
                 {peers.find((p) => p.ipv4 === (lastResult.target || targetIp))?.hostname || (lastResult.target || targetIp)}
               </span>
               {lastResult.source && !peers.find((p) => p.ipv4 === lastResult.source)?.is_current && (
-                <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300">
+                <span className="text-xs uppercase font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300">
                   Cluster Proxy
                 </span>
               )}

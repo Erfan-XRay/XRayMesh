@@ -91,7 +91,7 @@ export const PeersTab: React.FC<PeersTabProps> = ({
             </div>
             <div className="min-w-0">
               <h3 className="text-xs font-bold text-amber-300">{t("version_drift_warning_title")}</h3>
-              <p className="text-[11px] text-text-muted mt-0.5 leading-relaxed">{t("version_drift_warning_desc")}</p>
+              <p className="text-xs text-text-muted mt-0.5 leading-relaxed">{t("version_drift_warning_desc")}</p>
             </div>
           </div>
           {effectiveUpdateCmd && (
@@ -198,13 +198,13 @@ export const PeersTab: React.FC<PeersTabProps> = ({
 
                     <div className="flex flex-col items-end gap-1 shrink-0">
                       {isCurrent ? (
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-primary/20 text-primary border border-primary/30 flex items-center gap-1.5 shrink-0">
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary/20 text-primary border border-primary/30 flex items-center gap-1.5 shrink-0">
+                          <span className="w-2 h-2 rounded-full bg-primary" />
                           <span>{t("peer_badge_current")}</span>
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                           <span>P2P</span>
                         </span>
                       )}
@@ -212,27 +212,27 @@ export const PeersTab: React.FC<PeersTabProps> = ({
                   </div>
 
                   {/* High-Density Bento Metrics Grid (2x2) */}
-                  <div className="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-black/30 border border-white/5 text-xs mb-3">
+                  <div className="grid grid-cols-2 gap-2.5 p-3 rounded-xl bg-black/30 border border-white/5 text-xs mb-3">
                     <div>
-                      <div className="text-[10px] text-text-muted">{t("peer_card_protocol")}</div>
+                      <div className="text-xs text-text-muted">{t("peer_card_protocol")}</div>
                       <div className="font-mono font-semibold text-primary mt-0.5 truncate tech-val">
                         {formatTunnelProto(p.tunnel_proto)}
                       </div>
                     </div>
                     <div>
-                      <div className="text-[10px] text-text-muted">{t("latency_title")}</div>
+                      <div className="text-xs text-text-muted">{t("latency_title")}</div>
                       <div className={`font-mono font-bold mt-0.5 tabular-nums tech-val ${latencyColor}`}>
                         {hasLatency ? `${latNum.toFixed(1)} ms` : "--"}
                       </div>
                     </div>
                     <div>
-                      <div className="text-[10px] text-text-muted">{t("peer_card_rx")}</div>
+                      <div className="text-xs text-text-muted">{t("peer_card_rx")}</div>
                       <div className="font-mono text-text-main mt-0.5 truncate tabular-nums tech-val">
                         {p.rx_bytes || "0 B"}
                       </div>
                     </div>
                     <div>
-                      <div className="text-[10px] text-text-muted">{t("peer_card_tx")}</div>
+                      <div className="text-xs text-text-muted">{t("peer_card_tx")}</div>
                       <div className="font-mono text-text-main mt-0.5 truncate tabular-nums tech-val">
                         {p.tx_bytes || "0 B"}
                       </div>
@@ -240,30 +240,30 @@ export const PeersTab: React.FC<PeersTabProps> = ({
                   </div>
 
                   {/* Version & Update Indicator */}
-                  <div className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-black/30 border border-white/5 text-xs mb-3">
+                  <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-black/30 border border-white/5 text-xs mb-3">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[10px] text-text-muted">{t("version_title")}:</span>
+                      <span className="text-xs text-text-muted">{t("version_title")}:</span>
                       <span className="font-mono font-semibold text-text-main tech-val">
-                        {p.xraymesh_version || "2.2.6-beta.1"}
+                        {p.xraymesh_version || "2.2.6-beta.2"}
                       </span>
                       {p.xraymesh_branch && (
-                        <span className="px-1 py-0.2 rounded text-[8px] font-mono font-bold bg-white/10 text-text-muted border border-white/10 uppercase">
+                        <span className="px-1.5 py-0.5 rounded text-xs font-mono font-bold bg-white/10 text-text-muted border border-white/10 uppercase tracking-wide">
                           {p.xraymesh_branch}
                         </span>
                       )}
                     </div>
                     {p.update_available ? (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
-                        <ArrowUpCircle className="w-3 h-3" />
+                      <span className="px-2.5 py-0.5 rounded-md text-xs font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1.5">
+                        <ArrowUpCircle className="w-3.5 h-3.5" />
                         <span>{t("version_update_available")}</span>
                       </span>
                     ) : p.version_drift ? (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-500/15 text-purple-400 border border-purple-500/30 flex items-center gap-1" title="Version mismatch with cluster">
-                        <AlertTriangle className="w-3 h-3" />
+                      <span className="px-2.5 py-0.5 rounded-md text-xs font-semibold bg-purple-500/15 text-purple-400 border border-purple-500/30 flex items-center gap-1.5" title="Version mismatch with cluster">
+                        <AlertTriangle className="w-3.5 h-3.5" />
                         <span>Drift</span>
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                      <span className="px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
                         {t("version_up_to_date")}
                       </span>
                     )}
@@ -273,7 +273,7 @@ export const PeersTab: React.FC<PeersTabProps> = ({
                 {/* Bottom Action Buttons */}
                 <div>
                   {isCurrent ? (
-                    <div className="px-3 py-2 rounded-xl bg-white/[0.03] border border-white/5 text-[11px] text-text-muted text-center">
+                    <div className="px-3 py-2 rounded-xl bg-white/[0.03] border border-white/5 text-xs text-text-muted text-center">
                       {t("peer_current_desc")}
                     </div>
                   ) : (

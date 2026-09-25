@@ -589,11 +589,11 @@ export default function App() {
                     <h4 className="text-xs sm:text-sm font-bold text-text-main">
                       {t('version_update_available')}: v{versionInfo.latest_version}
                     </h4>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-primary/20 text-primary border border-primary/30">
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-primary/20 text-primary border border-primary/30">
                       Current: v{versionInfo.current_version}
                     </span>
                   </div>
-                  <p className="text-[11px] sm:text-xs text-text-muted mt-1 max-w-2xl leading-relaxed">
+                  <p className="text-xs text-text-muted mt-1 max-w-2xl leading-relaxed">
                     {versionInfo.release_notes || 'A new update is available for XRayMesh.'}
                   </p>
                 </div>
@@ -624,11 +624,11 @@ export default function App() {
                     <h4 className="text-xs sm:text-sm font-bold text-text-main">
                       {t('onboarding_banner_title')}
                     </h4>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
                       {t('setup_mode_badge')}
                     </span>
                   </div>
-                  <p className="text-[11px] sm:text-xs text-text-muted max-w-2xl leading-relaxed">
+                  <p className="text-xs text-text-muted max-w-2xl leading-relaxed">
                     {t('onboarding_banner_desc')}
                   </p>
                 </div>
@@ -674,7 +674,7 @@ export default function App() {
                     <span>{tab.label}</span>
                     {tab.badge !== undefined && (
                       <span
-                        className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold leading-none shrink-0 ${
+                        className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold leading-none shrink-0 ${
                           isActive
                             ? 'bg-black/25 text-black'
                             : 'bg-primary/20 text-primary border border-primary/30'
@@ -696,18 +696,18 @@ export default function App() {
                 <span className="text-xs sm:text-sm font-bold text-text-main">
                   {t('setup_mode_title')}
                 </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
                   {t('setup_mode_badge')}
                 </span>
               </div>
-              <span className="text-[11px] text-text-muted hidden md:inline">
+              <span className="text-xs text-text-muted hidden md:inline">
                 {t('setup_mode_locked_notice')}
               </span>
             </div>
           )}
 
           {/* Tab Content with Smooth Transition */}
-          <main id="dashboard-content" role="tabpanel" aria-label={tabs.find((item) => item.id === activeTab)?.label} className="animate-tab-in">
+          <main id="dashboard-content" key={activeTab} role="tabpanel" aria-label={tabs.find((item) => item.id === activeTab)?.label} className="animate-tab-in">
             {activeTab === 'node' && (
               <NodeConfigTab
                 onRefreshStatus={handleRefresh}

@@ -26,7 +26,7 @@ export const ThemeModeSwitch: React.FC<ThemeModeSwitchProps> = ({ value, onChang
             type="button"
             onClick={() => onChange(option.value)}
             aria-pressed={isActive}
-            className={`min-h-11 flex items-center justify-center gap-1 rounded-lg px-2 text-[11px] font-semibold transition-all active:scale-95 ${
+            className={`min-h-11 flex items-center justify-center gap-1 rounded-lg px-2 text-xs font-semibold transition-all active:scale-95 ${
               isActive
                 ? 'bg-primary text-on-primary shadow-sm'
                 : 'text-text-muted hover:bg-card hover:text-text-main'
