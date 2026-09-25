@@ -33,7 +33,7 @@ import ssl
 from pathlib import Path
 
 # Paths & Defaults
-CURRENT_VERSION = "2.2.6-beta.6"
+CURRENT_VERSION = "2.2.6-beta.7"
 CURRENT_BRANCH = "beta"
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/xraymesh")
 BIN_DIR = os.path.join(INSTALL_DIR, "bin")
@@ -59,7 +59,8 @@ SESSION_LOCK = False
 
 # Version & Release Caching
 VERSION_CACHE = {}  # branch -> {"data": version info, "last_checked": ts}
-VERSION_CACHE_TTL = 900  # 15 minutes
+VERSION_CACHE_TTL = 300  # 5 minutes
+VERSION_FAIL_TTL = 60  # a failed check is retried soon instead of posing as "up to date"
 VERSION_REFRESHING = set()  # branches with a background refresh in flight
 PEER_VERSION_CACHE = {}  # ip -> {"version": ver, "timestamp": ts}
 
@@ -167,12 +168,13 @@ def set_update_channel(channel):
     return branch
 
 
-def get_version_info(branch=None):
-    """Fetch version info from the branch's version.json, with 15-minute caching per branch."""
+def get_version_info(branch=None, force=False):
+    """Fetch version info from the branch's version.json, cached per branch (failed checks only briefly)."""
     now = time.time()
     branch = branch or get_active_branch()
     cached = VERSION_CACHE.get(branch)
-    if cached and cached.get("data") and (now - cached.get("last_checked", 0) < VERSION_CACHE_TTL):
+    ttl = VERSION_CACHE_TTL if cached and cached.get("data", {}).get("checked") else VERSION_FAIL_TTL
+    if not force and cached and cached.get("data") and (now - cached.get("last_checked", 0) < ttl):
         # Compare against the running version at read time; it changes after a self-update.
         data = dict(cached["data"])
         data["current_version"] = CURRENT_VERSION
@@ -196,7 +198,17 @@ def get_version_info(branch=None):
     except Exception:
         pass
 
-    latest_ver = CURRENT_VERSION
+    if not isinstance(remote_data, dict):
+        previous = (cached or {}).get("data") or {}
+        if previous.get("latest_version") and previous.get("checked_at"):
+            # Keep the last good answer, but retry soon.
+            data = dict(previous, current_version=CURRENT_VERSION, checked=False, check_failed_at=now)
+            data["update_available"] = is_newer_version(data["latest_version"], CURRENT_VERSION)
+            VERSION_CACHE[branch] = {"data": data, "last_checked": now}
+            return data
+
+    # Unknown until GitHub answers; never report "up to date" from a failed check.
+    latest_ver = ""
     changelog = []
     update_cmd = f"bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/{branch}/xraymesh.sh) update"
     release_notes = ""
@@ -217,6 +229,7 @@ def get_version_info(branch=None):
         "release_notes": release_notes,
         "update_command": update_cmd,
         "checked": isinstance(remote_data, dict),
+        "checked_at": now if isinstance(remote_data, dict) else None,
     }
     VERSION_CACHE[branch] = {"data": result, "last_checked": now}
     return result
@@ -226,7 +239,8 @@ def get_cached_version_info():
     """Non-blocking variant for latency-sensitive probes: serve the cache and refresh it in the background."""
     branch = get_active_branch()
     cached = VERSION_CACHE.get(branch) or {}
-    fresh = cached.get("data") and time.time() - cached.get("last_checked", 0) < VERSION_CACHE_TTL
+    ttl = VERSION_CACHE_TTL if (cached.get("data") or {}).get("checked") else VERSION_FAIL_TTL
+    fresh = cached.get("data") and time.time() - cached.get("last_checked", 0) < ttl
     if not fresh and branch not in VERSION_REFRESHING:
         VERSION_REFRESHING.add(branch)
 
@@ -281,6 +295,7 @@ def local_update_summary():
         "channel": branch_channel(branch),
         "latest_version": latest,
         "update_available": bool(latest) and is_newer_version(latest, CURRENT_VERSION),
+        "update_checked": bool(info.get("checked")),
         "update": {k: job.get(k) for k in ("state", "step", "target_version", "error", "rolled_back", "started_at", "finished_at")},
     }
 
@@ -386,7 +401,7 @@ def get_peer_version(peer_ip, port=None, timeout=1.0):
         cache_entry["branch"] = peer_branch
     # Peers from 2.2.6-beta.5 on report their own channel, latest release and update job.
     source = peer_info if peer_info else cached
-    for key in ("channel", "latest_version", "update_available", "update"):
+    for key in ("channel", "latest_version", "update_available", "update_checked", "update"):
         if key in source:
             cache_entry[key] = source[key]
     PEER_VERSION_CACHE[peer_ip] = cache_entry
@@ -2043,7 +2058,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
         if path == "/api/version":
             self.send_json({
                 "ok": True,
-                "data": get_version_info()
+                "data": get_version_info(force=query.get("refresh") == "1")
             })
             return
 
@@ -2146,6 +2161,8 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                             # The peer checked its own channel.
                             p["update_available"] = bool(peer_cache.get("update_available"))
                             p["latest_version"] = peer_cache.get("latest_version", "")
+                            if "update_checked" in peer_cache:
+                                p["update_checked"] = bool(peer_cache.get("update_checked"))
                         elif (p["xraymesh_branch"] or active_branch) == active_branch and p_ver != "unknown":
                             # Older peers do not report it; our channel's release is only valid for the same branch.
                             p["update_available"] = is_newer_version(latest_v, p_ver)
@@ -2180,6 +2197,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             local_summary = local_update_summary()
             local_summary["latest_version"] = local_summary["latest_version"] or latest_v
             local_summary["update_available"] = is_newer_version(local_summary["latest_version"], CURRENT_VERSION)
+            local_summary["update_checked"] = local_summary["update_checked"] or bool(v_info.get("checked"))
             for p in peers_list:
                 if isinstance(p, dict) and p.get("is_current"):
                     p.update({
@@ -2188,6 +2206,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                         "channel": local_summary["channel"],
                         "latest_version": local_summary["latest_version"],
                         "update_available": local_summary["update_available"],
+                        "update_checked": local_summary["update_checked"],
                         "update": local_summary["update"],
                         "version_drift": False,
                     })

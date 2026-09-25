@@ -43,6 +43,8 @@ export interface Peer {
   xraymesh_branch?: string;
   interfaces?: string[];
   update_available?: boolean;
+  /** False when the server could not reach GitHub, so "no update" is not known. */
+  update_checked?: boolean;
   version_drift?: boolean;
   is_current?: boolean;
   /** Reported by each server for its own update channel (2.2.6-beta.5+). */

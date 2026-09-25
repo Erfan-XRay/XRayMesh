@@ -2,6 +2,15 @@
 
 All notable XRayMesh changes are documented here.
 
+## [2.2.6-beta.7] - 2026-09-25
+
+### Changed
+- New releases are picked up within 5 minutes instead of 15.
+- The Refresh button now checks GitHub for updates again right away (`GET /api/version?refresh=1`).
+
+### Fixed
+- A server that could not reach GitHub reported itself as "Up to date" for 15 minutes. It now keeps its last good answer, or shows "Couldn't check for updates", and retries within a minute. Every server reports this state to the rest of the mesh.
+
 ## [2.2.6-beta.6] - 2026-09-25
 
 ### Added

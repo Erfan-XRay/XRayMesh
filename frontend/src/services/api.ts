@@ -455,8 +455,9 @@ export async function dismissClusterRollback(): Promise<void> {
   if (!res.ok) throw new Error('Failed to dismiss rollback notice');
 }
 
-export async function fetchVersionInfo(): Promise<VersionInfo> {
-  const res = await fetch('/api/version');
+/** `refresh` skips the server's cache and asks GitHub again. */
+export async function fetchVersionInfo(refresh = false): Promise<VersionInfo> {
+  const res = await fetch(refresh ? '/api/version?refresh=1' : '/api/version');
   const d = await res.json();
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to fetch version info');
   return d.data;

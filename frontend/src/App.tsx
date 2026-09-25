@@ -200,6 +200,8 @@ export default function App() {
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
+    // Re-check GitHub first so the peers list below reflects a release published minutes ago.
+    await api.fetchVersionInfo(true).catch(() => undefined);
     await Promise.all([loadDashboard(), tunnelStore.refresh()]);
     setIsRefreshing(false);
     addToast(t('btn_refresh') + ' ✓', 'success');

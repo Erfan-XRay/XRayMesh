@@ -75,6 +75,15 @@ export const UpdateCell: React.FC<UpdateCellProps> = ({ peer, run, onUpdate, onD
     );
   }
 
+  if (peer.update_checked === false) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-amber-400" title={t('update_check_failed_hint')}>
+        <AlertCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+        <span>{t('update_check_failed')}</span>
+      </span>
+    );
+  }
+
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-text-muted">
       <Check className="w-3.5 h-3.5 shrink-0 text-emerald-400" aria-hidden="true" />
