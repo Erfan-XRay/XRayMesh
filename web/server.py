@@ -33,7 +33,7 @@ import ssl
 from pathlib import Path
 
 # Paths & Defaults
-CURRENT_VERSION = "2.2.6-beta.3"
+CURRENT_VERSION = "2.2.6-beta.4"
 CURRENT_BRANCH = "beta"
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/xraymesh")
 BIN_DIR = os.path.join(INSTALL_DIR, "bin")
@@ -1037,6 +1037,115 @@ def sanitize_peer_endpoint(raw_peer, default_port="11010"):
     return hostport
 
 
+MESH_PROTOCOLS = ("dual", "udp", "tcp", "ws", "wss", "quic", "faketcp")
+
+# Zero-width and bidi control characters that chat apps and RTL pages slip into copied text.
+_INVISIBLE_CHARS_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]")
+_INVITE_RUN_RE = re.compile(r"[A-Za-z0-9+/_=\s-]+")
+
+
+class InviteTokenError(ValueError):
+    """Raised when a pasted mesh invite code cannot be used. `code` is a stable id for the UI."""
+
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+
+
+def _decode_invite_candidate(token):
+    token = token.replace("-", "+").replace("_", "/").rstrip("=")
+    if not token:
+        return None
+    token += "=" * (-len(token) % 4)
+    try:
+        text = base64.b64decode(token, validate=True).decode("utf-8")
+        data, _ = json.JSONDecoder().raw_decode(text.lstrip())
+    except ValueError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def decode_invite_token(raw):
+    """
+    Decode an xrmesh:// invite code into a normalized dict.
+    Tolerates surrounding text, line wrapping, invisible bidi marks, URL-safe base64
+    and missing padding, because codes are usually copied from terminals or chat apps.
+    """
+    text = _INVISIBLE_CHARS_RE.sub("", str(raw or ""))
+    prefix = re.search(r"xrmesh://", text, re.IGNORECASE)
+    if prefix:
+        text = text[prefix.end():]
+    text = re.sub(r"^[^A-Za-z0-9+/_-]+", "", text)
+    run = _INVITE_RUN_RE.match(text)
+    run = run.group(0) if run else ""
+
+    # A wrapped code spans several lines; a code followed by other words must stop at the first gap.
+    data = None
+    for candidate in (re.sub(r"\s+", "", run), run.split()[0] if run.split() else ""):
+        data = _decode_invite_candidate(candidate)
+        if data is not None:
+            break
+    if data is None:
+        raise InviteTokenError(
+            "invalid_invite",
+            "This is not a valid XRayMesh invite code. Copy the complete code that starts with xrmesh:// and try again.",
+        )
+
+    net = str(data.get("net") or data.get("network_name") or "").strip()
+    secret = str(data.get("secret") or data.get("network_secret") or "").strip()
+    if not net or not secret:
+        raise InviteTokenError("invite_incomplete", "The invite code is missing the network name or secret.")
+
+    proto = str(data.get("proto") or data.get("protocol") or "dual").strip().lower()
+    invite = {
+        "net": net,
+        "secret": secret,
+        "endpoint": str(data.get("endpoint") or data.get("peer") or "").strip(),
+        "proto": proto if proto in MESH_PROTOCOLS else "dual",
+    }
+    # Optional transport settings (added in 2.2.6-beta.4) so a joining node matches the mesh.
+    for key in ("enc", "kcp", "ipv6"):
+        if isinstance(data.get(key), bool):
+            invite[key] = data[key]
+    mtu = data.get("mtu")
+    if isinstance(mtu, int) and not isinstance(mtu, bool) and 576 <= mtu <= 9000:
+        invite["mtu"] = mtu
+    return invite
+
+
+def valid_mesh_hostname(name):
+    """Return True for node names EasyTier and the peer listings can display safely."""
+    return bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,62}", name or ""))
+
+
+def valid_ipv4(ip_str):
+    """Return True for a dotted-quad IPv4 address written with ASCII digits."""
+    if not re.fullmatch(r"\d{1,3}(\.\d{1,3}){3}", ip_str or "", re.ASCII):
+        return False
+    return all(int(p) <= 255 for p in ip_str.split("."))
+
+
+def parse_port(value):
+    """Return the port as an int when it is within 1-65535, otherwise None."""
+    try:
+        port = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return port if 1 <= port <= 65535 else None
+
+
+def write_config_bytes(raw):
+    """Atomically restore CONFIG_FILE from raw bytes with secure permissions."""
+    tmp = CONFIG_FILE + ".tmp"
+    with open(tmp, "wb") as f:
+        f.write(raw)
+    try:
+        os.chmod(tmp, 0o600)
+    except Exception:
+        pass
+    os.replace(tmp, CONFIG_FILE)
+
+
 def save_node_config_env(cfg):
     """Write dictionary to CONFIG_FILE with secure file permissions."""
     os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
@@ -1950,13 +2059,22 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             pub_ip = get_server_public_ip()
             port = config.get("PORT", "11010")
             proto = config.get("PROTOCOL", "dual")
+            try:
+                mtu = int(config.get("MTU", "1380"))
+            except ValueError:
+                mtu = 1380
 
             invite_obj = {
                 "v": 1,
                 "net": config.get("NETWORK_NAME", "xraymesh"),
                 "secret": config.get("NETWORK_SECRET", ""),
                 "endpoint": f"{pub_ip}:{port}" if pub_ip else "",
-                "proto": proto
+                "proto": proto,
+                # Transport settings let the joining node match this mesh exactly.
+                "enc": config.get("ENCRYPTION", "yes") != "no",
+                "kcp": config.get("ENABLE_KCP", "no") == "yes",
+                "ipv6": config.get("IPV6", "no") == "yes",
+                "mtu": mtu
             }
             token_str = base64.b64encode(json.dumps(invite_obj).encode("utf-8")).decode("utf-8")
             self.send_json({
@@ -2727,76 +2845,97 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             return
 
         elif path == "/api/node/join":
-            invite_raw = data.get("invite", "").strip()
-            if not invite_raw:
-                self.send_json({"ok": False, "error": "Missing invite token"}, status=400)
-                return
-
-            token = invite_raw.replace("xrmesh://", "").strip()
+            # Joining replaces the whole mesh configuration (the UI confirms this first).
+            # Only this server's name and listen port carry over; tunnels are untouched.
             try:
-                decoded_json = base64.b64decode(token).decode("utf-8")
-                invite_data = json.loads(decoded_json)
-            except Exception as e:
-                self.send_json({"ok": False, "error": f"Invalid invite format: {e}"}, status=400)
+                invite = decode_invite_token(data.get("invite", ""))
+            except InviteTokenError as e:
+                self.send_json({"ok": False, "code": e.code, "error": str(e)}, status=400)
                 return
 
-            net = invite_data.get("net", "").strip()
-            secret = invite_data.get("secret", "").strip()
-            endpoint = invite_data.get("endpoint", "").strip()
-            proto = invite_data.get("proto", "dual").strip().lower()
-
-            if not net or not secret:
-                self.send_json({"ok": False, "error": "Invite token is missing network name or secret"}, status=400)
-                return
-
-            custom_hostname = data.get("hostname", "").strip()
-            custom_ipv4 = data.get("ipv4", "").strip()
-
-            cfg = load_env_file(CONFIG_FILE)
-            cur_ip = custom_ipv4 or cfg.get("IPV4", "")
-            if not cur_ip or cur_ip == "10.144.144.1":
-                cur_ip = f"10.144.144.{secrets.randbelow(200) + 2}"
-
-            final_hostname = custom_hostname or cfg.get("HOSTNAME", "").strip()
-            if not final_hostname:
-                final_hostname = os.uname().nodename if hasattr(os, "uname") else "node"
-
-            cfg["NETWORK_NAME"] = net
-            cfg["NETWORK_SECRET"] = secret
-            cfg["PROTOCOL"] = proto
-            cfg["IPV4"] = cur_ip
-            cfg["HOSTNAME"] = final_hostname
-            if not cfg.get("PORT"):
-                cfg["PORT"] = "11010"
-            if not cfg.get("ENCRYPTION"):
-                cfg["ENCRYPTION"] = "yes"
-            if not cfg.get("IPV6"):
-                cfg["IPV6"] = "no"
-            if not cfg.get("MTU"):
-                cfg["MTU"] = "1380"
-
-            mesh_port = str(cfg.get("PORT", "11010"))
-            clean_endpoint = sanitize_peer_endpoint(endpoint, mesh_port)
-            cur_peers = [sanitize_peer_endpoint(p, mesh_port) for p in cfg.get("PEERS", "").split(",") if p.strip()]
-            cur_peers = [p for p in cur_peers if p]
-            if clean_endpoint and clean_endpoint not in cur_peers:
-                cur_peers.append(clean_endpoint)
-            cfg["PEERS"] = ",".join(cur_peers)
-
-            save_node_config_env(cfg)
-            ok, msg = run_xraymesh_cmd(["node-restart"])
-            if ok:
+            current = load_env_file(CONFIG_FILE)
+            hostname = str(data.get("hostname") or current.get("HOSTNAME") or "").strip()
+            if not hostname and hasattr(os, "uname"):
+                hostname = os.uname().nodename
+            if not valid_mesh_hostname(hostname):
                 self.send_json({
-                    "ok": True,
-                    "message": f"Successfully joined mesh '{net}'. Node is online.",
-                    "data": {
-                        "network_name": net,
-                        "ipv4": cur_ip,
-                        "peer": clean_endpoint
-                    }
-                })
-            else:
-                self.send_json({"ok": False, "error": f"Joined mesh '{net}', but node service failed to start: {msg}"}, status=500)
+                    "ok": False,
+                    "code": "invalid_hostname",
+                    "error": "Server name must start with a letter or number and may only contain letters, numbers, '.', '-' or '_'."
+                }, status=400)
+                return
+
+            ipv4 = str(data.get("ipv4") or "").strip() or f"10.144.144.{secrets.randbelow(253) + 2}"
+            if not valid_ipv4(ipv4):
+                self.send_json({"ok": False, "code": "invalid_ipv4", "error": "Enter a valid virtual IPv4 address."}, status=400)
+                return
+
+            port = parse_port(data.get("port") or current.get("PORT") or 11010)
+            if port is None:
+                self.send_json({"ok": False, "code": "invalid_port", "error": "Listen port must be between 1 and 65535."}, status=400)
+                return
+
+            previous_raw = None
+            if os.path.isfile(CONFIG_FILE):
+                try:
+                    with open(CONFIG_FILE, "rb") as f:
+                        previous_raw = f.read()
+                except OSError as e:
+                    self.send_json({"ok": False, "code": "backup_failed", "error": f"Could not back up the current configuration: {e}"}, status=500)
+                    return
+
+            # A pending SafeSync watchdog would otherwise roll this server back to the old mesh.
+            disarm_rollback_watchdog()
+            save_node_config_env({
+                "NETWORK_NAME": invite["net"],
+                "NETWORK_SECRET": invite["secret"],
+                "HOSTNAME": hostname,
+                "IPV4": ipv4,
+                "PROTOCOL": invite["proto"],
+                "PORT": str(port),
+                "PEERS": invite["endpoint"],
+                "ENCRYPTION": "yes" if invite.get("enc", True) else "no",
+                "IPV6": "yes" if invite.get("ipv6", False) else "no",
+                "MTU": str(invite.get("mtu", 1380)),
+                "ENABLE_KCP": "yes" if invite.get("kcp", False) else "no",
+            })
+
+            ok, msg = run_xraymesh_cmd(["node-restart"])
+            if not ok:
+                if previous_raw is not None:
+                    write_config_bytes(previous_raw)
+                    run_xraymesh_cmd(["node-restart"])
+                else:
+                    run_xraymesh_cmd(["delete-node"])
+                self.send_json({
+                    "ok": False,
+                    "code": "start_failed",
+                    "restored": True,
+                    "error": msg or "The mesh service failed to start with the new configuration."
+                }, status=500)
+                return
+
+            # SafeSync backup/staged files and rollback notices belong to the previous mesh.
+            for stale in (CONFIG_BACKUP_FILE, CONFIG_STAGED_FILE):
+                try:
+                    os.remove(stale)
+                except OSError:
+                    pass
+            LAST_ROLLBACK["occurred"] = False
+
+            self.send_json({
+                "ok": True,
+                "message": f"Joined mesh '{invite['net']}'. The previous configuration was replaced.",
+                "data": {
+                    "network_name": invite["net"],
+                    "hostname": hostname,
+                    "ipv4": ipv4,
+                    "port": port,
+                    "peer": sanitize_peer_endpoint(invite["endpoint"], str(port))
+                }
+            })
+            return
+
         elif path == "/api/cluster/broadcast":
             cfg = load_env_file(CONFIG_FILE)
             current_secret = cfg.get("NETWORK_SECRET", "").strip()
@@ -2953,7 +3092,12 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             return
 
         elif path == "/api/node/stop":
-            ok, msg = run_xraymesh_cmd(["stop"])
+            # Stop only the mesh daemon: the CLI "stop" command also stops this web panel.
+            try:
+                r = subprocess.run(["systemctl", "stop", "xraymesh.service"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
+                ok, msg = r.returncode == 0, (r.stderr or r.stdout).strip()
+            except Exception as e:
+                ok, msg = False, str(e)
             if ok:
                 self.send_json({"ok": True, "message": "Mesh node service stopped."})
             else:

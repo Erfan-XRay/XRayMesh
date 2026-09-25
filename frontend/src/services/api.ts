@@ -1,4 +1,4 @@
-import { StatusResponse, Peer, TunnelsData, PingResult, SpeedtestData, NodeConfig, MeshInviteData, RollbackInfo, VersionInfo } from '../types';
+import { StatusResponse, Peer, TunnelsData, PingResult, SpeedtestData, NodeConfig, MeshInviteData, JoinMeshResult, RollbackInfo, VersionInfo } from '../types';
 
 export async function fetchAuthStatus(): Promise<{ authenticated: boolean; password_configured: boolean }> {
   const res = await fetch('/api/auth/status');
@@ -273,20 +273,30 @@ export async function deleteRealmTunnel(name: string, originNode?: string): Prom
   return d.message;
 }
 
+/** Parse a JSON API response; a garbled body becomes a readable error instead of a raw JSON.parse message. */
+async function readJson(res: Response): Promise<any> {
+  const text = await res.text();
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(`Unexpected response from the server (HTTP ${res.status}).`);
+  }
+}
+
 export async function deleteNodeConfig(): Promise<string> {
   const res = await fetch('/api/node/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({}),
   });
-  const d = await res.json();
+  const d = await readJson(res);
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to delete node');
   return d.message;
 }
 
 export async function fetchNodeConfig(): Promise<NodeConfig> {
   const res = await fetch('/api/node/config');
-  const d = await res.json();
+  const d = await readJson(res);
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to fetch node configuration');
   return d.data;
 }
@@ -297,75 +307,87 @@ export async function saveNodeConfig(config: Partial<NodeConfig>): Promise<strin
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(config),
   });
-  const d = await res.json();
+  const d = await readJson(res);
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to save node configuration');
   return d.message || 'Configuration saved successfully.';
 }
 
-export async function addMeshPeer(peer: string): Promise<string> {
+export async function addMeshPeer(peer: string): Promise<string[]> {
   const res = await fetch('/api/node/peers/add', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ peer }),
   });
-  const d = await res.json();
+  const d = await readJson(res);
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to add peer');
-  return d.message;
+  return d.peers || [];
 }
 
-export async function removeMeshPeer(peer: string): Promise<string> {
+export async function removeMeshPeer(peer: string): Promise<string[]> {
   const res = await fetch('/api/node/peers/remove', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ peer }),
   });
-  const d = await res.json();
+  const d = await readJson(res);
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to remove peer');
-  return d.message;
+  return d.peers || [];
 }
 
 export async function fetchMeshInvite(): Promise<MeshInviteData> {
   const res = await fetch('/api/node/invite');
-  const d = await res.json();
+  const d = await readJson(res);
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to generate invite');
   return d.data;
 }
 
+/** Error from /api/node/join; `code` identifies the failure and `restored` means the old config is back. */
+export class JoinMeshError extends Error {
+  code: string;
+  restored: boolean;
+
+  constructor(message: string, code = '', restored = false) {
+    super(message);
+    this.name = 'JoinMeshError';
+    this.code = code;
+    this.restored = restored;
+  }
+}
+
+/** Replace this node's mesh configuration with the one from an invite code. */
 export async function joinMeshNetwork(
   invite: string,
-  options?: { hostname?: string; ipv4?: string }
-): Promise<string> {
+  options: { hostname: string; ipv4: string; port?: number }
+): Promise<JoinMeshResult> {
   const res = await fetch('/api/node/join', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      invite,
-      hostname: options?.hostname,
-      ipv4: options?.ipv4,
-    }),
+    body: JSON.stringify({ invite, ...options }),
   });
-  const d = await res.json();
-  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to join mesh network');
-  return d.message;
+  const d = await readJson(res);
+  if (!res.ok || !d.ok) {
+    throw new JoinMeshError(d.error || 'Failed to join mesh network', d.code, Boolean(d.restored));
+  }
+  return d.data;
 }
 
 export async function startMeshNode(): Promise<string> {
   const res = await fetch('/api/node/start', { method: 'POST' });
-  const d = await res.json();
+  const d = await readJson(res);
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to start mesh node');
   return d.message || 'Mesh node started successfully.';
 }
 
 export async function stopMeshNode(): Promise<string> {
   const res = await fetch('/api/node/stop', { method: 'POST' });
-  const d = await res.json();
+  const d = await readJson(res);
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to stop mesh node');
   return d.message || 'Mesh node stopped.';
 }
 
 export async function restartMeshNode(): Promise<string> {
   const res = await fetch('/api/node/restart', { method: 'POST' });
-  const d = await res.json();
+  const d = await readJson(res);
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to restart mesh node');
   return d.message || 'Mesh node restarted successfully.';
 }

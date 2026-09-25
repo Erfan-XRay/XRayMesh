@@ -190,9 +190,21 @@ export interface MeshInviteData {
     secret: string;
     endpoint: string;
     proto: string;
+    enc?: boolean;
+    kcp?: boolean;
+    ipv6?: boolean;
+    mtu?: number;
   };
   public_ip: string;
   port: string | number;
+}
+
+export interface JoinMeshResult {
+  network_name: string;
+  hostname: string;
+  ipv4: string;
+  port: number;
+  peer: string;
 }
 
 export interface ToastItem {

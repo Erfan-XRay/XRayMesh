@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Language } from '../types';
-import { translations } from './translations';
+import { translations, TranslationKey } from './translations';
 
 const LANG_STORAGE_KEY = 'xraymesh_dashboard_lang';
 
@@ -30,7 +30,7 @@ export function useTranslation() {
   }, [lang, isRtl]);
 
   const t = useCallback(
-    (key: keyof typeof translations.en): string => {
+    (key: TranslationKey): string => {
       const dict = translations[lang] || translations.en;
       return dict[key] || translations.en[key] || key;
     },

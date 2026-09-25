@@ -2,6 +2,21 @@
 
 All notable XRayMesh changes are documented here.
 
+## [2.2.6-beta.4] - 2026-09-25
+
+### Changed
+- Redesigned the Node Config tab. The 3-step wizard and the 4 manual sub-tabs are replaced by a two-step setup (join an existing mesh or create a new one) and, once configured, a compact service header with two tabs: Settings and Peers & invite.
+- Settings is one form with a single sticky save bar that only appears when something changed. "Apply to all servers" (SafeSync) is offered when only shared settings changed.
+- Joining another mesh from a configured node now shows a confirmation that compares the current and new configuration. On confirm, the old network settings, secret, protocol and peers are replaced. The server name, listen port and tunnels are kept.
+- Invite codes now carry the mesh's transport settings (encryption, KCP, IPv6, MTU) so joining nodes match the mesh. Older codes still work.
+- All Node Config text is translated (English and Persian) and follows the RTL rules: logical CSS properties, mirrored directional icons, and isolated LTR values.
+
+### Fixed
+- Joining a mesh from the web panel always showed an error (for example `JSON.parse: unexpected non-whitespace character after JSON data`) even though the join succeeded. `/api/node/join` wrote a second HTTP response after the JSON body.
+- Invite codes copied from terminals or chat apps are accepted even with line wraps, invisible bidi characters, surrounding text, uppercase prefix, missing padding or URL-safe base64.
+- If the mesh service fails to start after a join, the previous configuration is restored automatically instead of leaving the node broken.
+- The Stop button in the web panel also stopped the web panel itself. It now stops only the mesh service.
+
 ## [2.2.6-beta.3] - 2026-09-25
 
 ### Added

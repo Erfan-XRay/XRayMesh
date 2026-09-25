@@ -100,6 +100,7 @@ export default function App() {
 
   // Cluster SafeSync state
   const [clusterSyncOpen, setClusterSyncOpen] = useState(false);
+  const [nodeReloadKey, setNodeReloadKey] = useState(0);
   const [clusterSyncConfig, setClusterSyncConfig] = useState<{
     protocol: MeshProtocol;
     enableKcp: boolean;
@@ -519,7 +520,7 @@ export default function App() {
         { id: 'speedtest', label: t('tab_speedtest'), icon: <Zap className="w-4 h-4" /> },
       ]
     : [
-        { id: 'node', label: t('wizard_title') || t('tab_node'), icon: <Sparkles className="w-4 h-4 text-primary" />, badge: t('setup_mode_badge') || 'Setup' },
+        { id: 'node', label: t('setup_title'), icon: <Sparkles className="w-4 h-4 text-primary" />, badge: t('setup_mode_badge') || 'Setup' },
       ];
 
   // ─── Loading / Auth Gate ────────────────────────────────
@@ -608,30 +609,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Welcome / First-Run Onboarding Banner (When node is not configured) */}
-          {initialLoaded && !isNodeConfigured && (
-            <div className="relative z-20 mb-4 sm:mb-6 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-teal-950/50 via-emerald-950/40 to-slate-900/60 border border-emerald-500/40 backdrop-blur-xl shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4 animate-fade-in">
-              <div className="flex items-start md:items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/10">
-                  <Sparkles className="w-5 h-5 animate-pulse" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <h4 className="text-xs sm:text-sm font-bold text-text-main">
-                      {t('onboarding_banner_title')}
-                    </h4>
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                      {t('setup_mode_badge')}
-                    </span>
-                  </div>
-                  <p className="text-xs text-text-muted max-w-2xl leading-relaxed">
-                    {t('onboarding_banner_desc')}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Overview Cards (Only shown after mesh node is configured) */}
           {isNodeConfigured && (
             <div className="relative z-10 animate-fade-in">
@@ -647,8 +624,8 @@ export default function App() {
             </div>
           )}
 
-          {/* Tab Navigation (When configured) / Setup Mode Bar (When unconfigured) */}
-          {isNodeConfigured ? (
+          {/* Tab Navigation (only once the node is configured) */}
+          {isNodeConfigured && (
             <nav aria-label={t('drawer_tabs')} className="horizontal-scroll hidden md:flex flex-wrap gap-1.5 mb-4 sm:mb-6 p-1.5 rounded-2xl bg-card/80 border border-card-border backdrop-blur-xl shadow-lg" role="tablist">
               {tabs.map((tab) => {
                 const isActive = activeTab === tab.id;
@@ -683,38 +660,19 @@ export default function App() {
                 );
               })}
             </nav>
-          ) : (
-            <div className="flex items-center justify-between gap-3 mb-4 sm:mb-6 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl bg-card/70 border border-primary/30 backdrop-blur-md shadow-sm animate-fade-in">
-              <div className="flex items-center gap-2 sm:gap-2.5">
-                <span className="p-1.5 rounded-lg bg-primary/15 text-primary">
-                  <Sparkles className="w-4 h-4 animate-pulse" />
-                </span>
-                <span className="text-xs sm:text-sm font-bold text-text-main">
-                  {t('setup_mode_title')}
-                </span>
-                <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                  {t('setup_mode_badge')}
-                </span>
-              </div>
-              <span className="text-xs text-text-muted hidden md:inline">
-                {t('setup_mode_locked_notice')}
-              </span>
-            </div>
           )}
 
           {/* Tab Content with Smooth Transition */}
           <main id="dashboard-content" key={activeTab} role="tabpanel" aria-label={tabs.find((item) => item.id === activeTab)?.label} className="animate-tab-in">
             {activeTab === 'node' && (
               <NodeConfigTab
-                onRefreshStatus={handleRefresh}
+                onRefreshStatus={loadDashboard}
                 onNotify={addToast}
                 onCopy={handleCopy}
                 copiedKey={copiedKey}
                 t={t}
-                lang={lang}
-                isRtl={isRtl}
-                activePeers={peers}
                 onOpenClusterSync={handleOpenClusterSync}
+                reloadKey={nodeReloadKey}
               />
             )}
             {activeTab === 'peers' && (
@@ -804,7 +762,10 @@ export default function App() {
               peers={peers}
               currentConfig={clusterSyncConfig}
               onNotify={addToast}
-              onRefreshData={handleRefresh}
+              onRefreshData={() => {
+                handleRefresh();
+                setNodeReloadKey((key) => key + 1);
+              }}
               t={t}
               isRtl={isRtl}
             />

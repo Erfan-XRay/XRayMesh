@@ -1,8 +1,8 @@
 {
-  "version": "2.2.6-beta.3",
+  "version": "2.2.6-beta.4",
   "branch": "beta",
-  "release_name": "XRayMesh v2.2.6-beta.3 (Design System & High-Contrast Light Mode Overhaul)",
+  "release_name": "XRayMesh v2.2.6-beta.4 (Node Setup Redesign & Join Fix)",
   "release_date": "2026-09-25",
-  "changelog": "Refined design system with 60-30-10 palette architecture, high-contrast accessible Light Mode, dynamic ambient mesh gradients, subtle dot-grid canvas, and glassmorphic depth.",
+  "changelog": "Redesigned Node setup and settings: a two-step setup, one settings form with a single save bar, and a Peers & invite tab. Joining another mesh now asks for confirmation, replaces the old configuration and restores it automatically if the service fails. Fixed the join error in the web panel and the Stop button shutting down the panel.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update"
 }
