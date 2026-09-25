@@ -44,6 +44,8 @@ export interface PeersResult {
   clusterVersionDrift?: boolean;
   current_version?: string;
   latest_version?: string;
+  branch?: string;
+  update_command?: string;
   local_ip?: string;
   local_hostname?: string;
 }
@@ -69,6 +71,8 @@ export async function fetchPeersData(): Promise<PeersResult> {
     latest_version: d.latest_version,
     local_ip: d.local_ip,
     local_hostname: d.local_hostname,
+    branch: d.branch,
+    update_command: d.update_command,
   };
 }
 

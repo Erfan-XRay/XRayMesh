@@ -51,8 +51,13 @@ export const Header: React.FC<HeaderProps> = ({
               {t("brand_title")}
             </h1>
             <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-primary/10 text-primary border border-primary/20 shrink-0">
-              v{node.xraymesh_version || "2.1.3"}
+              v{node.xraymesh_version || "2.2.6-beta.1"}
             </span>
+            {node.branch === "beta" && (
+              <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0 uppercase tracking-wider">
+                Beta
+              </span>
+            )}
             {node.ssl_enabled && (
               <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0" title="SSL/TLS Active">
                 <Lock className="w-3 h-3 text-emerald-400" aria-hidden="true" />

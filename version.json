@@ -1,7 +1,8 @@
 {
-  "version": "2.2.5",
-  "release_name": "XRayMesh v2.2.5 (iptables Origin Lock & Peer Probe Optimization)",
-  "release_date": "2026-09-24",
-  "changelog": "Restricted iptables tunnels to local host to avoid interface discovery hangs, removed blind port scanning, optimized peer probe latency, and preserved valid peer versions on transient network timeouts.",
-  "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh) update"
+  "version": "2.2.6-beta.1",
+  "branch": "beta",
+  "release_name": "XRayMesh v2.2.6-beta.1 (Beta Channel)",
+  "release_date": "2026-09-25",
+  "changelog": "Beta channel tracking release with branch-aware version checks and drift detection.",
+  "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update"
 }

@@ -6,7 +6,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="2.2.5"
+readonly VERSION="2.2.6-beta.1"
+readonly DEFAULT_BRANCH="beta"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
 readonly BIN_DIR="${INSTALL_DIR}/bin"
@@ -38,6 +39,18 @@ readonly WEB_TOKEN_FILE="/etc/xraymesh/web-tokens.json"
 readonly DEFAULT_WEB_PORT="11080"
 readonly LOG_TAG="xraymesh"
 readonly FALLBACK_EASYTIER_VERSION="v2.6.4"
+
+get_active_branch() {
+  if [[ -n "${XRAYMESH_BRANCH:-}" ]]; then
+    echo "$XRAYMESH_BRANCH"
+  elif [[ -f "$WEB_CONFIG_FILE" ]] && grep -q '^XRAYMESH_BRANCH=' "$WEB_CONFIG_FILE" 2>/dev/null; then
+    grep '^XRAYMESH_BRANCH=' "$WEB_CONFIG_FILE" | head -n1 | cut -d= -f2- | tr -d '"'\'' '
+  elif [[ -f "$CONFIG_FILE" ]] && grep -q '^XRAYMESH_BRANCH=' "$CONFIG_FILE" 2>/dev/null; then
+    grep '^XRAYMESH_BRANCH=' "$CONFIG_FILE" | head -n1 | cut -d= -f2- | tr -d '"'\'' '
+  else
+    echo "$DEFAULT_BRANCH"
+  fi
+}
 
 if [[ -t 1 ]]; then
   readonly RESET=$'\033[0m' BOLD=$'\033[1m' DIM=$'\033[2m'
@@ -2583,7 +2596,7 @@ ensure_xraymesh_cli() {
       install -m 0755 "$current_source" "$target" 2>/dev/null || cp -f "$current_source" "$target" 2>/dev/null || true
     fi
   else
-    local branch="${XRAYMESH_BRANCH:-main}" ts
+    local branch; branch="$(get_active_branch)" ts
     ts="$(date +%s)"
     local tmp_sh
     tmp_sh="$(mktemp)"
@@ -2606,7 +2619,7 @@ download_file_with_mirrors() {
   local target_path="$1"
   local rel_path="$2"
   local mode="${3:-0644}"
-  local branch="${XRAYMESH_BRANCH:-main}"
+  local branch; branch="$(get_active_branch)"
   local ts
   ts="$(date +%s)"
 
@@ -2641,7 +2654,7 @@ download_file_with_mirrors() {
 
 update_web_assets() {
   mkdir -p "${WEB_DIR}/static" "${INSTALL_DIR}" /etc/xraymesh
-  local branch="${XRAYMESH_BRANCH:-main}" updated=0
+  local branch; branch="$(get_active_branch)" updated=0
   local script_dir
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -2687,6 +2700,14 @@ update_web_assets() {
   write_iperf_service
   systemctl daemon-reload 2>/dev/null || true
 
+  if [[ -f "$WEB_CONFIG_FILE" ]]; then
+    if grep -q '^XRAYMESH_BRANCH=' "$WEB_CONFIG_FILE" 2>/dev/null; then
+      sed -i "s|^XRAYMESH_BRANCH=.*|XRAYMESH_BRANCH=\"${branch}\"|" "$WEB_CONFIG_FILE"
+    else
+      echo "XRAYMESH_BRANCH=\"${branch}\"" >> "$WEB_CONFIG_FILE"
+    fi
+  fi
+
   if [[ -f "$WEB_SERVICE_FILE" ]]; then
     write_web_services
   fi
@@ -2709,7 +2730,7 @@ update_web_assets() {
 update_node_full() {
   require_root
   require_linux
-  local branch="${XRAYMESH_BRANCH:-main}"
+  local branch; branch="$(get_active_branch)"
   info "Starting node update (branch: ${branch})..."
 
   # 1. Update CLI, Web Server, frontend assets, runner and services
@@ -2745,14 +2766,22 @@ install_web_runtime() {
   install_dependencies
   update_web_assets
 
+  local active_b; active_b="$(get_active_branch)"
   if [[ ! -f "$WEB_CONFIG_FILE" ]]; then
     umask 077
     cat > "$WEB_CONFIG_FILE" <<EOF_WEB_CFG
 WEB_PORT="${DEFAULT_WEB_PORT}"
 WEB_BIND="0.0.0.0"
 WEB_PASSWORD_HASH=""
+XRAYMESH_BRANCH="${active_b}"
 EOF_WEB_CFG
     chmod 600 "$WEB_CONFIG_FILE"
+  else
+    if grep -q '^XRAYMESH_BRANCH=' "$WEB_CONFIG_FILE" 2>/dev/null; then
+      sed -i "s|^XRAYMESH_BRANCH=.*|XRAYMESH_BRANCH=\"${active_b}\"|" "$WEB_CONFIG_FILE"
+    else
+      echo "XRAYMESH_BRANCH=\"${active_b}\"" >> "$WEB_CONFIG_FILE"
+    fi
   fi
 
   write_web_services
@@ -3828,7 +3857,7 @@ main() {
     systemctl stop xraymesh.service xraymesh-web.service xraymesh-haproxy.service xraymesh-iptables.service xraymesh-gost.service xraymesh-realm.service xraymesh-iperf.service 2>/dev/null || true
     warn "All services stopped."
     ;;
-  version|-v|--version) echo "${APP} ${VERSION} - © ${OWNER}" ;;
+  version|-v|--version) echo "${APP} ${VERSION} (${DEFAULT_BRANCH}) - © ${OWNER}" ;;
   help|-h|--help)
     printf '\n'
     say "  ${APP} v${VERSION} — CLI Commands Reference" "$BOLD$CYAN"

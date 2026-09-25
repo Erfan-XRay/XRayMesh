@@ -33,7 +33,8 @@ import ssl
 from pathlib import Path
 
 # Paths & Defaults
-CURRENT_VERSION = "2.2.5"
+CURRENT_VERSION = "2.2.6-beta.1"
+CURRENT_BRANCH = "beta"
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/xraymesh")
 BIN_DIR = os.path.join(INSTALL_DIR, "bin")
 CONFIG_FILE = os.environ.get("CONFIG_FILE", "/etc/xraymesh/config.env")
@@ -73,15 +74,48 @@ def is_ssl_enabled():
     return bool(cert and key and os.path.isfile(cert) and os.path.isfile(key))
 
 
+def get_active_branch():
+    """Determine active branch for version checks, downloads, and drift detection."""
+    env_branch = os.environ.get("XRAYMESH_BRANCH")
+    if env_branch and env_branch.strip():
+        return env_branch.strip()
+    web_cfg = load_env_file(WEB_ENV_FILE)
+    if web_cfg.get("XRAYMESH_BRANCH"):
+        return web_cfg["XRAYMESH_BRANCH"].strip()
+    node_cfg = load_env_file(CONFIG_FILE)
+    if node_cfg.get("XRAYMESH_BRANCH"):
+        return node_cfg["XRAYMESH_BRANCH"].strip()
+    return CURRENT_BRANCH
+
+
+def parse_semver(v):
+    """Parse semver string supporting pre-release tags, e.g. 2.2.6-beta.1."""
+    s = str(v).strip().lstrip('v')
+    m = re.match(r'^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-?([a-zA-Z]+)(?:\.?(\d+))?)?', s)
+    if not m:
+        return (0, 0, 0, 0, "", 0)
+    major = int(m.group(1) or 0)
+    minor = int(m.group(2) or 0)
+    patch = int(m.group(3) or 0)
+    tag = m.group(4)
+    tag_num = int(m.group(5) or 0)
+    is_release = 1 if tag is None else 0
+    tag_str = (tag or "").lower()
+    return (major, minor, patch, is_release, tag_str, tag_num)
+
+
 def is_newer_version(remote_ver, local_ver):
-    """Compare semver strings like '2.0.0' vs '1.8.0'."""
+    """Compare semver strings with pre-release awareness (e.g. 2.2.6-beta.2 vs 2.2.6-beta.1)."""
     try:
-        def parse_ver(v):
-            cleaned = re.sub(r'[^0-9.]', '', str(v))
-            return [int(x) for x in cleaned.split('.') if x.isdigit()]
-        r_parts = parse_ver(remote_ver)
-        l_parts = parse_ver(local_ver)
-        return r_parts > l_parts
+        r = parse_semver(remote_ver)
+        l = parse_semver(local_ver)
+        if r[:3] != l[:3]:
+            return r[:3] > l[:3]
+        if r[3] != l[3]:
+            return r[3] > l[3]
+        if r[4] != l[4]:
+            return r[4] > l[4]
+        return r[5] > l[5]
     except Exception:
         return False
 
@@ -93,7 +127,7 @@ def get_version_info():
         return VERSION_CACHE["data"]
 
     remote_data = None
-    branch = os.environ.get("XRAYMESH_BRANCH", "main")
+    branch = get_active_branch()
     url = f"https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/{branch}/version.json?t={int(now)}"
     try:
         req = urllib.request.Request(
@@ -101,7 +135,7 @@ def get_version_info():
             headers={
                 "Cache-Control": "no-cache",
                 "Pragma": "no-cache",
-                "User-Agent": f"XRayMesh-Web/{CURRENT_VERSION}"
+                "User-Agent": f"XRayMesh-Web/{CURRENT_VERSION} ({branch})"
             }
         )
         with urllib.request.urlopen(req, timeout=4) as resp:
@@ -124,6 +158,7 @@ def get_version_info():
     result = {
         "current_version": CURRENT_VERSION,
         "latest_version": latest_ver,
+        "branch": branch,
         "update_available": is_newer_version(latest_ver, CURRENT_VERSION),
         "changelog": changelog,
         "release_notes": release_notes,
@@ -217,7 +252,8 @@ def get_peer_version(peer_ip, port=None, timeout=1.0):
         else:
             version_found = "unknown"
 
-    PEER_VERSION_CACHE[peer_ip] = {
+    peer_branch = (peer_info.get("branch") if peer_info else None) or cached.get("branch") or ""
+    cache_entry = {
         "version": version_found,
         "port": responsive_port or cached.get("port") or port or PORT,
         "interfaces": normalize_network_interfaces(
@@ -225,6 +261,9 @@ def get_peer_version(peer_ip, port=None, timeout=1.0):
         ),
         "timestamp": now
     }
+    if peer_branch:
+        cache_entry["branch"] = peer_branch
+    PEER_VERSION_CACHE[peer_ip] = cache_entry
     return version_found
 
 
@@ -641,7 +680,7 @@ def ensure_xraymesh_script():
     target = os.path.join(INSTALL_DIR, "xraymesh.sh")
     try:
         os.makedirs(INSTALL_DIR, exist_ok=True)
-        branch = os.environ.get("XRAYMESH_BRANCH", "main")
+        branch = get_active_branch()
         url = f"https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/{branch}/xraymesh.sh?t={int(time.time())}"
         import urllib.request
         req = urllib.request.Request(
@@ -771,7 +810,7 @@ def run_xraymesh_cmd(args, timeout=45):
     if not os.path.isfile(script):
         return False, (
             f"XRayMesh CLI script not found at {script}. "
-            "Please run: bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh)"
+            f"Please run: bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/{get_active_branch()}/xraymesh.sh)"
         )
     cmd = ["bash", script] + args
     try:
@@ -1607,6 +1646,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             self.send_json({
                 "ok": True,
                 "version": CURRENT_VERSION,
+                "branch": get_active_branch(),
                 "hostname": config.get("HOSTNAME", ""),
                 "ipv4": config.get("IPV4", ""),
                 "interfaces": get_network_interfaces()
@@ -1662,6 +1702,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                     "service_active": svc_active,
                     "easytier_version": et_ver,
                     "xraymesh_version": CURRENT_VERSION,
+                    "branch": get_active_branch(),
                     "web_port": PORT,
                     "ssl_enabled": is_ssl_enabled(),
                     "web_domain": web_cfg.get("WEB_DOMAIN", "")
@@ -1674,6 +1715,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             peers_data = get_easytier_peers()
             v_info = get_version_info()
             latest_v = v_info.get("latest_version", CURRENT_VERSION)
+            active_branch = get_active_branch()
             node_cfg = load_env_file(CONFIG_FILE)
             local_ip = (node_cfg.get("IPV4", "") or "").strip()
             local_hostname = (node_cfg.get("HOSTNAME", "") or "").strip() or "local"
@@ -1704,6 +1746,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                         p["xraymesh_version"] = p_ver
                         peer_cache = PEER_VERSION_CACHE.get(p.get("ipv4", ""), {})
                         p["interfaces"] = normalize_network_interfaces(peer_cache.get("interfaces"))
+                        p["xraymesh_branch"] = peer_cache.get("branch", "")
                         p["update_available"] = is_newer_version(latest_v, p_ver)
                         p["version_drift"] = (p_ver != CURRENT_VERSION)
 
@@ -1719,6 +1762,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                     "rx_bytes": "0 B",
                     "tx_bytes": "0 B",
                     "xraymesh_version": CURRENT_VERSION,
+                    "xraymesh_branch": active_branch,
                     "interfaces": get_network_interfaces(),
                     "update_available": is_newer_version(latest_v, CURRENT_VERSION),
                     "version_drift": False,
@@ -1736,6 +1780,8 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 "cluster_version_drift": has_drift,
                 "current_version": CURRENT_VERSION,
                 "latest_version": latest_v,
+                "branch": active_branch,
+                "update_command": v_info.get("update_command", f"bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/{active_branch}/xraymesh.sh) update"),
                 "local_ip": local_ip,
                 "local_hostname": local_hostname
             })
@@ -1887,6 +1933,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                     "service_active": svc_active,
                     "last_rollback": LAST_ROLLBACK,
                     "xraymesh_version": CURRENT_VERSION,
+                    "branch": get_active_branch(),
                     "web_port": PORT,
                     "ssl_enabled": is_ssl_enabled(),
                     "web_domain": web_cfg.get("WEB_DOMAIN", "")

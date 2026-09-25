@@ -104,8 +104,13 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className="font-bold text-sm text-text-main tracking-tight truncate">XRayMesh</span>
                   <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-primary/15 text-primary border border-primary/25 shrink-0">
-                    v{node.xraymesh_version || "2.1.3"}
+                    v{node.xraymesh_version || "2.2.6-beta.1"}
                   </span>
+                  {node.branch === "beta" && (
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0 uppercase tracking-wider">
+                      Beta
+                    </span>
+                  )}
                 </div>
                 <div className="text-[10px] text-text-muted font-mono truncate max-w-[170px] tech-val">
                   {node.network_name || "XRayMesh Network"}

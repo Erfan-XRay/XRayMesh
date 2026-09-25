@@ -9,6 +9,7 @@ export interface NodeInfo {
   service_active?: boolean;
   easytier_version?: string;
   xraymesh_version?: string;
+  branch?: string;
   web_port?: number;
   ssl_enabled?: boolean;
   web_domain?: string;
@@ -39,6 +40,7 @@ export interface Peer {
   rx_packets?: string | number;
   tx_packets?: string | number;
   xraymesh_version?: string;
+  xraymesh_branch?: string;
   interfaces?: string[];
   update_available?: boolean;
   version_drift?: boolean;
@@ -100,6 +102,7 @@ export interface TunnelsData {
 export interface VersionInfo {
   current_version: string;
   latest_version: string;
+  branch?: string;
   update_available: boolean;
   changelog?: string[];
   release_notes?: string;

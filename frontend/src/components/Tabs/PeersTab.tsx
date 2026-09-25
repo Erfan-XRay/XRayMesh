@@ -241,16 +241,26 @@ export const PeersTab: React.FC<PeersTabProps> = ({
 
                   {/* Version & Update Indicator */}
                   <div className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-black/30 border border-white/5 text-xs mb-3">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-[10px] text-text-muted">{t("version_title")}:</span>
                       <span className="font-mono font-semibold text-text-main tech-val">
-                        {p.xraymesh_version || "v2.1.3"}
+                        {p.xraymesh_version || "2.2.6-beta.1"}
                       </span>
+                      {p.xraymesh_branch && (
+                        <span className="px-1 py-0.2 rounded text-[8px] font-mono font-bold bg-white/10 text-text-muted border border-white/10 uppercase">
+                          {p.xraymesh_branch}
+                        </span>
+                      )}
                     </div>
                     {p.update_available ? (
                       <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
                         <ArrowUpCircle className="w-3 h-3" />
                         <span>{t("version_update_available")}</span>
+                      </span>
+                    ) : p.version_drift ? (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-500/15 text-purple-400 border border-purple-500/30 flex items-center gap-1" title="Version mismatch with cluster">
+                        <AlertTriangle className="w-3 h-3" />
+                        <span>Drift</span>
                       </span>
                     ) : (
                       <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">

@@ -2,6 +2,14 @@
 
 All notable XRayMesh changes are documented here.
 
+## [2.2.6-beta.1] - 2026-09-25
+
+### Added
+- Beta channel version tracking reading remote version checks directly from the beta branch.
+- Pre-release semver comparator supporting `-beta.x` increments and official release upgrades.
+- Automatic branch propagation across CLI, Web UI service environment, and peer cluster info probes.
+- Cluster version drift detection across mixed main and beta mesh nodes.
+
 ## [2.2.5] - 2026-09-24
 
 ### Fixed
