@@ -52,6 +52,10 @@ export default {
         "card-in": "cardEnter 240ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
         "radar-ping": "radarPing 2.5s cubic-bezier(0, 0, 0.2, 1) infinite",
         "shimmer": "shimmer 2s linear infinite",
+        "spin-smooth": "spinSmooth 1s cubic-bezier(0.4, 0, 0.2, 1) infinite",
+        "orbit-spin": "orbitSpin 2.4s linear infinite",
+        "glow-pulse": "glowPulse 2s ease-in-out infinite",
+        "ping-wave": "pingWave 1.8s cubic-bezier(0, 0, 0.2, 1) infinite",
       },
       keyframes: {
         modalIn: {
@@ -81,6 +85,22 @@ export default {
         shimmer: {
           "0%": { backgroundPosition: "-200% 0" },
           "100%": { backgroundPosition: "200% 0" },
+        },
+        spinSmooth: {
+          "0%": { transform: "rotate(0deg)" },
+          "100%": { transform: "rotate(360deg)" },
+        },
+        orbitSpin: {
+          "0%": { transform: "rotate(0deg)" },
+          "100%": { transform: "rotate(360deg)" },
+        },
+        glowPulse: {
+          "0%, 100%": { opacity: "0.4", transform: "scale(0.95)" },
+          "50%": { opacity: "0.85", transform: "scale(1.05)" },
+        },
+        pingWave: {
+          "0%": { transform: "scale(0.8)", opacity: "0.9" },
+          "70%, 100%": { transform: "scale(2)", opacity: "0" },
         },
       }
     },

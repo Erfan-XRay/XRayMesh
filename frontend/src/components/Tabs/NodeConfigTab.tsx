@@ -15,6 +15,7 @@ import {
   dismissClusterRollback,
 } from '../../services/api';
 import { copyToClipboard } from '../../utils/clipboard';
+import { LoadingSpinner } from '../LoadingSpinner';
 import {
   Settings,
   Shield,
@@ -726,9 +727,13 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center p-16 rounded-2xl bg-card border border-card-border backdrop-blur-xl">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-xs text-text-muted">{t('mesh_connecting')}</p>
+      <div className="flex flex-col items-center justify-center p-16 rounded-2xl bg-card/90 border border-card-border backdrop-blur-xl animate-fade-in shadow-xl">
+        <LoadingSpinner
+          size="lg"
+          glow={true}
+          label={t('mesh_connecting')}
+          sublabel={t('mesh_status_polling')}
+        />
       </div>
     );
   }

@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, Trash2, X } from 'lucide-react';
+import { LoadingDots } from '../LoadingSpinner';
 
 interface DeleteConfirmModalProps {
   isOpen: boolean;
@@ -83,14 +84,20 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
           <button
             onClick={onConfirm}
             disabled={isDeleting}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-accent-red text-white text-sm font-semibold hover:bg-accent-red/90 transition-colors disabled:opacity-60"
+            className="btn-interactive flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-accent-red text-white text-sm font-semibold hover:bg-accent-red/90 transition-colors disabled:opacity-60 active:scale-95 shadow-md shadow-accent-red/20"
           >
             {isDeleting ? (
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <>
+                <div className="loader-dual-ring w-4 h-4" />
+                <span>{t('btn_delete')}</span>
+                <LoadingDots />
+              </>
             ) : (
-              <Trash2 className="w-4 h-4" />
+              <>
+                <Trash2 className="w-4 h-4" />
+                <span>{t('btn_delete')}</span>
+              </>
             )}
-            {t('btn_delete')}
           </button>
         </div>
       </div>

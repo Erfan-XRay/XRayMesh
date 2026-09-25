@@ -35,6 +35,7 @@ import { TunnelsTab } from './components/Tabs/TunnelsTab';
 
 import { Users, Zap, Activity, Network, Settings, ArrowUpCircle, Sparkles } from 'lucide-react';
 import { copyToClipboard } from './utils/clipboard';
+import { LoadingSpinner } from './components/LoadingSpinner';
 
 const EMPTY_STATUS: StatusResponse = {
   node: {},
@@ -524,18 +525,13 @@ export default function App() {
   // ─── Loading / Auth Gate ────────────────────────────────
   if (isAuthenticated === null || (isAuthenticated && !initialLoaded)) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-4 bg-canvas">
-        <div className="relative flex items-center justify-center">
-          <div className="w-10 h-10 border-3 border-primary/20 border-t-primary rounded-full animate-spin" />
-        </div>
-        <div className="text-center">
-          <p className="text-sm font-semibold text-text-main">
-            {lang === 'fa' ? 'در حال بارگذاری و بررسی وضعیت نود...' : 'Connecting to XRayMesh Node...'}
-          </p>
-          <p className="text-xs text-text-muted mt-1">
-            {lang === 'fa' ? 'دریافت مشخصات شبکه و وضعیت نودها' : 'Synchronizing node status and mesh topology'}
-          </p>
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-screen gap-5 bg-canvas px-4">
+        <LoadingSpinner
+          size="xl"
+          glow={true}
+          label={lang === 'fa' ? 'در حال بارگذاری و بررسی وضعیت نود...' : 'Connecting to XRayMesh Node...'}
+          sublabel={lang === 'fa' ? 'دریافت مشخصات شبکه و وضعیت نودها' : 'Synchronizing node status and mesh topology'}
+        />
       </div>
     );
   }

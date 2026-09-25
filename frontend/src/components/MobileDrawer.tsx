@@ -275,7 +275,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
               disabled={isRefreshing}
               className="flex items-center justify-center gap-1.5 py-2.5 px-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-text-main transition-colors disabled:opacity-50 min-w-0"
             >
-              <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${isRefreshing ? "animate-spin text-primary" : ""}`} />
+              <RefreshCw className={`w-3.5 h-3.5 shrink-0 transition-transform duration-500 ${isRefreshing ? "animate-spin-smooth text-primary" : ""}`} />
               <span className="truncate">{t("btn_refresh")}</span>
             </button>
 

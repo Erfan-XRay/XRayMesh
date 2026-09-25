@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Peer, HaproxyTunnel, IptablesTunnel, GostTunnel, RealmTunnel } from '../../types';
 import { fetchInterfaces } from '../../services/api';
-import { X, Loader2, Server, AlertCircle } from 'lucide-react';
+import { X, Server, AlertCircle, Loader2 } from 'lucide-react';
+import { LoadingDots } from '../LoadingSpinner';
 
 export type TunnelModalType = 'haproxy' | 'iptables' | 'gost' | 'realm';
 
@@ -527,10 +528,17 @@ maxLength={32}
             <button
               type="submit"
               disabled={isLoading || isRemoteIptablesEdit}
-              className="px-5 py-2 rounded-xl bg-primary text-black font-semibold hover:bg-primary-hover disabled:opacity-50 flex items-center gap-1.5 transition-all shadow-md"
+              className="btn-interactive px-5 py-2 rounded-xl bg-primary text-black font-semibold hover:bg-primary-hover disabled:opacity-50 flex items-center gap-1.5 transition-all shadow-md active:scale-95"
             >
-              {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              <span>{isEdit ? t('btn_save') : t('btn_create')}</span>
+              {isLoading ? (
+                <>
+                  <div className="loader-dual-ring w-3.5 h-3.5" />
+                  <span>{isEdit ? t('btn_save') : t('btn_create')}</span>
+                  <LoadingDots />
+                </>
+              ) : (
+                <span>{isEdit ? t('btn_save') : t('btn_create')}</span>
+              )}
             </button>
           </div>
         </form>

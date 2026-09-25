@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Peer, PingResult } from '../../types';
-import { Activity, Send, Loader2, Terminal, ArrowLeftRight, ArrowRight, Server } from 'lucide-react';
+import { Activity, Send, Terminal, ArrowLeftRight, ArrowRight, Server } from 'lucide-react';
+import { LoadingDots } from '../LoadingSpinner';
 
 interface PingTabProps {
   peers: Peer[];
@@ -230,12 +231,13 @@ export const PingTab: React.FC<PingTabProps> = ({
         <button
           type="submit"
           disabled={!targetIp.trim() || !sourceIp || targetIp.trim() === sourceIp || isRunning}
-          className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-primary text-black font-semibold text-xs sm:text-sm hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all shadow-md"
+          className="btn-interactive w-full sm:w-auto px-6 py-2.5 rounded-xl bg-primary text-black font-semibold text-xs sm:text-sm hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
         >
           {isRunning ? (
             <>
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <div className="loader-dual-ring w-4 h-4" />
               <span>{t('ping_running')}</span>
+              <LoadingDots />
             </>
           ) : (
             <>

@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { ShieldCheck, Zap, Rocket, Target, Loader2, ArrowLeftRight, ArrowRight, Server } from 'lucide-react';
+import { LoadingSpinner } from '../LoadingSpinner';
 
 interface SpeedtestTabProps {
   peers: Peer[];
@@ -374,14 +375,15 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
         {/* Right Column: Visualization & Metrics */}
         <div className="lg:col-span-7 flex flex-col justify-between p-6 rounded-2xl bg-surface border border-card-border relative overflow-hidden min-h-[380px]">
           {isRunning && (
-            <div className="absolute inset-0 bg-black/75 backdrop-blur-sm z-20 flex flex-col items-center justify-center p-6 text-center">
-              <Loader2 className="w-10 h-10 text-primary animate-spin mb-3" />
-              <p className="text-sm font-medium text-primary">{t('speed_running')}</p>
-              <p className="text-xs font-mono text-text-muted mt-2">
-                {sourcePeer?.hostname || sourceIp} ──► {selectedPeer?.hostname || targetIp}
-              </p>
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-md z-20 flex flex-col items-center justify-center p-6 text-center animate-fade-in">
+              <LoadingSpinner
+                size="lg"
+                glow={true}
+                label={t('speed_running')}
+                sublabel={`${sourcePeer?.hostname || sourceIp} -> ${selectedPeer?.hostname || targetIp}`}
+              />
               {isRemoteRunner && (
-                <span className="mt-2 text-xs uppercase font-semibold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                <span className="mt-3 text-xs uppercase font-semibold px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 animate-pulse-subtle">
                   Remote Runner via Node {sourceIp}
                 </span>
               )}

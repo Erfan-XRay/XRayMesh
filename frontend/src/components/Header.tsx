@@ -151,7 +151,7 @@ export const Header: React.FC<HeaderProps> = ({
           title={t("btn_refresh")}
           aria-label={t("btn_refresh")}
         >
-          <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin text-primary" : ""}`} />
+          <RefreshCw className={`w-4 h-4 transition-transform duration-500 ${isRefreshing ? "animate-spin-smooth text-primary" : ""}`} />
         </button>
 
         {/* Drawer Toggle */}
@@ -277,7 +277,7 @@ export const Header: React.FC<HeaderProps> = ({
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-medium text-text-muted hover:text-text-main hover:bg-white/10 transition-colors disabled:opacity-50"
           title={t("btn_refresh")}
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-primary" : ""}`} />
+          <RefreshCw className={`w-3.5 h-3.5 transition-transform duration-500 ${isRefreshing ? "animate-spin-smooth text-primary" : "group-hover:rotate-45"}`} />
           <span className="hidden md:inline">{t("btn_refresh")}</span>
         </button>
 

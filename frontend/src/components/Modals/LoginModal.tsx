@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Copy, Check, Lock, Key, Loader2 } from 'lucide-react';
+import { Copy, Check, Lock, Key } from 'lucide-react';
+import { LoadingDots } from '../LoadingSpinner';
 import { XRayMeshLogo } from '../XRayMeshLogo';
 
 interface LoginModalProps {
@@ -151,10 +152,17 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           <button
             type="submit"
             disabled={isLoading || (tab === 'pw' ? !password : !token)}
-            className="w-full py-2.5 rounded-xl bg-primary text-black font-semibold text-sm hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all shadow-md"
+            className="btn-interactive w-full py-2.5 rounded-xl bg-primary text-black font-semibold text-sm hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
           >
-            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            <span>{t('btn_signin')}</span>
+            {isLoading ? (
+              <>
+                <div className="loader-dual-ring w-4 h-4" />
+                <span>{t('login_verifying')}</span>
+                <LoadingDots />
+              </>
+            ) : (
+              <span>{t('btn_signin')}</span>
+            )}
           </button>
         </form>
 
