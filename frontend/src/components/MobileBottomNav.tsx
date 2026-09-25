@@ -4,6 +4,8 @@ import { TabId } from "../types";
 export interface MobileBottomNavTab {
   id: TabId;
   label: string;
+  /** Fits the 5-column bottom bar; falls back to label. */
+  short?: string;
   icon: React.ReactNode;
   badge?: number | string;
 }
@@ -25,42 +27,37 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     <nav
       role="navigation"
       aria-label={t("drawer_tabs")}
-      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-card/95 backdrop-blur-2xl border-t border-card-border pb-safe pt-1.5 px-2 shadow-[0_-8px_30px_rgba(0,0,0,0.5)] transition-all"
+      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-card/95 backdrop-blur-2xl border-t border-card-border pb-safe pt-1 px-1 shadow-[0_-8px_30px_rgba(0,0,0,0.35)]"
     >
-      <div className="flex items-center justify-around gap-1 max-w-lg mx-auto">
+      <div className="grid grid-flow-col auto-cols-fr max-w-lg mx-auto">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
+              type="button"
               onClick={() => onSelectTab(tab.id)}
               aria-current={isActive ? "page" : undefined}
-              className={`relative flex-1 flex flex-col items-center justify-center min-h-[48px] py-1 px-1 rounded-xl transition-all duration-200 active:scale-95 ${
-                isActive
-                  ? "text-primary font-bold"
-                  : "text-text-muted hover:text-text-main"
+              aria-label={tab.badge !== undefined ? `${tab.label} (${tab.badge})` : tab.label}
+              className={`relative min-w-0 flex flex-col items-center justify-center min-h-[52px] py-1 rounded-xl transition-colors duration-200 active:scale-95 ${
+                isActive ? "text-primary font-semibold" : "text-text-muted hover:text-text-main"
               }`}
             >
-              {/* Active pill background */}
               {isActive && (
-                <span className="absolute inset-x-1 inset-y-1 rounded-xl bg-primary/15 border border-primary/25 -z-10 animate-fade-in" />
+                <span className="absolute top-0 inset-x-4 h-0.5 rounded-full bg-primary animate-fade-in" aria-hidden="true" />
               )}
 
-              {/* Icon with optional badge */}
-              <div className="relative flex items-center justify-center w-6 h-6">
-                <span className={`transition-transform duration-200 ${isActive ? "scale-110" : ""}`}>
-                  {tab.icon}
-                </span>
+              <span className="relative flex items-center justify-center w-6 h-6" aria-hidden="true">
+                <span className={`transition-transform duration-200 ${isActive ? "scale-110" : ""}`}>{tab.icon}</span>
                 {tab.badge !== undefined && (
-                  <span className="absolute -top-1.5 -end-2.5 min-w-[18px] h-[18px] px-1 rounded-full text-xs font-mono font-bold leading-none flex items-center justify-center bg-primary text-black shadow-sm">
+                  <span className="absolute -top-1 -end-2.5 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-mono font-bold leading-none flex items-center justify-center bg-primary text-black">
                     {tab.badge}
                   </span>
                 )}
-              </div>
+              </span>
 
-              {/* Label */}
-              <span className="text-xs mt-1 font-medium truncate max-w-[72px] leading-tight">
-                {tab.label}
+              <span className="text-[11px] mt-0.5 font-medium leading-tight max-w-full truncate px-0.5" aria-hidden="true">
+                {tab.short || tab.label}
               </span>
             </button>
           );

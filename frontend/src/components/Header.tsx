@@ -41,20 +41,21 @@ export const Header: React.FC<HeaderProps> = ({
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
 
   return (
-    <header className="relative z-40 flex items-center justify-between gap-2.5 p-3 sm:p-4 mb-4 sm:mb-6 rounded-2xl bg-card/85 border border-card-border backdrop-blur-2xl shadow-xl transition-all">
+    <header className="relative z-40 flex items-center justify-between gap-2.5 px-3 py-2.5 sm:p-4 mb-3 sm:mb-6 rounded-2xl bg-card/85 border border-card-border backdrop-blur-2xl shadow-xl transition-all">
       {/* Brand & Custom Logo */}
       <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-        <XRayMeshLogo className="w-9 h-9 sm:w-10 sm:h-10 shrink-0" size={38} glow={true} />
+        <XRayMeshLogo className="w-8 h-8 sm:w-10 sm:h-10 shrink-0" size={38} glow={true} />
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap min-w-0">
             <h1 className="text-sm sm:text-base font-bold text-text-main tracking-tight leading-tight truncate">
-              {t("brand_title")}
+              <span className="sm:hidden">XRayMesh</span>
+              <span className="hidden sm:inline">{t("brand_title")}</span>
             </h1>
-            <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-primary/10 text-primary border border-primary/20 shrink-0">
-              v{node.xraymesh_version || "2.2.6-beta.8"}
+            <span className="hidden sm:inline px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-primary/10 text-primary border border-primary/20 shrink-0">
+              v{node.xraymesh_version || "2.2.6-beta.9"}
             </span>
             {node.branch === "beta" && (
-              <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0 uppercase tracking-wider">
+              <span className="hidden sm:inline px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0 uppercase tracking-wider">
                 Beta
               </span>
             )}
@@ -68,7 +69,17 @@ export const Header: React.FC<HeaderProps> = ({
           <p className="text-xs text-text-muted mt-0.5 truncate">
             {node.configured ? (
               <>
-                {t("network_prefix")}: <span className="font-mono text-primary font-medium">{node.network_name || "XRayMesh"}</span>
+                {/* Mobile: one quiet line instead of stacked badges. */}
+                <span className="sm:hidden flex min-w-0 font-mono" dir="ltr">
+                  <span className="truncate">{node.network_name || "XRayMesh"}</span>
+                  <span className="shrink-0">
+                    &nbsp;· v{node.xraymesh_version || "2.2.6-beta.9"}
+                    {node.branch === "beta" && <span className="text-amber-400"> β</span>}
+                  </span>
+                </span>
+                <span className="hidden sm:inline">
+                  {t("network_prefix")}: <span className="font-mono text-primary font-medium">{node.network_name || "XRayMesh"}</span>
+                </span>
               </>
             ) : (
               <span className="inline-flex items-center gap-1.5 text-amber-400 font-medium">
@@ -81,73 +92,12 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Mobile Controls (< md) */}
-      <div className="flex md:hidden items-center gap-1 shrink-0">
-        {/* Mobile Quick Language Toggle */}
-        <button
-          onClick={() => onSelectLang(lang === "fa" ? "en" : "fa")}
-          className="px-2 py-1 rounded-xl bg-white/5 border border-white/10 text-xs font-semibold text-text-main active:scale-95 transition-all"
-          title={lang === "fa" ? "Switch to English" : "تغییر به فارسی"}
-          aria-label={lang === "fa" ? "Switch to English" : "تغییر به فارسی"}
-        >
-          {lang === "fa" ? "EN" : "فا"}
-        </button>
-
-        {/* Mobile Quick Palette Trigger */}
-        <div className="relative">
-          <button
-            onClick={() => setThemeMenuOpen(!themeMenuOpen)}
-            className="p-2 rounded-xl bg-white/5 border border-white/10 text-text-muted hover:text-text-main active:scale-95 transition-all"
-            title={t("theme_selector")}
-            aria-label={t("theme_selector")}
-          >
-            <Palette className="w-4 h-4 text-primary" />
-          </button>
-
-          {themeMenuOpen && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setThemeMenuOpen(false)} />
-              <div
-                className={`absolute ${isRtl ? "left-0" : "right-0"} top-full mt-2 w-60 rounded-xl bg-card border border-card-border shadow-2xl p-2 z-50 animate-modal-in`}
-              >
-                <div className="mb-2">
-                  <div className="px-1 mb-1.5 text-xs font-bold uppercase tracking-wider text-text-subtle">
-                    {t("theme_mode")}
-                  </div>
-                  <ThemeModeSwitch value={themeMode} onChange={onSelectThemeMode} t={t} />
-                </div>
-                <div className="px-1 mb-1 text-xs font-bold uppercase tracking-wider text-text-subtle">
-                  {t("theme_selector")}
-                </div>
-                {availablePalettes.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => {
-                      onSelectPalette(p.id);
-                      setThemeMenuOpen(false);
-                    }}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors ${
-                      paletteId === p.id
-                        ? "bg-primary/20 text-primary font-bold"
-                        : "text-text-muted hover:bg-white/5 hover:text-text-main"
-                    }`}
-                  >
-                    <span>{lang === "fa" ? p.nameFa : p.nameEn}</span>
-                    <span
-                      className="w-3.5 h-3.5 rounded-full border border-white/20 shrink-0"
-                      style={{ backgroundColor: p.primaryColor }}
-                    />
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-
+      <div className="flex md:hidden items-center gap-0.5 shrink-0">
         {/* Refresh Button */}
         <button
           onClick={onRefresh}
           disabled={isRefreshing}
-          className="p-2 rounded-xl bg-white/5 border border-white/10 text-text-muted hover:text-text-main active:scale-95 transition-all disabled:opacity-50"
+          className="w-10 h-10 flex items-center justify-center rounded-xl text-text-muted hover:text-text-main hover:bg-white/5 active:scale-95 transition-all disabled:opacity-50"
           title={t("btn_refresh")}
           aria-label={t("btn_refresh")}
         >
@@ -157,10 +107,10 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Drawer Toggle */}
         <button
           onClick={onOpenDrawer}
-          className="p-2 rounded-xl bg-primary text-black font-semibold text-xs shadow-md shadow-primary/20 hover:opacity-90 active:scale-95 transition-all"
+          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 border border-card-border text-text-main hover:bg-white/10 active:scale-95 transition-all"
           aria-label={t("nav_menu")}
         >
-          <Menu className="w-4 h-4" />
+          <Menu className="w-5 h-5" />
         </button>
       </div>
 

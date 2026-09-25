@@ -42,6 +42,11 @@ export const translations = {
     tab_tunnels: "Tunnels",
     tab_speedtest: "Speedtest",
     tab_ping: "Ping & Latency",
+    tab_short_node: "Node",
+    tab_short_peers: "Peers",
+    tab_short_tunnels: "Tunnels",
+    tab_short_ping: "Ping",
+    tab_short_speedtest: "Speed",
 
     // Node & Mesh Tab
     proto_dual: "Dual (TCP + UDP)",
@@ -371,6 +376,9 @@ export const translations = {
     ping_avg: "Avg Latency",
     ping_max: "Max Latency",
     ping_loss: "Packet Loss",
+    ping_target_ip_label: "Target IP address",
+    ping_raw_output: "Raw output",
+    ping_remote_runner: "Remote runner",
 
     // Tunnels Tab
     tunnels_subtab_all: "All Tunnels",
@@ -535,6 +543,11 @@ export const translations = {
     tab_tunnels: "تانل‌ها",
     tab_speedtest: "تست سرعت",
     tab_ping: "پینگ و تاخیر",
+    tab_short_node: "نود",
+    tab_short_peers: "سرورها",
+    tab_short_tunnels: "تانل‌ها",
+    tab_short_ping: "پینگ",
+    tab_short_speedtest: "سرعت",
 
     // Node & Mesh Tab
     proto_dual: "دوگانه (TCP + UDP)",
@@ -864,6 +877,9 @@ export const translations = {
     ping_avg: "میانگین تاخیر",
     ping_max: "حداکثر تاخیر",
     ping_loss: "درصد پکت‌لاس",
+    ping_target_ip_label: "آی‌پی مقصد",
+    ping_raw_output: "خروجی خام",
+    ping_remote_runner: "اجرا از سرور دیگر",
 
     // Tunnels Tab
     tunnels_subtab_all: "همه تانل‌ها",

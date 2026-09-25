@@ -75,7 +75,73 @@ export const PeerRow: React.FC<PeerRowProps> = ({
 
   return (
     <li className="px-4 py-3.5 sm:px-5">
-      <div className={`grid grid-cols-2 gap-x-4 gap-y-3 ${PEER_GRID}`}>
+      {/* Phones: three dense lines instead of a stacked table. */}
+      <div className="lg:hidden space-y-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-text-main truncate" dir="auto">
+              {peer.hostname || peer.ipv4}
+            </p>
+            <button
+              type="button"
+              onClick={() => onCopy(peer.ipv4)}
+              aria-label={copyLabel}
+              className="mt-0.5 inline-flex items-center gap-1 font-mono text-xs text-text-muted active:text-text-main"
+              dir="ltr"
+            >
+              {peer.ipv4}
+              {copiedKey === peer.ipv4 ? <Check className="w-3 h-3 text-emerald-400" aria-hidden="true" /> : <Copy className="w-3 h-3 opacity-60" aria-hidden="true" />}
+            </button>
+          </div>
+          <span className={`shrink-0 inline-flex items-center gap-1 text-sm font-semibold tabular-nums ${LATENCY_TEXT[latency.tone]}`}>
+            <LatencyIcon className="w-4 h-4" aria-hidden="true" />
+            {latency.ms === null ? t('peer_latency_none') : <bdi dir="ltr">{`${latency.ms.toFixed(0)} ms`}</bdi>}
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 text-xs text-text-muted">
+          <span className={`inline-flex items-center gap-1.5 min-w-0 ${relayed ? 'text-amber-400' : ''}`}>
+            {relayed ? <Waypoints className="w-3.5 h-3.5 shrink-0" aria-hidden="true" /> : <ArrowLeftRight className="w-3.5 h-3.5 shrink-0 text-emerald-400" aria-hidden="true" />}
+            <span className="truncate">
+              {t(relayed ? 'peer_conn_relay' : 'peer_conn_direct')} · <span dir="ltr">{formatProtocol(peer.tunnel_proto)}</span>
+            </span>
+          </span>
+          <span className="inline-flex items-center gap-2 shrink-0 tabular-nums" dir="ltr">
+            <span className="inline-flex items-center gap-0.5"><ArrowDown className="w-3 h-3" aria-label={t('peer_traffic_down')} />{peer.rx_bytes || '0 B'}</span>
+            <span className="inline-flex items-center gap-0.5"><ArrowUp className="w-3 h-3" aria-label={t('peer_traffic_up')} />{peer.tx_bytes || '0 B'}</span>
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+            <span className="font-mono text-xs text-text-main" dir="ltr">{versionLabel(peer)}</span>
+            <ChannelButton peer={peer} onClick={() => onChangeChannel(peer)} t={t} />
+            <UpdateCell peer={peer} run={run} onUpdate={onUpdate} onDismiss={onDismissUpdate} t={t} />
+          </div>
+          <div className="flex items-center shrink-0 -me-1.5">
+            <button
+              type="button"
+              onClick={() => onPing(peer.ipv4)}
+              aria-label={t('peer_card_btn_ping')}
+              title={t('peer_card_btn_ping')}
+              className="w-9 h-9 inline-flex items-center justify-center rounded-lg text-text-muted hover:text-text-main hover:bg-surface active:scale-95"
+            >
+              <Activity className="w-4 h-4" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onSpeedtest(peer.ipv4)}
+              aria-label={t('peer_card_btn_speedtest')}
+              title={t('peer_card_btn_speedtest')}
+              className="w-9 h-9 inline-flex items-center justify-center rounded-lg text-text-muted hover:text-text-main hover:bg-surface active:scale-95"
+            >
+              <Zap className="w-4 h-4" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className={`hidden ${PEER_GRID}`}>
         {/* Server */}
         <div className="col-span-2 lg:col-span-1 min-w-0">
           <p className="text-sm font-semibold text-text-main truncate" dir="auto">

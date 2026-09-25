@@ -101,19 +101,11 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
             <div className="flex items-center gap-2.5 min-w-0">
               <XRayMeshLogo className="w-8 h-8 shrink-0" size={32} glow={true} />
               <div className="min-w-0">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="font-bold text-sm text-text-main tracking-tight truncate">XRayMesh</span>
-                  <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-primary/15 text-primary border border-primary/25 shrink-0">
-                    v{node.xraymesh_version || "2.2.6-beta.8"}
-                  </span>
-                  {node.branch === "beta" && (
-                    <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0 uppercase tracking-wider">
-                      Beta
-                    </span>
-                  )}
-                </div>
-                <div className="text-xs text-text-muted font-mono truncate max-w-[170px] tech-val mt-0.5">
-                  {node.network_name || "XRayMesh Network"}
+                <div className="font-bold text-sm text-text-main tracking-tight">XRayMesh</div>
+                <div className="flex items-center gap-1.5 min-w-0 mt-0.5 text-xs font-mono text-text-muted" dir="ltr">
+                  <span className="truncate">{node.network_name || "XRayMesh Network"}</span>
+                  <span className="shrink-0">· v{node.xraymesh_version || "2.2.6-beta.9"}</span>
+                  {node.branch === "beta" && <span className="shrink-0 text-amber-400 font-semibold">β</span>}
                 </div>
               </div>
             </div>

@@ -2,6 +2,23 @@
 
 All notable XRayMesh changes are documented here.
 
+## [2.2.6-beta.9] - 2026-09-25
+
+### Changed
+- Mobile header is one row: logo, name, a single network and version line, refresh and menu. Language and palette live in the menu.
+- Mobile overview is one compact 2x2 card (IP with tap-to-copy, peers, latency, CPU/RAM) instead of four full-height cards, so tab content starts on the first screen.
+- Bottom navigation uses short labels in a 5-column grid, marks the active tab, and has accessible names.
+- Server rows on phones are three dense lines (name, IP and latency; connection and traffic; version, update and actions).
+- Ping and Speedtest share a new source/destination picker with a swap button; the ping count is a segmented control, loss is color-coded, and raw output is collapsible.
+- Tunnels toolbar and type filters fit on phones; section descriptions are hidden on small screens.
+- Switching tabs scrolls to the top.
+
+### Fixed
+- Bottom navigation overflowed the screen and cut off its labels.
+- Ping and Speedtest route summary overflowed on phones.
+- Tunnels server picker overflowed its card on phones.
+- Side menu title was truncated.
+
 ## [2.2.6-beta.8] - 2026-09-25
 
 ### Added

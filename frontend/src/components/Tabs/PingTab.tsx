@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Peer, PingResult } from '../../types';
-import { Activity, Send, Terminal, ArrowLeftRight, ArrowRight, Server } from 'lucide-react';
+import { Activity, Send, Terminal, ArrowRight } from 'lucide-react';
+import { RoutePicker } from '../RoutePicker';
 import { LoadingDots } from '../LoadingSpinner';
 
 interface PingTabProps {
@@ -51,7 +52,6 @@ export const PingTab: React.FC<PingTabProps> = ({
   }, [peers, sourceIp, targetIp, onTargetChange]);
 
   const sourcePeer = peers.find((p) => p.ipv4 === sourceIp);
-  const targetPeer = peers.find((p) => p.ipv4 === targetIp);
 
   const handleSourceChange = (newSource: string) => {
     setSourceIp(newSource);
@@ -78,160 +78,81 @@ export const PingTab: React.FC<PingTabProps> = ({
   };
 
   const isRemoteRunner = sourcePeer && !sourcePeer.is_current;
+  const lossPct = Number(lastResult?.packet_loss_percent ?? 0);
+  const resultSource = lastResult?.source || sourceIp;
+  const resultTarget = lastResult?.target || targetIp;
+  const nameOf = (ip: string) => peers.find((p) => p.ipv4 === ip)?.hostname || ip;
 
   return (
-    <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
-      <div className="flex items-center justify-between gap-3 mb-6">
-        <div className="flex items-center gap-2">
-          <Activity className="w-5 h-5 text-primary" />
-          <div>
-            <h2 className="text-base font-bold text-text-main">{t('ping_panel_title')}</h2>
-            <p className="text-xs text-text-muted mt-0.5">{t('ping_route_display')}</p>
-          </div>
+    <div className="p-4 sm:p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
+      <div className="flex items-start justify-between gap-3 mb-5">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0" aria-hidden="true">
+            <Activity className="w-[18px] h-[18px]" />
+          </span>
+          <h2 className="text-base font-bold text-text-main leading-tight">{t('ping_panel_title')}</h2>
         </div>
-
         {isRemoteRunner && (
-          <span className="text-xs font-semibold uppercase px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30">
-            Remote Runner
+          <span className="shrink-0 text-[11px] font-semibold px-2 py-1 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30">
+            {t('ping_remote_runner')}
           </span>
         )}
       </div>
 
-      {/* Input Controls Form */}
-      <form onSubmit={handleSend} className="space-y-4 mb-6">
-        {/* Route Selectors (Source & Target with Swap) */}
-        <div className="p-3.5 rounded-xl bg-white/5 border border-card-border space-y-3">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-text-muted flex items-center gap-1.5">
-              <Server className="w-3.5 h-3.5 text-primary" />
-              {t('ping_route_display')}
-            </label>
-            {peers.length > 1 && (
-              <button
-                type="button"
-                onClick={handleSwap}
-                title={t('ping_swap_nodes')}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-xs font-medium transition-all"
-              >
-                <ArrowLeftRight className="w-3.5 h-3.5" />
-                <span>{t('ping_swap_nodes')}</span>
-              </button>
-            )}
-          </div>
+      <form onSubmit={handleSend} className="space-y-4">
+        <RoutePicker
+          peers={peers}
+          source={sourceIp}
+          target={targetIp}
+          onSourceChange={handleSourceChange}
+          onTargetChange={onTargetChange}
+          onSwap={handleSwap}
+          sourceLabel={t('ping_source_label')}
+          targetLabel={t('ping_dest_label')}
+          sourcePlaceholder={t('ping_source_placeholder')}
+          targetPlaceholder={t('ping_dest_select_placeholder')}
+          swapLabel={t('ping_swap_nodes')}
+        />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Source Node Selector */}
-            <div>
-              <label className="block text-xs font-medium text-text-muted mb-1">
-                {t('ping_source_label')}
-              </label>
-              <select
-                value={sourceIp}
-                onChange={(e) => handleSourceChange(e.target.value)}
-                className="w-full px-3 py-2 bg-black/40 border border-card-border rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
-              >
-                <option value="">{t('ping_source_placeholder')}</option>
-                {peers.map((p) => (
-                  <option key={p.ipv4} value={p.ipv4}>
-                    {p.hostname || p.ipv4} ({p.ipv4}){p.is_current ? ' ★ Local' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4">
+          <label className="block min-w-0">
+            <span className="block text-xs font-medium text-text-muted mb-1.5">{t('ping_target_ip_label')}</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              dir="ltr"
+              value={targetIp}
+              onChange={(e) => onTargetChange(e.target.value)}
+              placeholder="10.144.144.2"
+              className="w-full h-11 px-3.5 bg-input border border-card-border rounded-xl text-sm font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary text-start"
+            />
+          </label>
 
-            {/* Destination Node Quick Selector */}
-            <div>
-              <label className="block text-xs font-medium text-text-muted mb-1">
-                {t('ping_dest_label')}
-              </label>
-              <select
-                value={peers.some((p) => p.ipv4 === targetIp) ? targetIp : ''}
-                onChange={(e) => {
-                  if (e.target.value) onTargetChange(e.target.value);
-                }}
-                className="w-full px-3 py-2 bg-black/40 border border-card-border rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
-              >
-                <option value="">{t('ping_dest_select_placeholder')}</option>
-                {peers.filter((p) => p.ipv4 !== sourceIp).map((p) => (
-                  <option key={p.ipv4} value={p.ipv4}>
-                    {p.hostname || p.ipv4} ({p.ipv4}){p.is_current ? ' ★ Local' : ''} - {p.lat_ms || '0'}ms
-                  </option>
-                ))}
-              </select>
+          <div>
+            <span className="block text-xs font-medium text-text-muted mb-1.5">{t('ping_count_label')}</span>
+            <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-input border border-card-border" role="radiogroup" aria-label={t('ping_count_label')}>
+              {[4, 8, 10].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  role="radio"
+                  aria-checked={count === n}
+                  onClick={() => setCount(n)}
+                  className={`h-9 sm:w-14 rounded-lg text-sm font-mono font-semibold transition-colors ${
+                    count === n ? 'bg-primary text-black' : 'text-text-muted hover:text-text-main'
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
             </div>
           </div>
-
-          {/* Target IP Manual Input & Packet Count */}
-          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1">
-            <div className="sm:col-span-8">
-              <label className="block text-xs font-medium text-text-muted mb-1">
-                Target IP Address
-              </label>
-              <input
-                type="text"
-                value={targetIp}
-                onChange={(e) => onTargetChange(e.target.value)}
-                placeholder="10.144.144.2"
-                className="w-full px-3.5 py-2 bg-black/40 border border-card-border rounded-xl text-xs sm:text-sm font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
-              />
-            </div>
-
-            <div className="sm:col-span-4">
-              <label className="block text-xs font-medium text-text-muted mb-1">
-                {t('ping_count_label')}
-              </label>
-              <select
-                value={count}
-                onChange={(e) => setCount(Number(e.target.value))}
-                className="w-full px-3 py-2 bg-black/40 border border-card-border rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
-              >
-                <option value={4}>{t('ping_count_4')}</option>
-                <option value={8}>{t('ping_count_8')}</option>
-                <option value={10}>{t('ping_count_10')}</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Route Visual Indicator */}
-          {sourceIp && targetIp && (
-            <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-primary/10 border border-primary/20 text-xs">
-              <div className="flex items-center gap-1.5 truncate">
-                <span className="text-xs uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-card-border">
-                  {t('ping_source_chip_prefix')}
-                </span>
-                <span className="font-mono font-semibold text-text-main truncate">
-                  {sourcePeer?.hostname || sourceIp}
-                </span>
-                {sourcePeer?.is_current && (
-                  <span className="text-xs text-primary font-bold">(Local)</span>
-                )}
-              </div>
-
-              <div className="flex items-center px-1 text-primary font-bold">
-                <ArrowRight className="w-3.5 h-3.5" />
-              </div>
-
-              <div className="flex items-center gap-1.5 truncate">
-                <span className="text-xs uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-card-border">
-                  {t('ping_dest_chip_prefix')}
-                </span>
-                <span className="font-mono font-semibold text-text-main truncate">
-                  {targetPeer?.hostname || targetIp}
-                </span>
-                {targetPeer?.lat_ms !== undefined && (
-                  <span className="text-primary font-mono text-xs font-bold">
-                    {targetPeer.lat_ms}ms
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
         </div>
 
         <button
           type="submit"
           disabled={!targetIp.trim() || !sourceIp || targetIp.trim() === sourceIp || isRunning}
-          className="btn-interactive w-full sm:w-auto px-6 py-2.5 rounded-xl bg-primary text-black font-semibold text-xs sm:text-sm hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
+          className="btn-interactive w-full sm:w-auto h-11 px-6 rounded-xl bg-primary text-black font-semibold text-sm hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
         >
           {isRunning ? (
             <>
@@ -241,71 +162,52 @@ export const PingTab: React.FC<PingTabProps> = ({
             </>
           ) : (
             <>
-              <Send className="w-4 h-4" />
+              <Send className="w-4 h-4 rtl:-scale-x-100" />
               <span>{t('ping_btn_send')}</span>
             </>
           )}
         </button>
       </form>
 
-      {/* Results Metric Cards */}
       {lastResult && (
-        <div className="space-y-4 animate-modal-in">
-          {/* Diagnostic Route Banner */}
-          {(lastResult.source || sourceIp) && (lastResult.target || targetIp) && (
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-card-border text-xs font-mono text-text-muted">
-              <span className="text-text-main font-semibold">
-                {peers.find((p) => p.ipv4 === (lastResult.source || sourceIp))?.hostname || (lastResult.source || sourceIp)}
-              </span>
-              <ArrowRight className="w-3 h-3 text-primary" />
-              <span className="text-text-main font-semibold">
-                {peers.find((p) => p.ipv4 === (lastResult.target || targetIp))?.hostname || (lastResult.target || targetIp)}
-              </span>
-              {lastResult.source && !peers.find((p) => p.ipv4 === lastResult.source)?.is_current && (
-                <span className="text-xs uppercase font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300">
-                  Cluster Proxy
-                </span>
-              )}
+        <div className="mt-6 pt-5 border-t border-card-border space-y-4 animate-modal-in">
+          {resultSource && resultTarget && (
+            <div className="flex items-center gap-2 min-w-0 text-xs font-mono text-text-muted">
+              <span className="text-text-main font-semibold truncate">{nameOf(resultSource)}</span>
+              <ArrowRight className="w-3.5 h-3.5 text-primary shrink-0 rtl:-scale-x-100" />
+              <span className="text-text-main font-semibold truncate">{nameOf(resultTarget)}</span>
             </div>
           )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="p-3 rounded-xl bg-black/20 border border-white/5 text-center">
-              <div className="text-xs text-text-muted">{t('ping_min')}</div>
-              <div className="text-lg font-bold font-mono text-text-main mt-1 tabular-nums">
-                {lastResult.min_ms} ms
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            {[
+              { label: t('ping_min'), value: `${lastResult.min_ms} ms`, cls: 'text-text-main' },
+              { label: t('ping_avg'), value: `${lastResult.avg_ms} ms`, cls: 'text-primary' },
+              { label: t('ping_max'), value: `${lastResult.max_ms} ms`, cls: 'text-text-main' },
+              {
+                label: t('ping_loss'),
+                value: `${lastResult.packet_loss_percent}%`,
+                cls: lossPct === 0 ? 'text-emerald-400' : lossPct < 10 ? 'text-amber-400' : 'text-rose-400',
+              },
+            ].map((m) => (
+              <div key={m.label} className="p-3 rounded-xl bg-black/20 border border-white/5">
+                <div className="text-[11px] text-text-muted">{m.label}</div>
+                <div className={`text-lg font-bold font-mono mt-0.5 tabular-nums ${m.cls}`} dir="ltr">
+                  {m.value}
+                </div>
               </div>
-            </div>
-            <div className="p-3 rounded-xl bg-black/20 border border-white/5 text-center">
-              <div className="text-xs text-text-muted">{t('ping_avg')}</div>
-              <div className="text-lg font-bold font-mono text-primary mt-1 tabular-nums">
-                {lastResult.avg_ms} ms
-              </div>
-            </div>
-            <div className="p-3 rounded-xl bg-black/20 border border-white/5 text-center">
-              <div className="text-xs text-text-muted">{t('ping_max')}</div>
-              <div className="text-lg font-bold font-mono text-text-main mt-1 tabular-nums">
-                {lastResult.max_ms} ms
-              </div>
-            </div>
-            <div className="p-3 rounded-xl bg-black/20 border border-white/5 text-center">
-              <div className="text-xs text-text-muted">{t('ping_loss')}</div>
-              <div className="text-lg font-bold font-mono text-emerald-400 mt-1 tabular-nums">
-                {lastResult.packet_loss_percent}%
-              </div>
-            </div>
+            ))}
           </div>
 
-          {/* Raw Terminal Output */}
-          <div className="rounded-xl bg-black/40 border border-card-border p-3.5">
-            <div className="flex items-center gap-2 text-xs font-mono text-text-muted mb-2">
+          <details className="group rounded-xl bg-black/30 border border-card-border">
+            <summary className="flex items-center gap-2 px-3.5 py-2.5 text-xs font-medium text-text-muted cursor-pointer select-none">
               <Terminal className="w-3.5 h-3.5" />
-              <span>Diagnostic Raw Terminal</span>
-            </div>
-            <pre className="text-xs font-mono text-cyan-300 overflow-x-auto whitespace-pre-wrap leading-relaxed">
+              {t('ping_raw_output')}
+            </summary>
+            <pre className="px-3.5 pb-3.5 text-xs font-mono text-cyan-300 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed" dir="ltr">
               {lastResult.raw}
             </pre>
-          </div>
+          </details>
         </div>
       )}
     </div>

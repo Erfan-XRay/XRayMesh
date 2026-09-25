@@ -82,6 +82,15 @@ export default function App() {
 
   // Active tab (Default to Node & Mesh Config)
   const [activeTab, setActiveTab] = useState<TabId>('node');
+  // A new tab starts at its top; otherwise mobile users land mid-page after switching.
+  const firstTabRender = useRef(true);
+  useEffect(() => {
+    if (firstTabRender.current) {
+      firstTabRender.current = false;
+      return;
+    }
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+  }, [activeTab]);
 
   // Speedtest state
   const [speedTarget, setSpeedTarget] = useState('');
@@ -524,13 +533,13 @@ export default function App() {
     }
   }, [initialLoaded, isNodeConfigured, activeTab]);
 
-  const tabs: { id: TabId; label: string; icon: React.ReactNode; badge?: number | string }[] = isNodeConfigured
+  const tabs: { id: TabId; label: string; short?: string; icon: React.ReactNode; badge?: number | string }[] = isNodeConfigured
     ? [
-        { id: 'node', label: t('tab_node'), icon: <Settings className="w-4 h-4" /> },
-        { id: 'peers', label: t('tab_peers'), icon: <Users className="w-4 h-4" />, badge: peers.length > 0 ? peers.length : undefined },
-        { id: 'tunnels', label: t('tab_tunnels'), icon: <Network className="w-4 h-4" />, badge: totalTunnels > 0 ? totalTunnels : undefined },
-        { id: 'ping', label: t('tab_ping'), icon: <Activity className="w-4 h-4" /> },
-        { id: 'speedtest', label: t('tab_speedtest'), icon: <Zap className="w-4 h-4" /> },
+        { id: 'node', label: t('tab_node'), short: t('tab_short_node'), icon: <Settings className="w-4 h-4" /> },
+        { id: 'peers', label: t('tab_peers'), short: t('tab_short_peers'), icon: <Users className="w-4 h-4" />, badge: peers.length > 0 ? peers.length : undefined },
+        { id: 'tunnels', label: t('tab_tunnels'), short: t('tab_short_tunnels'), icon: <Network className="w-4 h-4" />, badge: totalTunnels > 0 ? totalTunnels : undefined },
+        { id: 'ping', label: t('tab_ping'), short: t('tab_short_ping'), icon: <Activity className="w-4 h-4" /> },
+        { id: 'speedtest', label: t('tab_speedtest'), short: t('tab_short_speedtest'), icon: <Zap className="w-4 h-4" /> },
       ]
     : [
         { id: 'node', label: t('setup_title'), icon: <Sparkles className="w-4 h-4 text-primary" />, badge: t('setup_mode_badge') || 'Setup' },

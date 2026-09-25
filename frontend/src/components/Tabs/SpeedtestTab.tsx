@@ -8,7 +8,8 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { ShieldCheck, Zap, Rocket, Target, Loader2, ArrowLeftRight, ArrowRight, Server } from 'lucide-react';
+import { ShieldCheck, Zap, Rocket, Target, Loader2, ArrowRight } from 'lucide-react';
+import { RoutePicker } from '../RoutePicker';
 import { LoadingSpinner } from '../LoadingSpinner';
 
 interface SpeedtestTabProps {
@@ -121,18 +122,18 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
   const isRemoteRunner = sourcePeer && !sourcePeer.is_current;
 
   return (
-    <div className="p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
+    <div className="p-4 sm:p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
       {/* Panel Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
         <div>
-          <h2 className="text-base font-bold text-text-main flex items-center gap-2">
-            <Zap className="w-4 h-4 text-primary" />
+          <h2 className="text-base font-bold text-text-main flex items-center gap-2 leading-tight">
+            <Zap className="w-4 h-4 text-primary shrink-0" />
             {t('speed_panel_title')}
           </h2>
-          <p className="text-xs text-text-muted mt-0.5">{t('speed_panel_desc')}</p>
+          <p className="hidden sm:block text-xs text-text-muted mt-0.5">{t('speed_panel_desc')}</p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="hidden sm:flex items-center gap-2">
           <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
             <ShieldCheck className="w-4 h-4" />
             <span>{t('speed_isolation_badge')}</span>
@@ -182,99 +183,19 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
             </div>
           </div>
 
-          {/* Node Selectors (Source & Destination with Swap) */}
-          <div className="space-y-2.5 p-3 rounded-xl bg-white/5 border border-card-border">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-text-muted flex items-center gap-1.5">
-                <Server className="w-3.5 h-3.5 text-primary" />
-                {t('speed_route_display')}
-              </label>
-              {peers.length > 1 && (
-                <button
-                  type="button"
-                  onClick={handleSwap}
-                  title={t('speed_swap_nodes')}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-xs font-medium transition-all"
-                >
-                  <ArrowLeftRight className="w-3 h-3" />
-                  <span>{t('speed_swap_nodes')}</span>
-                </button>
-              )}
-            </div>
-
-            {/* Source Node Selector */}
-            <div>
-              <label className="block text-xs font-medium text-text-muted mb-1">
-                {t('speed_source_label')}
-              </label>
-              <select
-                value={sourceIp}
-                onChange={(e) => handleSourceChange(e.target.value)}
-                className="w-full px-3 py-2 bg-black/40 border border-card-border rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
-              >
-                <option value="">{t('speed_source_placeholder')}</option>
-                {peers.map((p) => (
-                  <option key={p.ipv4} value={p.ipv4}>
-                    {p.hostname || p.ipv4} ({p.ipv4}){p.is_current ? ' ★ Local' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Destination Node Selector */}
-            <div>
-              <label className="block text-xs font-medium text-text-muted mb-1">
-                {t('speed_dest_label')}
-              </label>
-              <select
-                value={targetIp}
-                onChange={(e) => handleTargetChange(e.target.value)}
-                className="w-full px-3 py-2 bg-black/40 border border-card-border rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
-              >
-                <option value="">{t('speed_dest_placeholder')}</option>
-                {peers.filter((p) => p.ipv4 !== sourceIp).map((p) => (
-                  <option key={p.ipv4} value={p.ipv4}>
-                    {p.hostname || p.ipv4} ({p.ipv4}){p.is_current ? ' ★ Local' : ''} - {p.lat_ms || '0'}ms
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Active Route Visual Chip */}
-            {sourceIp && targetIp && (
-              <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-primary/10 border border-primary/20 text-xs">
-                <div className="flex items-center gap-1.5 truncate">
-                  <span className="text-xs uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-card-border">
-                    {t('speed_source_chip_prefix')}
-                  </span>
-                  <span className="font-mono font-semibold text-text-main truncate">
-                    {sourcePeer?.hostname || sourceIp}
-                  </span>
-                  {sourcePeer?.is_current && (
-                    <span className="text-xs text-primary font-bold">(Local)</span>
-                  )}
-                </div>
-
-                <div className="flex items-center px-1 text-primary font-bold">
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </div>
-
-                <div className="flex items-center gap-1.5 truncate">
-                  <span className="text-xs uppercase font-bold text-text-muted px-1.5 py-0.5 rounded bg-white/5 border border-card-border">
-                    {t('speed_target_chip_prefix')}
-                  </span>
-                  <span className="font-mono font-semibold text-text-main truncate">
-                    {selectedPeer?.hostname || targetIp}
-                  </span>
-                  {selectedPeer?.lat_ms !== undefined && (
-                    <span className="text-primary font-mono text-xs font-bold">
-                      {selectedPeer.lat_ms}ms
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+          <RoutePicker
+            peers={peers}
+            source={sourceIp}
+            target={targetIp}
+            onSourceChange={handleSourceChange}
+            onTargetChange={handleTargetChange}
+            onSwap={handleSwap}
+            sourceLabel={t('speed_source_label')}
+            targetLabel={t('speed_dest_label')}
+            sourcePlaceholder={t('speed_source_placeholder')}
+            targetPlaceholder={t('speed_dest_placeholder')}
+            swapLabel={t('speed_swap_nodes')}
+          />
 
           {/* Protocol Selection */}
           <div>
@@ -285,7 +206,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
               <button
                 type="button"
                 onClick={() => setProtocol('tcp')}
-                className={`py-2 px-3 rounded-xl border text-xs font-medium transition-all ${
+                className={`min-h-11 py-2 px-2 rounded-xl border text-xs font-medium leading-tight transition-all ${
                   protocol === 'tcp'
                     ? 'bg-primary/15 border-primary text-primary font-semibold shadow-sm'
                     : 'bg-white/5 border-card-border text-text-muted hover:text-text-main'
@@ -296,7 +217,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
               <button
                 type="button"
                 onClick={() => setProtocol('udp')}
-                className={`py-2 px-3 rounded-xl border text-xs font-medium transition-all ${
+                className={`min-h-11 py-2 px-2 rounded-xl border text-xs font-medium leading-tight transition-all ${
                   protocol === 'udp'
                     ? 'bg-primary/15 border-primary text-primary font-semibold shadow-sm'
                     : 'bg-white/5 border-card-border text-text-muted hover:text-text-main'
@@ -319,7 +240,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
               <select
                 value={bandwidth}
                 onChange={(e) => setBandwidth(e.target.value)}
-                className="w-full px-3 py-2 bg-black/40 border border-card-border rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
+                className="w-full h-11 px-3 bg-input border border-card-border rounded-xl text-sm font-mono text-text-main focus:outline-none focus:border-primary"
               >
                 <option value="20M">20 Mbps</option>
                 <option value="50M">50 Mbps</option>
@@ -338,7 +259,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
             <select
               value={duration}
               onChange={(e) => setDuration(Number(e.target.value))}
-              className="w-full px-3 py-2 bg-black/40 border border-card-border rounded-xl text-xs sm:text-sm font-mono text-text-main focus:outline-none focus:border-primary"
+              className="w-full h-11 px-3 bg-input border border-card-border rounded-xl text-sm font-mono text-text-main focus:outline-none focus:border-primary"
             >
               <option value={3}>{t('speed_duration_quick')}</option>
               <option value={5}>{t('speed_duration_std')}</option>
@@ -351,7 +272,8 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
           <button
             onClick={handleStart}
             disabled={!targetIp || !sourceIp || targetIp === sourceIp || isRunning}
-            className="w-full py-3 px-4 rounded-xl bg-primary text-black font-semibold text-sm hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg transition-all"
+            type="button"
+            className="w-full h-12 px-4 rounded-xl bg-primary text-black font-semibold text-sm hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg transition-all"
           >
             {isRunning ? (
               <>
@@ -373,7 +295,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
         </div>
 
         {/* Right Column: Visualization & Metrics */}
-        <div className="lg:col-span-7 flex flex-col justify-between p-6 rounded-2xl bg-surface border border-card-border relative overflow-hidden min-h-[380px]">
+        <div className="lg:col-span-7 flex flex-col justify-between p-4 sm:p-6 rounded-2xl bg-surface border border-card-border relative overflow-hidden sm:min-h-[380px]">
           {isRunning && (
             <div className="absolute inset-0 bg-black/80 backdrop-blur-md z-20 flex flex-col items-center justify-center p-6 text-center animate-fade-in">
               <LoadingSpinner
@@ -394,12 +316,12 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
           <div className="flex flex-col items-center justify-center text-center my-auto py-4">
             {/* Route indicator chip */}
             {(lastResult?.source || sourceIp) && (lastResult?.target || targetIp) && (
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-card-border text-xs font-mono text-text-muted mb-4">
-                <span className="text-text-main font-semibold">
+              <div className="inline-flex max-w-full min-w-0 items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-card-border text-xs font-mono text-text-muted mb-4">
+                <span className="text-text-main font-semibold truncate">
                   {peers.find((p) => p.ipv4 === (lastResult?.source || sourceIp))?.hostname || (lastResult?.source || sourceIp)}
                 </span>
-                <ArrowRight className="w-3 h-3 text-primary" />
-                <span className="text-text-main font-semibold">
+                <ArrowRight className="w-3 h-3 text-primary shrink-0 rtl:-scale-x-100" />
+                <span className="text-text-main font-semibold truncate">
                   {peers.find((p) => p.ipv4 === (lastResult?.target || targetIp))?.hostname || (lastResult?.target || targetIp)}
                 </span>
                 {lastResult?.source && !peers.find((p) => p.ipv4 === lastResult?.source)?.is_current && (
@@ -410,7 +332,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
               </div>
             )}
 
-            <div className="text-5xl md:text-6xl font-black font-mono tracking-tight text-primary drop-shadow-[0_0_25px_rgba(var(--primary-rgb),0.3)]">
+            <div dir="ltr" className="text-5xl md:text-6xl font-black font-mono tracking-tight text-primary drop-shadow-[0_0_25px_rgba(var(--primary-rgb),0.3)]">
               {lastResult
                 ? lastResult.summary.sent_mbps ||
                   lastResult.summary.received_mbps ||

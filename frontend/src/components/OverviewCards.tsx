@@ -46,8 +46,64 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({
       ? "text-amber-400"
       : "text-rose-400";
 
+  const meter = (pct: number, warn: number) =>
+    pct > 85 ? "bg-rose-500" : pct > warn ? "bg-amber-400" : "bg-primary";
+  const ipCopied = Boolean(node.ipv4) && copiedKey === node.ipv4;
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 mb-4 sm:mb-6">
+    <>
+    {/* Mobile: one compact 2x2 summary so tab content starts above the fold. */}
+    <div className="sm:hidden grid grid-cols-2 mb-3 rounded-2xl bg-card/90 border border-card-border backdrop-blur-xl shadow-lg overflow-hidden">
+      <button
+        type="button"
+        onClick={() => node.ipv4 && onCopy(node.ipv4)}
+        disabled={!node.ipv4}
+        aria-label={ipCopied ? t("btn_copied") : `${t("vip_title")} ${node.ipv4 || ""}`}
+        className="min-w-0 p-3 text-start border-e border-b border-card-border active:bg-white/5 transition-colors"
+      >
+        <span className="flex items-center gap-1 text-[11px] text-text-muted truncate">
+          {t("vip_title")}
+          {ipCopied ? <Check className="w-3 h-3 text-accent-green shrink-0" /> : <Copy className="w-3 h-3 shrink-0 opacity-60" />}
+        </span>
+        <span className="block mt-1 text-[15px] font-bold font-mono text-text-main tabular-nums truncate" dir="ltr">
+          {node.ipv4 || "--"}
+        </span>
+      </button>
+      <div className="min-w-0 p-3 border-b border-card-border">
+        <span className="flex items-center gap-1 text-[11px] text-text-muted truncate">
+          <Users className="w-3 h-3 shrink-0" />
+          {t("peers_title")}
+        </span>
+        <span className="block mt-1 text-[15px] font-bold font-mono text-text-main tabular-nums">{peerCount}</span>
+      </div>
+      <div className="min-w-0 p-3 border-e border-card-border">
+        <span className="flex items-center gap-1 text-[11px] text-text-muted truncate">
+          <Activity className="w-3 h-3 shrink-0" />
+          {t("latency_title")}
+        </span>
+        <span className={`block mt-1 text-[15px] font-bold font-mono tabular-nums truncate ${latencyColorClass}`} dir="ltr">
+          {avgLatency}
+        </span>
+      </div>
+      <div className="min-w-0 p-3 space-y-1.5">
+        {[
+          { label: "CPU", pct: cpuPct, warn: 60 },
+          { label: "RAM", pct: ramPct, warn: 65 },
+        ].map((m) => (
+          <div key={m.label}>
+            <div className="flex justify-between text-[11px] leading-none mb-1">
+              <span className="text-text-muted">{m.label}</span>
+              <span className="font-mono font-semibold text-text-main tabular-nums">{m.pct}%</span>
+            </div>
+            <div className="h-1 rounded-full bg-white/10 overflow-hidden" role="progressbar" aria-label={m.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={m.pct}>
+              <div className={`h-full rounded-full ${meter(m.pct, m.warn)}`} style={{ width: `${Math.min(100, Math.max(0, m.pct))}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div className="hidden sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 mb-4 sm:mb-6">
       {/* 1. Bento Card: Mesh Virtual IP & Node Identity */}
       <div className="interactive-card relative overflow-hidden p-4 sm:p-5 rounded-2xl bg-card/90 border border-card-border hover:border-primary/40 shadow-lg backdrop-blur-xl flex flex-col justify-between">
         <div>
@@ -233,5 +289,6 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({
         </div>
       </div>
     </div>
+    </>
   );
 };

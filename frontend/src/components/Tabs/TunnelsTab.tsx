@@ -248,7 +248,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
   };
 
   const segBtn = (active: boolean) =>
-    `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+    `flex items-center justify-center gap-1.5 h-9 px-3 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${
       active ? 'bg-primary/20 text-primary border border-primary/30 font-semibold' : 'text-text-muted hover:text-text-main hover:bg-white/5 border border-transparent'
     }`;
 
@@ -256,7 +256,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
     <div className="space-y-4">
       {/* Toolbar: scope, search, refresh */}
       <div className="flex flex-col lg:flex-row lg:items-center gap-3 p-2 rounded-xl bg-card border border-card-border backdrop-blur-md">
-        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={t('tunnels_scope_label')}>
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-1.5" role="group" aria-label={t('tunnels_scope_label')}>
           <button type="button" aria-pressed={scope === 'local'} onClick={() => onScopeChange('local')} className={segBtn(scope === 'local')}>
             <Server className="w-3.5 h-3.5" />
             {t('tunnels_scope_local')}
@@ -271,7 +271,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                 value={scope !== 'local' && scope !== 'all' ? scope : ''}
                 onChange={(e) => e.target.value && onScopeChange(e.target.value)}
                 aria-label={t('tunnels_scope_pick')}
-                className={`bg-input border rounded-lg px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-primary ${
+                className={`col-span-2 w-full sm:w-auto min-w-0 h-9 bg-input border rounded-lg px-2 text-xs font-mono focus:outline-none focus:border-primary ${
                   scope !== 'local' && scope !== 'all' ? 'border-primary/40 text-primary' : 'border-card-border text-text-muted'
                 }`}
               >
@@ -364,7 +364,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
       )}
 
       {/* Type filter */}
-      <div className="flex flex-wrap gap-1.5" role="group" aria-label={t('tunnels_subtab_all')}>
+      <div className="no-scrollbar flex sm:flex-wrap gap-1.5 overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0" role="group" aria-label={t('tunnels_subtab_all')}>
         <button type="button" aria-pressed={filter === 'all'} onClick={() => setFilter('all')} className={segBtn(filter === 'all')}>
           {t('tunnels_subtab_all')} <span className="opacity-70">{totalCount}</span>
         </button>
@@ -374,7 +374,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
             type="button"
             aria-pressed={filter === s.type}
             onClick={() => setFilter(s.type)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+            className={`h-9 px-3 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 transition-colors border ${
               filter === s.type ? `${ACCENTS[s.accent].pill} font-semibold` : 'text-text-muted hover:text-text-main hover:bg-white/5 border-transparent'
             }`}
           >
@@ -409,7 +409,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
                       {t(s.titleKey)}
                       <span className="text-xs font-mono font-normal text-text-subtle">{items.length}</span>
                     </h3>
-                    <p className="text-xs text-text-muted mt-0.5">{t(s.descKey)}</p>
+                    <p className="hidden sm:block text-xs text-text-muted mt-0.5">{t(s.descKey)}</p>
                   </div>
                   <button
                     type="button"

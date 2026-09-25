@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="2.2.6-beta.8"
+readonly VERSION="2.2.6-beta.9"
 readonly DEFAULT_BRANCH="beta"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
