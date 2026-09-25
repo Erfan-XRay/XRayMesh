@@ -2,6 +2,10 @@
 
 All notable XRayMesh changes are documented here.
 
+## [3.0.0-beta.4] - 2026-09-26
+
+Test release for one-click updates from the panel. No functional changes since 3.0.0-beta.3.
+
 ## [3.0.0-beta.3] - 2026-09-26
 
 ### Fixed

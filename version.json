@@ -1,8 +1,8 @@
 {
-  "version": "3.0.0-beta.3",
+  "version": "3.0.0-beta.4",
   "branch": "beta",
-  "release_name": "XRayMesh v3.0.0-beta.3 (Update Reliability)",
+  "release_name": "XRayMesh v3.0.0-beta.4 (Update Test)",
   "release_date": "2026-09-26",
-  "changelog": "One-click updates no longer get stuck on \"Starting...\": an update the server never started fails after 90 seconds with a clear message instead of blocking new attempts for 15 minutes, the updater reports progress before downloading the core, and panel requests time out instead of waiting forever.",
+  "changelog": "Test release for one-click updates from the panel. No functional changes since 3.0.0-beta.3.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update"
 }

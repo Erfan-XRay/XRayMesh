@@ -52,7 +52,7 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden sm:inline">{t("brand_title")}</span>
             </h1>
             <span className="hidden sm:inline px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-primary/10 text-primary border border-primary/20 shrink-0">
-              v{node.xraymesh_version || "3.0.0-beta.3"}
+              v{node.xraymesh_version || "3.0.0-beta.4"}
             </span>
             {node.branch === "beta" && (
               <span className="hidden sm:inline px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0 uppercase tracking-wider">
@@ -73,7 +73,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="sm:hidden flex min-w-0 font-mono" dir="ltr">
                   <span className="truncate">{node.network_name || "XRayMesh"}</span>
                   <span className="shrink-0">
-                    &nbsp;· v{node.xraymesh_version || "3.0.0-beta.3"}
+                    &nbsp;· v{node.xraymesh_version || "3.0.0-beta.4"}
                     {node.branch === "beta" && <span className="text-amber-400"> β</span>}
                   </span>
                 </span>
