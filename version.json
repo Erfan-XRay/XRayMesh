@@ -1,8 +1,8 @@
 {
-  "version": "3.0.0-beta.1",
+  "version": "3.0.0-beta.2",
   "branch": "beta",
-  "release_name": "XRayMesh v3.0.0-beta.1",
+  "release_name": "XRayMesh v3.0.0-beta.2 (Update Test)",
   "release_date": "2026-09-26",
-  "changelog": "First beta of XRayMesh 3.0: resilient multi-server tunnels, reliable update checks, a clean mobile UI, and one-click updates that no longer get stuck on \"Waiting for the server...\" - the panel reloads by itself when the update finishes.",
+  "changelog": "Test release for one-click updates from the panel. No functional changes since 3.0.0-beta.1.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update"
 }

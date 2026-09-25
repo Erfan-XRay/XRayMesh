@@ -2,6 +2,10 @@
 
 All notable XRayMesh changes are documented here.
 
+## [3.0.0-beta.2] - 2026-09-26
+
+Test release for one-click updates from the panel. No functional changes since 3.0.0-beta.1.
+
 ## [3.0.0-beta.1] - 2026-09-26
 
 First beta of XRayMesh 3.0. It brings together the 2.2.6 betas: resilient multi-server tunnels (beta.6), reliable update checks (beta.7), a smooth finish for self-updates (beta.8) and the clean mobile UI (beta.9).
