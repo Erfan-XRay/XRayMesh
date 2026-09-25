@@ -2,6 +2,15 @@
 
 All notable XRayMesh changes are documented here.
 
+## [2.2.6-beta.8] - 2026-09-25
+
+### Added
+- Full-screen notice while the server you are signed in to restarts to finish its update, followed by an automatic reload.
+- The sign-in page says the server was updated (and to which version) after that reload, and a toast confirms it after signing in.
+
+### Fixed
+- Updating the server you are signed in to got stuck on "Waiting for the server...": the restart drops the login session, so the signed-in status check failed with 401 until the 4 minute timeout. The panel now follows its own update through the public `/api/cluster/info` endpoint.
+
 ## [2.2.6-beta.7] - 2026-09-25
 
 ### Changed

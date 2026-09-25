@@ -1,8 +1,8 @@
 {
-  "version": "2.2.6-beta.7",
+  "version": "2.2.6-beta.8",
   "branch": "beta",
-  "release_name": "XRayMesh v2.2.6-beta.7 (Reliable Update Checks)",
+  "release_name": "XRayMesh v2.2.6-beta.8 (Smooth Self-Update Finish)",
   "release_date": "2026-09-25",
-  "changelog": "Update checks are now reliable: a server that cannot reach GitHub shows \"Couldn't check for updates\" instead of a false \"Up to date\" and retries within a minute, new releases show up within 5 minutes, and the Refresh button checks GitHub again right away.",
+  "changelog": "Updating the server you are signed in to no longer gets stuck on \"Waiting for the server...\". A full-screen notice shows while the server restarts, the panel reloads by itself when the new version is up, and the sign-in page says the server was updated.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update"
 }

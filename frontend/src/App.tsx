@@ -15,7 +15,7 @@ import {
 } from './types';
 import { useTheme } from './theme/useTheme';
 import { useTranslation } from './i18n/useTranslation';
-import { useNodeUpdates } from './hooks/useNodeUpdates';
+import { useNodeUpdates, UPDATED_TO_KEY } from './hooks/useNodeUpdates';
 import { useTunnels } from './hooks/useTunnels';
 import * as api from './services/api';
 
@@ -37,6 +37,17 @@ import { TunnelsTab } from './components/Tabs/TunnelsTab';
 import { Users, Zap, Activity, Network, Settings, ArrowUpCircle, Sparkles } from 'lucide-react';
 import { copyToClipboard } from './utils/clipboard';
 import { LoadingSpinner } from './components/LoadingSpinner';
+
+/** Version this server was just updated to, read once per page load (null when no update happened). */
+const JUST_UPDATED_TO: string | null = (() => {
+  try {
+    const v = sessionStorage.getItem(UPDATED_TO_KEY);
+    if (v !== null) sessionStorage.removeItem(UPDATED_TO_KEY);
+    return v;
+  } catch {
+    return null;
+  }
+})();
 
 const EMPTY_STATUS: StatusResponse = {
   node: {},
@@ -192,6 +203,18 @@ export default function App() {
 
   // Update runs live here so their progress survives switching tabs.
   const { runs: updateRuns, start: startUpdate, dismiss: dismissUpdate } = useNodeUpdates(loadDashboard);
+  // This server's own update, once it reaches the restart: the panel goes away for a moment.
+  const localRestart = Object.values(updateRuns).find(
+    (r) => r.isLocal && ['restart', 'reconnecting', 'rollback', 'success'].includes(r.phase)
+  );
+  const [updatedTo, setUpdatedTo] = useState<string | null>(JUST_UPDATED_TO);
+
+  useEffect(() => {
+    if (isAuthenticated && updatedTo !== null) {
+      addToast(t('update_after_reload_toast').replace('{version}', updatedTo ? `v${updatedTo}` : ''), 'success');
+      setUpdatedTo(null);
+    }
+  }, [isAuthenticated, updatedTo, addToast, t]);
 
   const loadInterfaces = useCallback(async () => {
     const ifaces = await api.fetchInterfaces();
@@ -542,8 +565,38 @@ export default function App() {
         onSelectLang={setLang}
         themeMode={themeMode}
         onSelectThemeMode={setThemeMode}
+        notice={
+          updatedTo !== null
+            ? t('update_login_notice').replace('{version}', updatedTo ? `v${updatedTo}` : '')
+            : undefined
+        }
         t={t}
       />
+
+      {/* This server is restarting to finish its own update */}
+      {localRestart && (
+        <div
+          role="alertdialog"
+          aria-live="assertive"
+          aria-label={t('update_overlay_title')}
+          className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm"
+        >
+          <div className="glass-panel-elevated w-full max-w-sm rounded-3xl p-6 text-center">
+            <LoadingSpinner
+              size="lg"
+              glow={true}
+              label={
+                localRestart.phase === 'success'
+                  ? t('update_overlay_done').replace('{version}', localRestart.targetVersion ? `v${localRestart.targetVersion}` : '')
+                  : localRestart.phase === 'rollback'
+                    ? t('update_phase_rollback')
+                    : t('update_overlay_title')
+              }
+              sublabel={localRestart.phase === 'success' ? t('update_overlay_done_hint') : t('update_overlay_hint')}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Dashboard (shown when authenticated) */}
       {isAuthenticated && (

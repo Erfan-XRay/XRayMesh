@@ -8,6 +8,7 @@ import {
   EyeOff,
   ArrowRight,
   CircleAlert,
+  CircleCheck,
   TriangleAlert,
   ClipboardPaste,
   ShieldCheck,
@@ -31,6 +32,8 @@ interface LoginModalProps {
   onSelectLang: (lang: Language) => void;
   themeMode: ThemeMode;
   onSelectThemeMode: (mode: ThemeMode) => void;
+  /** Shown above the sign-in card, e.g. after this server updated and dropped the session. */
+  notice?: string;
   t: (key: any) => string;
 }
 
@@ -52,6 +55,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   onSelectLang,
   themeMode,
   onSelectThemeMode,
+  notice,
   t,
 }) => {
   const [tab, setTab] = useState<'pw' | 'tk'>(passwordConfigured ? 'pw' : 'tk');
@@ -172,6 +176,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               {t('modal_login_desc')}
             </p>
           </div>
+
+          {notice && (
+            <div role="status" className="flex items-start gap-2.5 mb-4 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-sm text-emerald-400">
+              <CircleCheck className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+              <span className="leading-relaxed">{notice}</span>
+            </div>
+          )}
 
           {/* Card */}
           <div className="glass-panel-elevated rounded-3xl p-5 sm:p-7">

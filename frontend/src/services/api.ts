@@ -493,6 +493,16 @@ export async function startNodeUpdate(
   return { legacy: Boolean(d.legacy), status: d.status || {} };
 }
 
+/**
+ * This server's version and update job from the public cluster endpoint. Works
+ * without a session, which a restart of this panel's own server drops.
+ */
+export async function fetchLocalUpdateInfo(): Promise<UpdateSummary> {
+  const res = await fetch(`/api/cluster/info?t=${Date.now()}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Server not ready');
+  return res.json();
+}
+
 /** Poll a server's update job. `reachable` is false while it restarts. */
 export async function fetchNodeUpdateStatus(
   targetIp: string

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Peer, UpdateSummary } from '../types';
-import { fetchNodeUpdateStatus, NodeActionError, startNodeUpdate } from '../services/api';
+import { fetchLocalUpdateInfo, fetchNodeUpdateStatus, NodeActionError, startNodeUpdate } from '../services/api';
 import { isNewerVersion } from '../utils/version';
 
 export type UpdatePhase =
@@ -36,6 +36,8 @@ export interface UpdateRun {
 }
 
 const POLL_MS = 2000;
+/** Set before reloading after this panel's own server updated; read by the next page load. */
+export const UPDATED_TO_KEY = 'xraymesh.updatedTo';
 const TIMEOUT_MS = 4 * 60 * 1000;
 const ACTIVE: UpdatePhase[] = ['starting', 'queued', 'download', 'verify', 'install', 'restart', 'rollback', 'reconnecting', 'working'];
 
@@ -76,7 +78,13 @@ export function useNodeUpdates(onFinished: () => void) {
       patch(ip, changes);
       const run = runsRef.current[ip];
       if (changes.phase === 'success' && run?.isLocal) {
-        // This panel itself was replaced: load the new UI.
+        // This panel itself was replaced: load the new UI. The restart dropped the
+        // session, so the reload lands on sign-in, which explains what happened.
+        try {
+          sessionStorage.setItem(UPDATED_TO_KEY, changes.targetVersion || run.targetVersion || '');
+        } catch {
+          // Only used for the notice after reload.
+        }
         setTimeout(() => window.location.reload(), 2500);
       } else {
         onFinishedRef.current();
@@ -143,8 +151,19 @@ export function useNodeUpdates(onFinished: () => void) {
           return;
         }
         try {
-          const res = await fetchNodeUpdateStatus(ip);
-          apply(ip, res.reachable, res.legacy, res.status);
+          if (run.isLocal) {
+            // Our own server restarts during the update and forgets the session, so the
+            // signed-in status call would fail with 401 forever. Poll the public endpoint.
+            const info = await fetchLocalUpdateInfo();
+            if (info.version && run.fromVersion && isNewerVersion(info.version, run.fromVersion)) {
+              finish(ip, { phase: 'success', targetVersion: info.version });
+            } else {
+              apply(ip, true, run.legacy, info);
+            }
+          } else {
+            const res = await fetchNodeUpdateStatus(ip);
+            apply(ip, res.reachable, res.legacy, res.status);
+          }
         } catch (err) {
           // Our own panel is down while it restarts; anything else is retried until the timeout.
           if (run.isLocal || !(err instanceof NodeActionError)) patch(ip, { phase: 'reconnecting' });
