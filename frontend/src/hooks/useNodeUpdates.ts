@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Peer, UpdateSummary } from '../types';
-import { fetchLocalUpdateInfo, fetchNodeUpdateStatus, NodeActionError, startNodeUpdate } from '../services/api';
+import { fetchLocalUpdateInfo, fetchNodeUpdateStatus, isPanelServing, NodeActionError, startNodeUpdate } from '../services/api';
 import { isNewerVersion } from '../utils/version';
 
 export type UpdatePhase =
@@ -36,6 +36,8 @@ export interface UpdateRun {
 }
 
 const POLL_MS = 2000;
+/** A request to a restarting server can hang instead of failing; never wait on one longer. */
+const REQUEST_TIMEOUT_MS = 5000;
 /** Set before reloading after this panel's own server updated; read by the next page load. */
 export const UPDATED_TO_KEY = 'xraymesh.updatedTo';
 const TIMEOUT_MS = 4 * 60 * 1000;
@@ -65,6 +67,9 @@ export function useNodeUpdates(onFinished: () => void) {
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const onFinishedRef = useRef(onFinished);
   onFinishedRef.current = onFinished;
+
+  /** Consecutive failed status polls of this server's own update. */
+  const localFailures = useRef(0);
 
   useEffect(() => () => Object.values(timers.current).forEach(clearTimeout), []);
 
@@ -154,7 +159,8 @@ export function useNodeUpdates(onFinished: () => void) {
           if (run.isLocal) {
             // Our own server restarts during the update and forgets the session, so the
             // signed-in status call would fail with 401 forever. Poll the public endpoint.
-            const info = await fetchLocalUpdateInfo();
+            const info = await fetchLocalUpdateInfo(REQUEST_TIMEOUT_MS);
+            localFailures.current = 0;
             if (info.version && run.fromVersion && isNewerVersion(info.version, run.fromVersion)) {
               finish(ip, { phase: 'success', targetVersion: info.version });
             } else {
@@ -167,6 +173,12 @@ export function useNodeUpdates(onFinished: () => void) {
         } catch (err) {
           // Our own panel is down while it restarts; anything else is retried until the timeout.
           if (run.isLocal || !(err instanceof NodeActionError)) patch(ip, { phase: 'reconnecting' });
+          if (run.isLocal && ++localFailures.current >= 3 && (await isPanelServing(REQUEST_TIMEOUT_MS))) {
+            // The status endpoint keeps failing (proxy, odd network) but the panel itself
+            // answers again: reloading is the reliable way out, and lands on sign-in.
+            finish(ip, { phase: 'success', targetVersion: run.targetVersion });
+            return;
+          }
         }
         if (isRunActive(runsRef.current[ip])) timers.current[ip] = setTimeout(tick, POLL_MS);
       };
@@ -191,6 +203,7 @@ export function useNodeUpdates(onFinished: () => void) {
         jobStartedAt: 0,
         clickedAt: Date.now(),
       };
+      if (run.isLocal) localFailures.current = 0;
       runsRef.current = { ...runsRef.current, [ip]: run };
       setRuns((prev) => ({ ...prev, [ip]: run }));
       try {

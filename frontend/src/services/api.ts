@@ -497,10 +497,31 @@ export async function startNodeUpdate(
  * This server's version and update job from the public cluster endpoint. Works
  * without a session, which a restart of this panel's own server drops.
  */
-export async function fetchLocalUpdateInfo(): Promise<UpdateSummary> {
-  const res = await fetch(`/api/cluster/info?t=${Date.now()}`, { cache: 'no-store' });
+export async function fetchLocalUpdateInfo(timeoutMs: number): Promise<UpdateSummary> {
+  const res = await fetchWithTimeout(`/api/cluster/info?t=${Date.now()}`, timeoutMs);
   if (!res.ok) throw new Error('Server not ready');
   return res.json();
+}
+
+/** True when this panel's page is served again (the server is back after a restart). */
+export async function isPanelServing(timeoutMs: number): Promise<boolean> {
+  try {
+    const res = await fetchWithTimeout(`/?probe=${Date.now()}`, timeoutMs);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** fetch() has no timeout; a connection to a restarting server can otherwise hang for minutes. */
+async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { cache: 'no-store', signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** Poll a server's update job. `reachable` is false while it restarts. */

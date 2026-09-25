@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Erfan-XRay/XRayMesh/releases/tree/beta"><img src="https://img.shields.io/badge/version-2.2.6--beta.9-orange.svg?style=flat-square" alt="Version 2.2.5" /></a>
+  <a href="https://github.com/Erfan-XRay/XRayMesh/releases/tree/beta"><img src="https://img.shields.io/badge/version-3.0.0--beta.1-orange.svg?style=flat-square" alt="Version 2.2.5" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Source--Available-red.svg?style=flat-square" alt="Source-Available License" /></a>
   <img src="https://img.shields.io/badge/EasyTier-v2.6.4-cyan.svg?style=flat-square" alt="EasyTier core" />
   <img src="https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-orange.svg?style=flat-square" alt="Supported OS" />

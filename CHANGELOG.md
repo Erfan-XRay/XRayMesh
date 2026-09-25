@@ -2,6 +2,13 @@
 
 All notable XRayMesh changes are documented here.
 
+## [3.0.0-beta.1] - 2026-09-26
+
+First beta of XRayMesh 3.0. It brings together the 2.2.6 betas: resilient multi-server tunnels (beta.6), reliable update checks (beta.7), a smooth finish for self-updates (beta.8) and the clean mobile UI (beta.9).
+
+### Fixed
+- Updating the server you are signed in to could still get stuck on "Waiting for the server...". A status request to the restarting server could hang with no answer and no error, and polling waited on it forever. Every poll now times out after 5 seconds, and if the status endpoint keeps failing while the panel page is served again, the panel reloads and shows the update notice on the sign-in page.
+
 ## [2.2.6-beta.9] - 2026-09-25
 
 ### Changed
