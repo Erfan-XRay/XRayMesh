@@ -33,7 +33,7 @@ import ssl
 from pathlib import Path
 
 # Paths & Defaults
-CURRENT_VERSION = "3.0.0-beta.2"
+CURRENT_VERSION = "3.0.0-beta.3"
 CURRENT_BRANCH = "beta"
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/xraymesh")
 BIN_DIR = os.path.join(INSTALL_DIR, "bin")
@@ -68,6 +68,7 @@ PEER_VERSION_CACHE = {}  # ip -> {"version": ver, "timestamp": ts}
 CHANNEL_BRANCHES = {"stable": "main", "beta": "beta"}
 UPDATE_STATUS_FILE = os.environ.get("XRAYMESH_UPDATE_STATUS_FILE", "/var/lib/xraymesh/update-status.json")
 UPDATE_STALE_SEC = 900  # a job that stops reporting for this long is treated as failed
+UPDATE_QUEUED_STALE_SEC = 90  # a queued job the updater never picked up
 
 
 def is_ssl_enabled():
@@ -264,7 +265,13 @@ def read_update_status():
     if not isinstance(status, dict):
         return {"state": "idle"}
     last_seen = status.get("updated_at") or status.get("started_at") or 0
-    if status.get("state") in ("queued", "running") and time.time() - last_seen > UPDATE_STALE_SEC:
+    age = time.time() - last_seen
+    if status.get("state") == "queued" and age > UPDATE_QUEUED_STALE_SEC:
+        # The updater reports within seconds of starting; a job still queued never ran.
+        # Failing it here also stops it from blocking the next attempt as "already running".
+        status["state"] = "failed"
+        status["error"] = status.get("error") or "The updater never started. Check journalctl -u xraymesh-updater-temp -n 50 or /var/log/xraymesh-update.log."
+    elif status.get("state") in ("queued", "running") and age > UPDATE_STALE_SEC:
         status["state"] = "failed"
         status["error"] = status.get("error") or "The updater stopped reporting progress. Check /var/log/xraymesh-update.log or journalctl -u xraymesh-updater-temp."
     return status

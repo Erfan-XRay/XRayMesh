@@ -218,6 +218,13 @@ export function useNodeUpdates(onFinished: () => void) {
           poll(ip);
           return;
         }
+        if (code === 'request_timeout') {
+          // The start request got no answer, but the job may well have started: follow
+          // it (ignoring older jobs) and let the status report success or failure.
+          patch(ip, { phase: 'queued', jobStartedAt: Math.floor(run.clickedAt / 1000) - 30 });
+          poll(ip);
+          return;
+        }
         finish(ip, { phase: 'failed', errorCode: code || 'remote_error', errorDetail: err instanceof Error ? err.message : String(err) });
       }
     },

@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="3.0.0-beta.2"
+readonly VERSION="3.0.0-beta.3"
 readonly DEFAULT_BRANCH="beta"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
@@ -3122,6 +3122,9 @@ update_node_full() {
   # Without systemd-run the updater shares the web unit's cgroup, and the
   # delayed web restart at the end of update_app_safe would cut the core update short.
   if inside_web_service; then
+    # Report progress before the core download, which can take a while on slow links;
+    # otherwise the panel sees a job that is still "queued" and gives up on it.
+    UPDATE_BRANCH="$(get_active_branch)" UPDATE_FROM="$(installed_version)" update_status running download
     update_easytier_core_safe || true
     update_app_safe || rc=$?
     return "$rc"

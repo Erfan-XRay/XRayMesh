@@ -474,12 +474,23 @@ export class NodeActionError extends Error {
   }
 }
 
-async function postNodeAction(path: string, body: object): Promise<any> {
-  const res = await fetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+async function postNodeAction(path: string, body: object, timeoutMs = 0): Promise<any> {
+  const controller = new AbortController();
+  const timer = timeoutMs ? setTimeout(() => controller.abort(), timeoutMs) : undefined;
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (controller.signal.aborted) throw new NodeActionError('The server did not answer in time.', 'request_timeout');
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
   const d = await readJson(res);
   if (!res.ok || !d.ok) throw new NodeActionError(d.error || 'The request failed', d.code || '');
   return d;
@@ -489,7 +500,8 @@ async function postNodeAction(path: string, body: object): Promise<any> {
 export async function startNodeUpdate(
   targetIp: string
 ): Promise<{ legacy: boolean; status: UpdateSummary }> {
-  const d = await postNodeAction('/api/cluster/update', { target_ip: targetIp });
+  // The server answers within ~15s even when it has to fall back to a second launcher.
+  const d = await postNodeAction('/api/cluster/update', { target_ip: targetIp }, 25000);
   return { legacy: Boolean(d.legacy), status: d.status || {} };
 }
 
@@ -528,7 +540,7 @@ async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Respons
 export async function fetchNodeUpdateStatus(
   targetIp: string
 ): Promise<{ reachable: boolean; legacy: boolean; status: UpdateSummary }> {
-  const d = await postNodeAction('/api/cluster/update/status', { target_ip: targetIp });
+  const d = await postNodeAction('/api/cluster/update/status', { target_ip: targetIp }, 12000);
   return { reachable: d.reachable !== false, legacy: Boolean(d.legacy), status: d.status || {} };
 }
 

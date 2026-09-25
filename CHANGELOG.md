@@ -2,6 +2,13 @@
 
 All notable XRayMesh changes are documented here.
 
+## [3.0.0-beta.3] - 2026-09-26
+
+### Fixed
+- One-click updates could stay on "Starting..." for 15 minutes when the background updater never started, and every new attempt followed that dead job as "already running". A job still queued after 90 seconds is now reported as failed with the log command to check, and the next attempt starts a fresh update.
+- Without systemd-run, the updater downloaded the EasyTier core before reporting anything, so a slow GitHub link looked like a job that never started. It now reports "downloading" first.
+- The update start request times out after 25 seconds and the panel keeps following the job; remote status polls time out after 12 seconds.
+
 ## [3.0.0-beta.2] - 2026-09-26
 
 Test release for one-click updates from the panel. No functional changes since 3.0.0-beta.1.
