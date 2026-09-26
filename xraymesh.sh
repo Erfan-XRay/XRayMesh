@@ -3073,7 +3073,8 @@ prune_icmp_links() {
 remove_all_icmp_links() {
   local unit
   while read -r unit; do
-    [[ -n "$unit" ]] && systemctl disable --now "$unit" >/dev/null 2>&1 || true
+    [[ -n "$unit" ]] || continue
+    systemctl disable --now "$unit" >/dev/null 2>&1 || true
   done < <(icmp_link_units)
   rm -rf -- "$ICMP_LINK_DIR"
   rm -f "$ICMP_SERVICE_TEMPLATE"
