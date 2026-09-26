@@ -29,11 +29,12 @@ import signal
 import threading
 import shutil
 import concurrent.futures
+import ipaddress
 import ssl
 from pathlib import Path
 
 # Paths & Defaults
-CURRENT_VERSION = "3.0.0-beta.7"
+CURRENT_VERSION = "3.0.0-beta.8"
 CURRENT_BRANCH = "beta"
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/xraymesh")
 BIN_DIR = os.path.join(INSTALL_DIR, "bin")
@@ -1166,6 +1167,57 @@ def get_server_public_ip():
     return ""
 
 
+_public_ipv6_cache = {"ip": "", "time": 0.0}
+_VIRTUAL_IFACE_PREFIXES = ("easytier", "tun", "tap", "docker", "br-", "veth", "wg", "lo", "xrmi")
+
+
+def is_public_ipv6(ip_str):
+    """True for a globally routable IPv6 address (not ULA, link-local, loopback or documentation)."""
+    try:
+        ip = ipaddress.IPv6Address(str(ip_str or "").strip())
+    except ValueError:
+        return False
+    return ip.is_global
+
+
+def get_server_public_ipv6():
+    """Detect this server's public IPv6, preferring a stable address bound to a physical interface (cached 60s)."""
+    now = time.time()
+    if (now - _public_ipv6_cache["time"]) < 60:
+        return _public_ipv6_cache["ip"]
+
+    found = ""
+    try:
+        r = subprocess.run(["ip", "-o", "-6", "addr", "show", "scope", "global"], stdout=subprocess.PIPE, text=True, timeout=2)
+        candidates = []
+        for line in r.stdout.splitlines():
+            parts = line.split()
+            if len(parts) < 4 or any(parts[1].startswith(p) for p in _VIRTUAL_IFACE_PREFIXES):
+                continue
+            ip = parts[3].split("/")[0]
+            if not is_public_ipv6(ip) or "deprecated" in parts:
+                continue
+            # Privacy (temporary) addresses rotate, so other servers should not be told to dial them.
+            candidates.append((1 if "temporary" in parts else 0, ip))
+        if candidates:
+            found = sorted(candidates)[0][1]
+    except Exception:
+        pass
+
+    if not found:
+        try:
+            r = subprocess.run(["curl", "-6", "-s", "--connect-timeout", "2", "--max-time", "3", "https://api6.ipify.org"],
+                               stdout=subprocess.PIPE, text=True, timeout=4)
+            if is_public_ipv6(r.stdout.strip()):
+                found = r.stdout.strip()
+        except Exception:
+            pass
+
+    _public_ipv6_cache["ip"] = found
+    _public_ipv6_cache["time"] = now
+    return found
+
+
 def valid_tunnel_name(name):
     """Return True for tunnel names safe for env filenames and CLI usage."""
     return bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,31}", name or ""))
@@ -1296,6 +1348,12 @@ def decode_invite_token(raw):
     mtu = data.get("mtu")
     if isinstance(mtu, int) and not isinstance(mtu, bool) and 576 <= mtu <= 9000:
         invite["mtu"] = mtu
+    # The inviting server's mesh port (added in 3.0.0-beta.8); older codes only have it in the endpoint.
+    port = data.get("port")
+    if isinstance(port, int) and not isinstance(port, bool) and parse_port(port):
+        invite["port"] = port
+    elif split_endpoint(invite["endpoint"]):
+        invite["port"] = split_endpoint(invite["endpoint"])[1]
     if invite["proto"] == "icmp":
         invite["icmp"] = parse_icmp_link(data.get("icmp"), invite["endpoint"])
     return invite
@@ -2482,25 +2540,42 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 return
 
             pub_ip = get_server_public_ip()
-            port = config.get("PORT", "11010")
+            port = parse_port(config.get("PORT", "11010")) or 11010
             proto = config.get("PROTOCOL", "dual")
             try:
                 mtu = int(config.get("MTU", "1380"))
             except ValueError:
                 mtu = 1380
+            ipv6_on = config.get("IPV6", "no") == "yes"
 
             invite_obj = {
-                "v": 1,
+                "v": 2,
                 "net": config.get("NETWORK_NAME", "xraymesh"),
                 "secret": config.get("NETWORK_SECRET", ""),
                 "endpoint": f"{pub_ip}:{port}" if pub_ip else "",
                 "proto": proto,
-                # Transport settings let the joining node match this mesh exactly.
+                # Everything a joining node needs to match this mesh: transport settings and the mesh port.
+                "port": port,
                 "enc": config.get("ENCRYPTION", "yes") != "no",
                 "kcp": config.get("ENABLE_KCP", "no") == "yes",
-                "ipv6": config.get("IPV6", "no") == "yes",
+                "ipv6": ipv6_on,
                 "mtu": mtu
             }
+
+            # Other servers may dial this one over IPv6 when it is enabled and reachable.
+            # EasyTier adds [::] listeners except for FakeTCP, and BackPack's ICMP carrier is IPv4-only.
+            pub_ipv6 = ""
+            ipv6_unavailable = ""
+            if not ipv6_on:
+                ipv6_unavailable = "disabled"
+            elif proto == "icmp":
+                ipv6_unavailable = "icmp"
+            elif proto == "faketcp":
+                ipv6_unavailable = "faketcp"
+            else:
+                pub_ipv6 = get_server_public_ipv6()
+                if not pub_ipv6:
+                    ipv6_unavailable = "not_detected"
             if proto == "icmp":
                 if not pub_ip:
                     self.send_json({"ok": False, "error": "This server's public IP is unknown, so no ICMP link can be offered."}, status=500)
@@ -2524,6 +2599,9 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                     "invite": f"xrmesh://{token_str}",
                     "details": invite_obj,
                     "public_ip": pub_ip,
+                    "public_ipv6": pub_ipv6,
+                    "endpoint_ipv6": f"[{pub_ipv6}]:{port}" if pub_ipv6 else "",
+                    "ipv6_unavailable": ipv6_unavailable,
                     "port": port
                 }
             })
@@ -3335,7 +3413,8 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "code": "invalid_ipv4", "error": "Enter a valid virtual IPv4 address."}, status=400)
                 return
 
-            port = parse_port(data.get("port") or current.get("PORT") or 11010)
+            # The invite carries the mesh port, so a joining server uses the same one unless told otherwise.
+            port = parse_port(data.get("port") or invite.get("port") or current.get("PORT") or 11010)
             if port is None:
                 self.send_json({"ok": False, "code": "invalid_port", "error": "Listen port must be between 1 and 65535."}, status=400)
                 return
@@ -3386,7 +3465,8 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 "PORT": str(port),
                 "PEERS": peer,
                 "ENCRYPTION": "yes" if invite.get("enc", True) else "no",
-                "IPV6": "yes" if invite.get("ipv6", False) else "no",
+                # Dialling an IPv6 endpoint needs IPv6 enabled on this side too.
+                "IPV6": "yes" if invite.get("ipv6", False) or ":" in (split_endpoint(invite["endpoint"]) or ("",))[0] else "no",
                 "MTU": str(mtu),
                 "ENABLE_KCP": "yes" if invite.get("kcp", False) else "no",
             })

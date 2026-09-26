@@ -1,8 +1,8 @@
 {
-  "version": "3.0.0-beta.7",
+  "version": "3.0.0-beta.8",
   "branch": "beta",
-  "release_name": "XRayMesh v3.0.0-beta.7 (Update Consistency Fix)",
+  "release_name": "XRayMesh v3.0.0-beta.8 (Complete Invite Codes)",
   "release_date": "2026-09-26",
-  "changelog": "Fixes ICMP invites and joins failing with a usage message: opening the terminal menu updated the web panel but not the CLI script, so the panel called commands the script did not have. The menu now only installs web files that match the installed script, an older script copy can no longer overwrite a newer one, and the panel shows the server's reason when an invite code cannot be created.",
+  "changelog": "Invite codes now carry every setting a joining server needs: protocol, mesh port, MTU, KCP, encryption and IPv6, in both the panel and the terminal. With IPv6 on, the invite lets you choose whether other servers connect over IPv4 or IPv6, and the mesh port is opened in ip6tables. ICMP mode explains in a few short steps how to add servers from the main server, one code per server.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update"
 }

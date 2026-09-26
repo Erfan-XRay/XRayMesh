@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Check, Copy, Link2, Loader2, Pencil, Plus, RefreshCw, Server, Share2, Trash2, Users } from 'lucide-react';
+import { AlertTriangle, Check, Copy, Link2, Loader2, Pencil, Plus, Radio, RefreshCw, Server, Share2, Trash2, Users } from 'lucide-react';
 import { MeshInviteData } from '../../types';
-import type { Translate } from '../../i18n/translations';
+import type { Translate, TranslationKey } from '../../i18n/translations';
 import { formatText } from '../../i18n/fillTemplate';
 import { addMeshPeer, fetchMeshInvite, removeMeshPeer } from '../../services/api';
 import { encodeInviteToken, sanitizePeerInput } from '../../utils/meshInvite';
 import { FieldError } from './FormControls';
-import { btnGhost, btnGhostSm, btnPrimary, btnSecondary, cardClass, EmptyState, iconBtn, inputClass, SectionHeader } from '../ui';
-import { formatCount } from '../../i18n/format';
+import { InviteSettingsSummary } from './InviteSettings';
+import { btnGhost, btnGhostSm, btnPrimary, btnSecondary, Callout, cardClass, EmptyState, iconBtn, inputClass, SectionHeader, Segmented } from '../ui';
+import { formatCount, localizeDigits } from '../../i18n/format';
 
 interface ConnectionsPanelProps {
   port: number;
@@ -38,6 +39,7 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
   const [inviteError, setInviteError] = useState('');
   const [addressOverride, setAddressOverride] = useState('');
   const [editingAddress, setEditingAddress] = useState(false);
+  const [family, setFamily] = useState<'ipv4' | 'ipv6'>('ipv4');
 
   const [newPeer, setNewPeer] = useState('');
   const [peerError, setPeerError] = useState<string | null>(null);
@@ -60,16 +62,35 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
     loadInvite();
   }, [loadInvite]);
 
-  // Without a detected public IP the code is useless, so ask for the address right away.
+  // A server with only a public IPv6 is offered over IPv6 from the start.
   useEffect(() => {
-    if (invite && !invite.details.endpoint) setEditingAddress(true);
+    if (invite && !invite.details.endpoint && invite.endpoint_ipv6) setFamily('ipv6');
   }, [invite]);
 
+  const familyEndpoint = (family === 'ipv6' ? invite?.endpoint_ipv6 : invite?.details.endpoint) || '';
+  // Without a detected public IP the code is useless, so ask for the address right away.
+  useEffect(() => {
+    if (inviteState === 'ready' && invite && !familyEndpoint) setEditingAddress(true);
+  }, [invite, inviteState, familyEndpoint]);
+
   const override = sanitizePeerInput(addressOverride, port);
-  const endpoint = override || invite?.details.endpoint || '';
-  // The code is re-encoded in the browser when the address is overridden, as before.
-  const code = invite ? (override ? encodeInviteToken({ ...invite.details, endpoint: override }) : invite.invite) : '';
+  const endpoint = override || familyEndpoint;
+  // The code is re-encoded in the browser when the address or address family differs from the server's copy.
+  const reencode = Boolean(invite) && endpoint !== invite?.details.endpoint;
+  const code = invite
+    ? reencode
+      ? encodeInviteToken({ ...invite.details, endpoint, ipv6: invite.details.ipv6 || endpoint.startsWith('[') })
+      : invite.invite
+    : '';
   const missingAddress = inviteState === 'ready' && !endpoint;
+  // The choice is offered whenever IPv6 is on for this server; the reason shows when it cannot be used.
+  const showFamily = Boolean(invite?.details.ipv6);
+  const IPV6_REASON: Record<string, TranslationKey> = {
+    icmp: 'node_invite_ipv6_icmp',
+    faketcp: 'node_invite_ipv6_faketcp',
+    not_detected: 'node_invite_ipv6_not_detected',
+  };
+  const ipv6ReasonKey = invite?.ipv6_unavailable ? IPV6_REASON[invite.ipv6_unavailable] : undefined;
 
   const handleAddPeer = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,10 +162,53 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
 
         {inviteState === 'ready' && invite && (
           <div className="mt-4 space-y-4">
+            {invite.details.proto === 'icmp' && (
+              <Callout
+                tone="info"
+                icon={<Radio className="w-4 h-4" />}
+                title={t('icmp_howto_title')}
+                action={
+                  <button type="button" onClick={loadInvite} className={btnGhostSm}>
+                    <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>{t('node_invite_icmp_refresh')}</span>
+                  </button>
+                }
+              >
+                <ol className="mt-1 space-y-1">
+                  {(['icmp_howto_1', 'icmp_howto_2', 'icmp_howto_3'] as const).map((key, i) => (
+                    <li key={key} className="flex gap-2">
+                      <span className="shrink-0 tabular-nums text-text-subtle" aria-hidden="true">
+                        {localizeDigits(i + 1, t)}.
+                      </span>
+                      <span>{t(key)}</span>
+                    </li>
+                  ))}
+                </ol>
+              </Callout>
+            )}
+
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="node-invite-address" className="text-sm font-medium text-text-primary">
-                {t('node_invite_address')}
-              </label>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label htmlFor="node-invite-address" className="text-sm font-medium text-text-primary">
+                  {t('node_invite_address')}
+                </label>
+                {showFamily && (
+                  <Segmented
+                    size="sm"
+                    ariaLabel={t('node_invite_family')}
+                    value={family}
+                    onChange={(v) => {
+                      setFamily(v);
+                      setAddressOverride('');
+                      setEditingAddress(false);
+                    }}
+                    options={[
+                      { value: 'ipv4', label: 'IPv4', disabled: !invite.details.endpoint },
+                      { value: 'ipv6', label: 'IPv6', disabled: !invite.endpoint_ipv6 },
+                    ]}
+                  />
+                )}
+              </div>
               {editingAddress ? (
                 <div className="flex gap-2">
                   <input
@@ -180,6 +244,7 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
                   <span>{t('node_invite_no_ip_warning')}</span>
                 </p>
               )}
+              {showFamily && ipv6ReasonKey && <p className="text-xs text-text-muted leading-relaxed">{t(ipv6ReasonKey)}</p>}
             </div>
 
             <div className="rounded-xl bg-surface border border-card-border overflow-hidden">
@@ -194,18 +259,7 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
               </div>
             </div>
 
-            {invite.details.proto === 'icmp' && (
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border border-warning-border bg-warning/5">
-                <p className="flex items-start gap-1.5 text-xs text-text-muted leading-relaxed">
-                  <AlertTriangle className="w-3.5 h-3.5 mt-[0.2em] shrink-0 text-warning" aria-hidden="true" />
-                  <span>{t('node_invite_icmp_single')}</span>
-                </p>
-                <button type="button" onClick={loadInvite} className={`${btnGhostSm} shrink-0`}>
-                  <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
-                  <span>{t('node_invite_icmp_refresh')}</span>
-                </button>
-              </div>
-            )}
+            <InviteSettingsSummary settings={invite.details} t={t} />
           </div>
         )}
       </section>

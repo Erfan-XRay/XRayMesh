@@ -180,10 +180,10 @@ class NodeJoinEndpointTests(unittest.TestCase):
         self.assertEqual(cfg["NETWORK_SECRET"], "4f1c9e02b7d35a68")
         self.assertEqual(cfg["PROTOCOL"], "udp")
         self.assertEqual(cfg["IPV4"], "10.144.144.23")
-        # Old-mesh peers are gone; name and listen port carry over.
+        # Old-mesh peers are gone; the name carries over and the mesh port comes from the invite.
         self.assertEqual(cfg["PEERS"], "185.100.200.30:11010")
         self.assertEqual(cfg["HOSTNAME"], "tehran-edge")
-        self.assertEqual(cfg["PORT"], "12000")
+        self.assertEqual(cfg["PORT"], "11010")
         self.assertEqual(cfg["ENABLE_KCP"], "no")
         self.assertEqual(cfg["ENCRYPTION"], "yes")
         self.assertFalse(os.path.exists(server.CONFIG_BACKUP_FILE))
@@ -332,6 +332,67 @@ class NodeJoinEndpointTests(unittest.TestCase):
         self.assertIn(mock.call(["icmp-delete", "out-1"]), run_cmd.call_args_list)
         with open(server.CONFIG_FILE, "rb") as f:
             self.assertEqual(f.read(), original)
+
+
+class InviteCompletenessTests(unittest.TestCase):
+    """Invite codes carry every setting a joining server needs, including the mesh port and address family."""
+
+    setUp = NodeJoinEndpointTests.setUp
+    write_existing_config = NodeJoinEndpointTests.write_existing_config
+
+    def get_invite(self, ipv6_addr="", **cfg_overrides):
+        self.write_existing_config()
+        cfg = server.load_env_file(server.CONFIG_FILE)
+        cfg.update(cfg_overrides)
+        server.save_node_config_env(cfg)
+        with mock.patch.object(server, "get_server_public_ip", return_value="185.100.200.30"), \
+                mock.patch.object(server, "get_server_public_ipv6", return_value=ipv6_addr), \
+                mock.patch.object(server, "run_xraymesh_cmd", return_value=(True, '{"t":"' + "a" * 48 + '","p":20001,"i":1}')):
+            raw = call_handler("GET", "/api/node/invite")
+        status, payload = parse_single_response(self, raw)
+        self.assertEqual(status, 200)
+        return payload["data"]
+
+    def test_invite_carries_port_and_all_transport_settings(self):
+        data = self.get_invite()
+        details = data["details"]
+        self.assertEqual((details["v"], details["port"], details["mtu"]), (2, 12000, 1380))
+        self.assertEqual((details["kcp"], details["enc"], details["ipv6"]), (True, True, False))
+        self.assertEqual(data["ipv6_unavailable"], "disabled")
+        self.assertEqual(server.decode_invite_token(data["invite"])["port"], 12000)
+
+    def test_ipv6_endpoint_offered_when_enabled_and_detected(self):
+        data = self.get_invite(ipv6_addr="2a01:4f8::10", IPV6="yes", PROTOCOL="udp")
+        self.assertEqual(data["endpoint_ipv6"], "[2a01:4f8::10]:12000")
+        self.assertEqual(data["ipv6_unavailable"], "")
+
+    def test_ipv6_reasons(self):
+        cases = {"icmp": {"PROTOCOL": "icmp"}, "faketcp": {"PROTOCOL": "faketcp"}, "not_detected": {"PROTOCOL": "udp"}}
+        for reason, overrides in cases.items():
+            with self.subTest(reason):
+                data = self.get_invite(ipv6_addr="2a01:4f8::10" if reason != "not_detected" else "", IPV6="yes", **overrides)
+                self.assertEqual((data["ipv6_unavailable"], data["endpoint_ipv6"]), (reason, ""))
+
+    def test_old_codes_take_the_port_from_the_endpoint(self):
+        invite = server.decode_invite_token(make_invite(endpoint="185.100.200.30:12500"))
+        self.assertEqual(invite["port"], 12500)
+
+    def test_join_uses_invite_port_and_enables_ipv6_for_ipv6_endpoints(self):
+        with mock.patch.object(server, "run_xraymesh_cmd", return_value=(True, "")):
+            raw = call_handler("POST", "/api/node/join", {
+                "invite": make_invite(endpoint="[2a01:4f8::10]:12500", port=12500, ipv6=False),
+                "hostname": "tehran-edge",
+            })
+        status, payload = parse_single_response(self, raw)
+        self.assertEqual((status, payload["ok"]), (200, True))
+        cfg = server.load_env_file(server.CONFIG_FILE)
+        self.assertEqual((cfg["PORT"], cfg["IPV6"]), ("12500", "yes"))
+        self.assertEqual(cfg["PEERS"], "[2a01:4f8::10]:12500")
+
+    def test_public_ipv6_filter(self):
+        self.assertTrue(server.is_public_ipv6("2a01:4f8::10"))
+        for bad in ("fd00::1", "fe80::1", "::1", "2001:db8::1", "not-an-ip", ""):
+            self.assertFalse(server.is_public_ipv6(bad), bad)
 
 
 class IcmpCliMismatchTests(unittest.TestCase):

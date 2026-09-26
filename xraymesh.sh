@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="3.0.0-beta.7"
+readonly VERSION="3.0.0-beta.8"
 readonly DEFAULT_BRANCH="beta"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
@@ -484,6 +484,11 @@ if command -v iptables >/dev/null 2>&1; then
   iptables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null || true
   iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || true
 fi
+# Invites can point other servers at this node's IPv6 address, so open the port there too.
+if [[ "${IPV6:-no}" == "yes" ]] && command -v ip6tables >/dev/null 2>&1; then
+  ip6tables -C INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null || ip6tables -I INPUT -p tcp --dport "$PORT" -j ACCEPT 2>/dev/null || true
+  ip6tables -C INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || ip6tables -I INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || true
+fi
 if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
   ufw allow "$PORT"/tcp >/dev/null 2>&1 || true
   ufw allow "$PORT"/udp >/dev/null 2>&1 || true
@@ -784,6 +789,17 @@ setup_node() {
   fi
 }
 
+# Print this server's stable public IPv6, if it has one.
+get_server_ipv6() {
+  local ip6
+  ip6="$(ip -o -6 addr show scope global 2>/dev/null |
+    awk '$2 !~ /^(easytier|tun|tap|docker|br-|veth|wg|lo|xrmi)/ && !/deprecated/ && !/temporary/ { split($4, a, "/"); print a[1] }' |
+    grep -viE '^f[cd]' | head -n1 || true)"
+  [[ -n "$ip6" ]] || ip6="$(curl -6 -s --connect-timeout 2 --max-time 3 https://api6.ipify.org 2>/dev/null || true)"
+  [[ "$ip6" == *:* && "$ip6" =~ ^[0-9A-Fa-f:]+$ ]] && printf '%s\n' "$ip6"
+  return 0
+}
+
 show_mesh_invite() {
   require_root
   require_linux
@@ -793,16 +809,23 @@ show_mesh_invite() {
     return 1
   fi
 
+  # Optional: --ipv4 or --ipv6 picks the address family without asking.
+  local family_arg="${1:-}"
+
   header
   section "MESH INVITE CODE"
 
-  local net secret proto port pub_ip invite_code
+  local net secret proto port pub_ip pub_ip6="" invite_code mtu kcp enc ipv6
   # shellcheck disable=SC1090
   source "$CONFIG_FILE" 2>/dev/null || true
   net="${NETWORK_NAME:-xraymesh}"
   secret="${NETWORK_SECRET:-}"
   proto="${PROTOCOL:-dual}"
   port="${PORT:-11010}"
+  mtu="${MTU:-1380}"
+  kcp="${ENABLE_KCP:-no}"
+  enc="${ENCRYPTION:-yes}"
+  ipv6="${IPV6:-no}"
   pub_ip="$(get_server_ip)"
 
   if [[ -z "$secret" ]]; then
@@ -811,7 +834,27 @@ show_mesh_invite() {
     return 1
   fi
 
-  local endpoint="${pub_ip}:${port}"
+  local endpoint="${pub_ip}:${port}" family="IPv4"
+  # EasyTier adds [::] listeners except for FakeTCP, and BackPack's ICMP carrier is IPv4-only.
+  if [[ "$ipv6" == "yes" && "$proto" != "icmp" && "$proto" != "faketcp" ]]; then
+    pub_ip6="$(get_server_ipv6)"
+  fi
+  if [[ -n "$pub_ip6" ]]; then
+    local pick="1"
+    if [[ "$family_arg" == "--ipv6" || -z "$pub_ip" ]]; then
+      pick="2"
+    elif [[ -z "$family_arg" && -t 0 ]]; then
+      say "  Which address should other servers use to reach this one?" "$BOLD$YELLOW"
+      printf '  %b[ 1 ]%b  IPv4  %s\n' "$BOLD$CYAN" "$RESET" "$pub_ip"
+      printf '  %b[ 2 ]%b  IPv6  %s\n\n' "$BOLD$CYAN" "$RESET" "$pub_ip6"
+      read -r -p "  Select [1-2, default: 1]: " pick
+    fi
+    if [[ "$pick" == "2" ]]; then
+      endpoint="[${pub_ip6}]:${port}"
+      family="IPv6"
+    fi
+  fi
+
   local icmp_link=""
   if [[ "$proto" == "icmp" ]]; then
     # Every invite carries one ICMP link; it is reused until a server has actually joined on it.
@@ -821,35 +864,102 @@ show_mesh_invite() {
       pause
       return 1
     fi
+    (( mtu > ICMP_MESH_MTU )) && mtu="$ICMP_MESH_MTU"
   fi
   invite_code="$(python3 -c "import sys, json, base64
+a = sys.argv
 d = {
-    'v': 1,
-    'net': sys.argv[1],
-    'secret': sys.argv[2],
-    'endpoint': sys.argv[3],
-    'proto': sys.argv[4]
+    'v': 2,
+    'net': a[1],
+    'secret': a[2],
+    'endpoint': a[3],
+    'proto': a[4],
+    'port': int(a[5]),
+    'enc': a[6] != 'no',
+    'kcp': a[7] == 'yes',
+    'ipv6': a[8] == 'yes',
+    'mtu': int(a[9]),
 }
-if sys.argv[5]:
-    d['icmp'] = json.loads(sys.argv[5])
+if a[10]:
+    d['icmp'] = json.loads(a[10])
 token = base64.b64encode(json.dumps(d).encode('utf-8')).decode('utf-8')
 print(f'xrmesh://{token}')
-" "$net" "$secret" "$endpoint" "$proto" "$icmp_link" 2>/dev/null || true)"
+" "$net" "$secret" "$endpoint" "$proto" "$port" "$enc" "$kcp" "$ipv6" "$mtu" "$icmp_link" 2>/dev/null || true)"
 
   ok "Generated mesh invite code for this server."
   printf '\n'
   say "  ┌── Mesh Invite Code ─────────────────────────────────────────" "$DIM$BLUE"
   printf '  │  %b%s%b\n' "$BOLD$GREEN" "$invite_code" "$RESET"
-  say "  ├── Mesh Parameters ──────────────────────────────────────────" "$DIM$BLUE"
+  say "  ├── Settings this code applies on the joining server ─────────" "$DIM$BLUE"
   printf '  │  • %-16s : %s\n' "Network Name" "$net"
   printf '  │  • %-16s : %s\n' "Protocol" "$proto"
-  printf '  │  • %-16s : %s\n' "Peer Endpoint" "$endpoint"
+  printf '  │  • %-16s : %s (%s)\n' "Peer Endpoint" "$endpoint" "$family"
+  printf '  │  • %-16s : %s\n' "Mesh Port" "$port"
+  printf '  │  • %-16s : %s\n' "MTU" "$mtu"
+  printf '  │  • %-16s : %s\n' "KCP" "$kcp"
+  printf '  │  • %-16s : %s\n' "Encryption" "$enc"
+  printf '  │  • %-16s : %s\n' "IPv6" "$ipv6"
   say "  └─────────────────────────────────────────────────────────────" "$DIM$BLUE"
   printf '\n'
   info "On another server, run 'xraymesh join' and paste this code to connect instantly."
-  [[ "$proto" == "icmp" ]] &&
-    warn "This ICMP invite is for ONE server. Show the invite again after it joins to get a code for the next one."
+  if [[ "$proto" == "icmp" ]]; then
+    say "  How ICMP links work:" "$BOLD$YELLOW"
+    say "   1. This server is the main server; every other server joins with a code from here." "$YELLOW"
+    say "   2. One code connects ONE server. Paste it with 'xraymesh join' on that server." "$YELLOW"
+    say "   3. Once it shows up in 'xraymesh peers', run 'xraymesh invite' again for the next server." "$YELLOW"
+  fi
   pause
+}
+
+# Decode an invite code into one normalized value per line, following the same rules as
+# decode_invite_token() in web/server.py. Prints nothing when the code cannot be read.
+decode_invite_fields() {
+  python3 - "$1" <<'PY_DECODE' 2>/dev/null || true
+import base64, json, re, sys
+raw = re.sub("[​-‏‪-‮⁦-⁩﻿]", "", sys.argv[1]).strip().strip("\"'")
+token = re.sub(r"^.*?xrmesh://", "", raw, flags=re.I).strip()
+token = re.sub(r"\s+", "", token).replace("-", "+").replace("_", "/").rstrip("=")
+token += "=" * (-len(token) % 4)
+try:
+    d = json.loads(base64.b64decode(token).decode("utf-8"))
+except Exception:
+    sys.exit(1)
+if not isinstance(d, dict):
+    sys.exit(1)
+endpoint = str(d.get("endpoint") or "").strip()
+m = re.fullmatch(r"\[?([^\[\]]+?)\]?:(\d{1,5})", endpoint)
+proto = str(d.get("proto") or "dual").strip().lower()
+if proto not in ("dual", "udp", "tcp", "ws", "wss", "quic", "faketcp", "icmp"):
+    proto = "dual"
+
+def num(key, lo, hi):
+    v = d.get(key)
+    return v if isinstance(v, int) and not isinstance(v, bool) and lo <= v <= hi else None
+
+def flag(key, default):
+    v = d.get(key)
+    return ("yes" if v else "no") if isinstance(v, bool) else default
+
+host = m.group(1) if m else ""
+link = d.get("icmp") if isinstance(d.get("icmp"), dict) else {}
+for value in (
+    str(d.get("net") or "").strip(),
+    str(d.get("secret") or "").strip(),
+    proto,
+    endpoint,
+    host,
+    m.group(2) if m else "",
+    num("port", 1, 65535) or (int(m.group(2)) if m else 11010),
+    num("mtu", 576, 9000) or 1380,
+    flag("kcp", "no"),
+    flag("enc", "yes"),
+    "yes" if ":" in host else flag("ipv6", "no"),
+    link.get("t", ""),
+    link.get("p", ""),
+    link.get("i", ""),
+):
+    print(value)
+PY_DECODE
 }
 
 join_mesh_invite() {
@@ -875,34 +985,26 @@ join_mesh_invite() {
     return 1
   fi
 
-  # Decode invite token using Python
-  local decoded_json
-  decoded_json="$(python3 -c '
-import sys, base64, json
-raw = sys.argv[1].strip().strip("\"\x27")
-token = raw.replace("xrmesh://", "").strip()
-try:
-    data = json.loads(base64.b64decode(token).decode("utf-8"))
-    print(json.dumps(data))
-except Exception:
-    sys.exit(1)
-' "$raw_invite" 2>/dev/null || true)"
-  if [[ -z "$decoded_json" ]]; then
+  local -a fields=()
+  mapfile -t fields < <(decode_invite_fields "$raw_invite")
+  if (( ${#fields[@]} < 14 )); then
     fail "Invalid invite code format. Make sure you copied the complete 'xrmesh://...' link."
     pause
     return 1
   fi
 
-  local net secret proto endpoint
-  net="$(python3 -c "import sys, json; d=json.loads(sys.argv[1]); print(d.get('net', '').strip())" "$decoded_json")"
-  secret="$(python3 -c "import sys, json; d=json.loads(sys.argv[1]); print(d.get('secret', '').strip())" "$decoded_json")"
-  proto="$(python3 -c "import sys, json; d=json.loads(sys.argv[1]); print(d.get('proto', 'dual').strip().lower())" "$decoded_json")"
-  endpoint="$(python3 -c "import sys, json; d=json.loads(sys.argv[1]); print(d.get('endpoint', '').strip())" "$decoded_json")"
+  local net="${fields[0]}" secret="${fields[1]}" proto="${fields[2]}" endpoint="${fields[3]}"
+  local peer_host="${fields[4]}" peer_port="${fields[5]}" invite_port="${fields[6]}" mtu_val="${fields[7]}"
+  local kcp_val="${fields[8]}" enc_val="${fields[9]}" ipv6_val="${fields[10]}"
+  local icmp_token="${fields[11]}" icmp_port="${fields[12]}" icmp_idx="${fields[13]}"
 
   if [[ -z "$net" || -z "$secret" ]]; then
     fail "The invite code is missing essential network credentials."
     pause
     return 1
+  fi
+  if [[ "$proto" == "icmp" ]] && (( mtu_val > ICMP_MESH_MTU )); then
+    mtu_val="$ICMP_MESH_MTU"
   fi
 
   printf '\n'
@@ -910,11 +1012,18 @@ except Exception:
   printf '  │  • %-16s : %b%s%b\n' "Network Name" "$BOLD$CYAN" "$net" "$RESET"
   printf '  │  • %-16s : %b%s%b\n' "Protocol" "$BOLD$CYAN" "$proto" "$RESET"
   printf '  │  • %-16s : %b%s%b\n' "Peer Endpoint" "$BOLD$GREEN" "${endpoint:-Relayed Peer}" "$RESET"
-  printf '  │  • %-16s : %bVerified (Encrypted)%b\n' "Security" "$GREEN" "$RESET"
+  printf '  │  • %-16s : %s\n' "Mesh Port" "$invite_port"
+  printf '  │  • %-16s : %s\n' "MTU" "$mtu_val"
+  printf '  │  • %-16s : %s\n' "KCP" "$kcp_val"
+  printf '  │  • %-16s : %s\n' "Encryption" "$enc_val"
+  printf '  │  • %-16s : %s\n' "IPv6" "$ipv6_val"
   say "  └─────────────────────────────────────────────────────────────" "$DIM$BLUE"
+  if [[ "$proto" == "icmp" ]]; then
+    info "This code creates an ICMP link to ${peer_host:-the other server} and works for this server only."
+  fi
   printf '\n'
 
-  local default_hostname default_ipv4 default_port="11010"
+  local default_hostname default_ipv4
   default_hostname="$(hostname -s 2>/dev/null || echo "node")"
 
   # Generate suggested random IP in 10.144.144.2 - 254
@@ -926,7 +1035,6 @@ except Exception:
     source "$CONFIG_FILE" 2>/dev/null || true
     [[ -n "${IPV4:-}" && "$IPV4" != "10.144.144.1" ]] && default_ipv4="$IPV4"
     [[ -n "${HOSTNAME:-}" ]] && default_hostname="$HOSTNAME"
-    [[ -n "${PORT:-}" ]] && default_port="$PORT"
   fi
 
   local hostname ipv4 port
@@ -938,36 +1046,24 @@ except Exception:
     warn "Enter a valid address from the private IP range (e.g. 10.144.144.x)."
   done
 
+  # The invite carries the mesh port, so every server listens on the same one by default.
   while :; do
-    port="$(prompt_default "Mesh Listen Port" "$default_port")"
+    port="$(prompt_default "Mesh Listen Port" "$invite_port")"
     valid_port "$port" && break
     warn "The port must be between 1 and 65535."
   done
 
-  local peers_val="" mtu_val="1380"
-  if [[ -n "$endpoint" ]]; then
-    peers_val="$endpoint"
-  fi
+  local peers_val="$endpoint"
 
   if [[ "$proto" == "icmp" ]]; then
-    local icmp_fields icmp_host mesh_peer_port icmp_token icmp_port icmp_idx link_json peer_ip
-    icmp_fields="$(python3 -c '
-import sys, json, re
-d = json.loads(sys.argv[1])
-link = d.get("icmp")
-m = re.match(r"^\[?([^\]]+?)\]?:(\d+)$", str(d.get("endpoint", "")).strip())
-if not isinstance(link, dict) or not m:
-    sys.exit(1)
-print("\t".join([m.group(1), m.group(2), str(link.get("t", "")), str(link.get("p", "")), str(link.get("i", ""))]))
-' "$decoded_json" 2>/dev/null || true)"
-    if [[ -z "$icmp_fields" ]]; then
+    local link_json peer_ip
+    if [[ -z "$peer_host" || -z "$icmp_token" ]]; then
       fail "This ICMP invite has no link details. Generate a new invite on the other server."
       pause
       return 1
     fi
-    IFS=$'\t' read -r icmp_host mesh_peer_port icmp_token icmp_port icmp_idx <<< "$icmp_fields"
-    info "Creating the ICMP link to ${icmp_host}..."
-    link_json="$(create_icmp_dial_link "$icmp_host" "$icmp_port" "$icmp_token" "$icmp_idx" | tail -n1)"
+    info "Creating the ICMP link to ${peer_host}..."
+    link_json="$(create_icmp_dial_link "$peer_host" "$icmp_port" "$icmp_token" "$icmp_idx" | tail -n1)"
     peer_ip="$(python3 -c 'import sys, json; print(json.loads(sys.argv[1])["peer_ip"])' "$link_json" 2>/dev/null || true)"
     if [[ -z "$peer_ip" ]]; then
       fail "The ICMP link could not be created."
@@ -975,12 +1071,11 @@ print("\t".join([m.group(1), m.group(2), str(link.get("t", "")), str(link.get("p
       return 1
     fi
     # EasyTier reaches the other server through the ICMP link, not its public address.
-    peers_val="udp://${peer_ip}:${mesh_peer_port}"
-    mtu_val="$ICMP_MESH_MTU"
+    peers_val="udp://${peer_ip}:${peer_port}"
   fi
 
   info "Applying configuration and connecting to mesh network '${net}'..."
-  write_config "$net" "$secret" "$hostname" "$ipv4" "$proto" "$port" "$peers_val" "yes" "no" "$mtu_val" "no"
+  write_config "$net" "$secret" "$hostname" "$ipv4" "$proto" "$port" "$peers_val" "$enc_val" "$ipv6_val" "$mtu_val" "$kcp_val"
 
   if apply_node_config; then
     prune_icmp_links
@@ -4626,7 +4721,7 @@ main() {
     ;;
   setup-node) require_linux; setup_node ;;
   join|join-mesh) shift; require_root; require_linux; join_mesh_invite "$@" ;;
-  invite|invite-code) require_root; require_linux; show_mesh_invite ;;
+  invite|invite-code) shift; require_root; require_linux; show_mesh_invite "$@" ;;
   status)
     local mesh_state web_state iperf_state port pub_ip proto domain v_ip host_name url
     mesh_state="$(systemctl is-active xraymesh.service 2>/dev/null || echo inactive)"

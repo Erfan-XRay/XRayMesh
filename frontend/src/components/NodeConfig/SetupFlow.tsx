@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, Copy, Link2, Loader2, Plus } from 'lucide-react';
 import { NodeConfig } from '../../types';
 import type { Translate } from '../../i18n/translations';
@@ -92,6 +92,12 @@ export const SetupFlow: React.FC<SetupFlowProps> = ({ config, t, onCopy, copiedK
   const [inviteText, setInviteText] = useState('');
   const [joinIpv4, setJoinIpv4] = useState(() => suggestVirtualIp());
   const parsedInvite = useMemo(() => parseInviteToken(inviteText), [inviteText]);
+
+  // Every server in a mesh listens on the same port by default, so take it from the code.
+  const invitePort = parsedInvite.status === 'ok' ? parsedInvite.invite.port : undefined;
+  useEffect(() => {
+    if (invitePort) setForm((prev) => ({ ...prev, port: String(invitePort) }));
+  }, [invitePort]);
 
   const createErrors = validateNodeForm(form);
   const joinErrors = {

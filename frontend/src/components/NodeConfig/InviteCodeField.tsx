@@ -1,9 +1,10 @@
 import React, { useId } from 'react';
-import { AlertTriangle, CheckCircle2, ClipboardPaste } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ClipboardPaste, Radio } from 'lucide-react';
 import type { Translate } from '../../i18n/translations';
 import { fillTemplate } from '../../i18n/fillTemplate';
 import { InviteParseResult } from '../../utils/meshInvite';
-import { FieldError, PROTOCOL_TEXT } from './FormControls';
+import { FieldError } from './FormControls';
+import { inviteSettingRows } from './InviteSettings';
 import { inputClass } from '../ui';
 
 interface InviteCodeFieldProps {
@@ -92,9 +93,27 @@ export const InviteCodeField: React.FC<InviteCodeFieldProps> = ({ value, onChang
                 </dd>
               </>
             )}
-            <dt className="text-text-muted">{t('node_label_protocol')}</dt>
-            <dd className="text-text-primary">{t(PROTOCOL_TEXT[parsed.invite.proto][0])}</dd>
+            {inviteSettingRows(parsed.invite, t).map(({ label, value, technical }) => (
+              <React.Fragment key={label}>
+                <dt className="text-text-muted">{label}</dt>
+                <dd className="text-text-primary">
+                  {technical ? (
+                    <bdi dir="ltr" className="font-mono">
+                      {value}
+                    </bdi>
+                  ) : (
+                    value
+                  )}
+                </dd>
+              </React.Fragment>
+            ))}
           </dl>
+          {parsed.invite.proto === 'icmp' && (
+            <p className="mt-2 flex items-start gap-1.5 text-xs text-text-muted leading-relaxed">
+              <Radio className="w-3.5 h-3.5 mt-[0.2em] shrink-0 text-primary" aria-hidden="true" />
+              <span>{t('invite_preview_icmp')}</span>
+            </p>
+          )}
           {!parsed.invite.endpoint && (
             <p className="mt-2 flex items-start gap-1.5 text-xs text-warning leading-relaxed">
               <AlertTriangle className="w-3.5 h-3.5 mt-[0.2em] shrink-0" aria-hidden="true" />

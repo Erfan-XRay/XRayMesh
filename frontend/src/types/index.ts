@@ -248,6 +248,8 @@ export interface MeshInviteData {
     secret: string;
     endpoint: string;
     proto: string;
+    /** The inviting server's mesh port; joining servers listen on the same one by default. */
+    port?: number;
     enc?: boolean;
     kcp?: boolean;
     ipv6?: boolean;
@@ -256,6 +258,11 @@ export interface MeshInviteData {
     icmp?: { t: string; p: number; i: number };
   };
   public_ip: string;
+  public_ipv6?: string;
+  /** "[v6]:port" when other servers can reach this one over IPv6. */
+  endpoint_ipv6?: string;
+  /** Why IPv6 cannot be offered: IPv6 is off, the protocol has no IPv6 listener, or no public address. */
+  ipv6_unavailable?: '' | 'disabled' | 'icmp' | 'faketcp' | 'not_detected';
   port: string | number;
 }
 

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Check, Loader2, X } from 'lucide-react';
 import { JoinMeshResult, MeshProtocol, NodeConfig } from '../../types';
 import type { Translate } from '../../i18n/translations';
@@ -68,6 +68,12 @@ export const JoinMeshModal: React.FC<JoinMeshModalProps> = ({ current, t, onClos
   const errors = { hostname: validateHostname(hostname), ipv4: validateIpv4(ipv4), port: validatePort(port) };
   const shown = (err: ReturnType<typeof validateHostname>) => (submitted && err ? t(err) : null);
   const invite = parsed.status === 'ok' ? parsed.invite : null;
+
+  // Every server in a mesh listens on the same port by default, so take it from the code.
+  const invitePort = invite?.port;
+  useEffect(() => {
+    if (invitePort) setPort(String(invitePort));
+  }, [invitePort]);
 
   const handleContinue = (e: React.FormEvent) => {
     e.preventDefault();
@@ -182,6 +188,7 @@ export const JoinMeshModal: React.FC<JoinMeshModalProps> = ({ current, t, onClos
                 { label: t('node_label_network'), value: current.network_name, technical: true },
                 { label: t('node_field_vip'), value: current.ipv4, technical: true },
                 { label: t('node_label_protocol'), value: protocolLabel(String(current.protocol), t) },
+                { label: t('node_field_port'), value: String(current.port), technical: true },
                 { label: t('node_peers_heading'), value: String(current.peers?.length ?? 0), technical: true },
               ]}
             />
@@ -192,6 +199,7 @@ export const JoinMeshModal: React.FC<JoinMeshModalProps> = ({ current, t, onClos
                 { label: t('node_label_network'), value: invite.net, technical: true },
                 { label: t('node_field_vip'), value: ipv4.trim(), technical: true },
                 { label: t('node_label_protocol'), value: protocolLabel(invite.proto, t) },
+                { label: t('node_field_port'), value: port.trim(), technical: true },
                 { label: t('node_peers_heading'), value: invite.endpoint || '-', technical: true },
               ]}
             />

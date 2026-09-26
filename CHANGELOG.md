@@ -2,6 +2,18 @@
 
 All notable XRayMesh changes are documented here.
 
+## [3.0.0-beta.8] - 2026-09-26
+
+### Added
+- Invite codes carry the mesh port alongside protocol, MTU, KCP, encryption and IPv6, and joining servers use the invite's port by default (panel and `xraymesh join`). Older codes still work and take the port from their address.
+- IPv4 / IPv6 choice for the invite address when IPv6 is on, with the reason shown when IPv6 cannot be used (no public IPv6, ICMP, or FakeTCP). `xraymesh invite` asks too, or takes `--ipv4` / `--ipv6`.
+- The invite panel lists the settings the code applies on the other server, and the join preview shows them all before joining.
+- ICMP mode explains in three short steps that the main server hands out one code per server.
+
+### Fixed
+- `xraymesh join` applied fixed values for encryption, KCP, IPv6 and MTU instead of the invite's settings, and `xraymesh invite` left them out of the code.
+- With IPv6 on, the mesh port is now opened in ip6tables as well as iptables.
+
 ## [3.0.0-beta.7] - 2026-09-26
 
 ### Fixed

@@ -7,6 +7,8 @@ export interface MeshInvite {
   secret: string;
   endpoint: string;
   proto: MeshProtocol;
+  /** Mesh port of the inviting server (from the code, or its endpoint for older codes). */
+  port?: number;
   enc?: boolean;
   kcp?: boolean;
   ipv6?: boolean;
@@ -82,6 +84,12 @@ export function parseInviteToken(raw: string): InviteParseResult {
   if (typeof data.ipv6 === 'boolean') invite.ipv6 = data.ipv6;
   if (Number.isInteger(data.mtu) && (data.mtu as number) >= 576 && (data.mtu as number) <= 9000) {
     invite.mtu = data.mtu as number;
+  }
+  const endpointPort = /:(\d{1,5})$/.exec(invite.endpoint);
+  if (Number.isInteger(data.port) && (data.port as number) >= 1 && (data.port as number) <= 65535) {
+    invite.port = data.port as number;
+  } else if (endpointPort && Number(endpointPort[1]) >= 1 && Number(endpointPort[1]) <= 65535) {
+    invite.port = Number(endpointPort[1]);
   }
   return { status: 'ok', invite };
 }
