@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="3.0.0-beta.6"
+readonly VERSION="3.0.0-beta.7"
 readonly DEFAULT_BRANCH="beta"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
@@ -3108,7 +3108,8 @@ ensure_xraymesh_cli() {
   local current_source="${BASH_SOURCE[0]:-}"
 
   if [[ -n "$current_source" && -f "$current_source" && "$current_source" != /dev/fd/* && "$current_source" != /proc/* ]]; then
-    if [[ "$current_source" != "$target" ]]; then
+    # Never downgrade: an older copy run by hand would leave the newer web panel without its commands.
+    if [[ "$current_source" != "$target" ]] && ! installed_script_is_newer; then
       install -m 0755 "$current_source" "$target" 2>/dev/null || cp -f "$current_source" "$target" 2>/dev/null || true
     fi
   else
@@ -3167,42 +3168,34 @@ update_web_assets() {
   local script_dir
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-  # 1. Ensure core CLI script is updated to latest version
+  # 1. Install the running copy of the CLI script, unless the installed one is newer.
   local target_sh="${INSTALL_DIR}/xraymesh.sh"
-  if [[ -f "${script_dir}/xraymesh.sh" && "${script_dir}/xraymesh.sh" != "$target_sh" ]]; then
+  if [[ -f "${script_dir}/xraymesh.sh" && "${script_dir}/xraymesh.sh" != "$target_sh" ]] && ! installed_script_is_newer; then
     install -m 0755 "${script_dir}/xraymesh.sh" "$target_sh" 2>/dev/null || cp -f "${script_dir}/xraymesh.sh" "$target_sh" 2>/dev/null || true
     ln -sf "$target_sh" /usr/local/bin/xraymesh 2>/dev/null || true
     updated=1
-  else
-    if download_file_with_mirrors "$target_sh" "xraymesh.sh" 0755; then
-      ln -sf "$target_sh" /usr/local/bin/xraymesh 2>/dev/null || true
-      updated=1
-    fi
   fi
 
-  # 2. Update web server and static assets
-  # NOTE: Always prefer fresh download from mirrors. Local copy from script_dir
-  # is only a fallback (and only when source != target, otherwise install
-  # fails with "same file" and the update becomes a fake success).
-  local _dl_ok=0
-  if download_file_with_mirrors "${WEB_DIR}/server.py" "web/server.py" 0755; then
-    _dl_ok=1
-    updated=1
-  fi
-  if download_file_with_mirrors "${WEB_DIR}/static/index.html" "web/static/index.html" 0644; then
-    _dl_ok=1
-    updated=1
-  fi
-  if (( !_dl_ok )); then
-    local _src_py="${script_dir}/web/server.py" _src_html="${script_dir}/web/static/index.html"
-    if [[ -f "$_src_py" && -f "$_src_html" && "$_src_py" != "${WEB_DIR}/server.py" ]]; then
-      install -m 0755 "$_src_py" "${WEB_DIR}/server.py" 2>/dev/null || cp -f "$_src_py" "${WEB_DIR}/server.py" 2>/dev/null || true
-      install -m 0644 "$_src_html" "${WEB_DIR}/static/index.html" 2>/dev/null || cp -f "$_src_html" "${WEB_DIR}/static/index.html" 2>/dev/null || true
-      updated=1
-    elif (( !updated )); then
-      warn "Web asset download failed and no usable local fallback found."
+  # 2. The web server and panel must be the same release as the CLI script, or the
+  # panel calls commands the script does not have. Newer releases come only through
+  # the verified update (xraymesh node-update), which replaces all three together.
+  local cli_version stage rel mode local_copy
+  cli_version="$(installed_version)"
+  stage="$(mktemp -d)"
+  for rel in web/server.py web/static/index.html; do
+    stage_file_ok "${INSTALL_DIR}/${rel}" "$rel" "$cli_version" && continue
+    mode=0755
+    [[ "$rel" == "web/static/index.html" ]] && mode=0644
+    local_copy="${script_dir}/${rel}"
+    if fetch_release_file "${stage}/${rel}" "$rel" "$branch" "$cli_version" ||
+      { [[ "$local_copy" != "${INSTALL_DIR}/${rel}" ]] && stage_file_ok "$local_copy" "$rel" "$cli_version" &&
+        mkdir -p "$(dirname "${stage}/${rel}")" && cp -f "$local_copy" "${stage}/${rel}"; }; then
+      install_staged_file "${stage}/${rel}" "${INSTALL_DIR}/${rel}" "$mode" && updated=1
+    else
+      warn "No copy of ${rel} for ${cli_version} was found; run 'xraymesh node-update' to update everything."
     fi
-  fi
+  done
+  rm -rf -- "$stage"
 
   # 3. Always regenerate runner and services
   write_runner
@@ -3282,6 +3275,12 @@ installed_version() {
     v="$(sed -n 's/^readonly VERSION="\(.*\)"$/\1/p' "${INSTALL_DIR}/xraymesh.sh" | head -n1)"
   fi
   printf '%s\n' "${v:-$VERSION}"
+}
+
+# True when the installed CLI script is a newer release than this running copy,
+# e.g. an old downloaded xraymesh.sh being run by hand after an update.
+installed_script_is_newer() {
+  version_is_newer "$(installed_version)" "$VERSION"
 }
 
 # update_status <state> <step> [error] [rolled_back]

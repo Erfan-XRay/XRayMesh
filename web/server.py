@@ -33,7 +33,7 @@ import ssl
 from pathlib import Path
 
 # Paths & Defaults
-CURRENT_VERSION = "3.0.0-beta.6"
+CURRENT_VERSION = "3.0.0-beta.7"
 CURRENT_BRANCH = "beta"
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/xraymesh")
 BIN_DIR = os.path.join(INSTALL_DIR, "bin")
@@ -1329,6 +1329,25 @@ def parse_icmp_link(link, endpoint):
     return {"t": token, "p": port, "i": idx}
 
 
+def cli_version_mismatch_error():
+    """Explain when the installed xraymesh.sh is a different release than this panel, else return None.
+
+    ICMP links are created by commands that only newer scripts have; an older script answers
+    with its usage text, which tells the user nothing.
+    """
+    try:
+        with open(get_xraymesh_script(), encoding="utf-8", errors="ignore") as f:
+            m = re.search(r'^readonly VERSION="([^"]+)"', f.read(), re.MULTILINE)
+    except OSError:
+        return None
+    if not m or m.group(1) == CURRENT_VERSION:
+        return None
+    return (
+        f"This server's XRayMesh CLI is {m.group(1)} but the web panel is {CURRENT_VERSION}. "
+        "Run 'sudo xraymesh node-update' on this server, then try again."
+    )
+
+
 def last_json_line(output):
     """Return the last JSON object printed by an xraymesh.sh command, ignoring its progress messages."""
     for line in reversed(str(output or "").splitlines()):
@@ -2486,6 +2505,10 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 if not pub_ip:
                     self.send_json({"ok": False, "error": "This server's public IP is unknown, so no ICMP link can be offered."}, status=500)
                     return
+                mismatch = cli_version_mismatch_error()
+                if mismatch:
+                    self.send_json({"ok": False, "error": mismatch}, status=500)
+                    return
                 # Each ICMP invite carries one link; it is reused until a server actually joins on it.
                 ok, out = run_xraymesh_cmd(["icmp-invite"], timeout=120)
                 link = last_json_line(out) if ok else None
@@ -3331,6 +3354,10 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             icmp_link_name = None
             if invite["proto"] == "icmp":
                 # EasyTier reaches the inviting server through the ICMP link, not its public address.
+                mismatch = cli_version_mismatch_error()
+                if mismatch:
+                    self.send_json({"ok": False, "code": "icmp_link_failed", "error": mismatch}, status=500)
+                    return
                 host, mesh_port = split_endpoint(invite["endpoint"])
                 link = invite["icmp"]
                 ok, out = run_xraymesh_cmd(

@@ -35,6 +35,7 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
 }) => {
   const [invite, setInvite] = useState<MeshInviteData | null>(null);
   const [inviteState, setInviteState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [inviteError, setInviteError] = useState('');
   const [addressOverride, setAddressOverride] = useState('');
   const [editingAddress, setEditingAddress] = useState(false);
 
@@ -48,7 +49,9 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
     try {
       setInvite(await fetchMeshInvite());
       setInviteState('ready');
-    } catch {
+    } catch (err) {
+      // The server's reason (e.g. an outdated CLI on this server) is what the user needs to act on.
+      setInviteError(err instanceof Error ? err.message : String(err));
       setInviteState('error');
     }
   }, []);
@@ -121,11 +124,18 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
         )}
 
         {inviteState === 'error' && (
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <FieldError message={t('node_invite_error')} />
-            <button type="button" onClick={loadInvite} className={btnGhost}>
-              {t('btn_retry')}
-            </button>
+          <div className="mt-4 space-y-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <FieldError message={t('node_invite_error')} />
+              <button type="button" onClick={loadInvite} className={btnGhost}>
+                {t('btn_retry')}
+              </button>
+            </div>
+            {inviteError && (
+              <p dir="ltr" className="text-start font-mono text-xs text-text-muted leading-relaxed break-words">
+                {inviteError}
+              </p>
+            )}
           </div>
         )}
 

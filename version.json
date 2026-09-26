@@ -1,8 +1,8 @@
 {
-  "version": "3.0.0-beta.6",
+  "version": "3.0.0-beta.7",
   "branch": "beta",
-  "release_name": "XRayMesh v3.0.0-beta.6 (ICMP Transport)",
+  "release_name": "XRayMesh v3.0.0-beta.7 (Update Consistency Fix)",
   "release_date": "2026-09-26",
-  "changelog": "New experimental ICMP transport for networks where only ping gets through: the mesh runs over ICMP links built with BackPack (xDi), so every tunnel keeps working. Choose ICMP on the listening server and add each other server with its own invite code. SafeSync cannot switch the whole mesh to or from ICMP.",
+  "changelog": "Fixes ICMP invites and joins failing with a usage message: opening the terminal menu updated the web panel but not the CLI script, so the panel called commands the script did not have. The menu now only installs web files that match the installed script, an older script copy can no longer overwrite a newer one, and the panel shows the server's reason when an invite code cannot be created.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update"
 }

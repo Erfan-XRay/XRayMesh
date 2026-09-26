@@ -2,6 +2,14 @@
 
 All notable XRayMesh changes are documented here.
 
+## [3.0.0-beta.7] - 2026-09-26
+
+### Fixed
+- ICMP invites and joins failed with the CLI's usage text on servers where the terminal menu had been opened: the menu's automatic web update pulled the newest panel and web server but never the CLI script (its download was always rejected), so the panel called commands the script did not have.
+- The menu now only installs a web server and panel that match the installed CLI version; newer releases come through `xraymesh node-update`, which replaces all three together.
+- Running an older copy of `xraymesh.sh` no longer overwrites a newer installed script.
+- When the CLI and panel versions differ, ICMP invite and join errors say so and name the command to run, and the panel shows the server's reason when an invite code cannot be created.
+
 ## [3.0.0-beta.6] - 2026-09-26
 
 ### Added

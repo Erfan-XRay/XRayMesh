@@ -334,6 +334,46 @@ class NodeJoinEndpointTests(unittest.TestCase):
             self.assertEqual(f.read(), original)
 
 
+class IcmpCliMismatchTests(unittest.TestCase):
+    """A panel newer than the CLI script must say so instead of relaying the script's usage text."""
+
+    setUp = NodeJoinEndpointTests.setUp
+    write_existing_config = NodeJoinEndpointTests.write_existing_config
+
+    def old_script(self):
+        path = os.path.join(self.tmp.name, "xraymesh.sh")
+        Path(path).write_text('#!/usr/bin/env bash\nreadonly VERSION="3.0.0-beta.5"\n', encoding="utf-8")
+        return mock.patch.object(server, "get_xraymesh_script", return_value=path)
+
+    def test_join_reports_outdated_cli(self):
+        original = self.write_existing_config()
+        with self.old_script(), mock.patch.object(server, "run_xraymesh_cmd") as run_cmd:
+            raw = call_handler("POST", "/api/node/join", {
+                "invite": make_invite(proto="icmp", icmp={"t": "f" * 48, "p": 20001, "i": 1}),
+                "hostname": "tehran-edge",
+            })
+        status, payload = parse_single_response(self, raw)
+        self.assertEqual((status, payload["code"]), (500, "icmp_link_failed"))
+        self.assertIn("xraymesh node-update", payload["error"])
+        self.assertIn("3.0.0-beta.5", payload["error"])
+        run_cmd.assert_not_called()
+        with open(server.CONFIG_FILE, "rb") as f:
+            self.assertEqual(f.read(), original)
+
+    def test_invite_reports_outdated_cli(self):
+        self.write_existing_config()
+        cfg = server.load_env_file(server.CONFIG_FILE)
+        cfg["PROTOCOL"] = "icmp"
+        server.save_node_config_env(cfg)
+        with self.old_script(), mock.patch.object(server, "get_server_public_ip", return_value="185.100.200.30"), \
+                mock.patch.object(server, "run_xraymesh_cmd") as run_cmd:
+            raw = call_handler("GET", "/api/node/invite")
+        status, payload = parse_single_response(self, raw)
+        self.assertEqual(status, 500)
+        self.assertIn("xraymesh node-update", payload["error"])
+        run_cmd.assert_not_called()
+
+
 class IcmpSafeSyncTests(unittest.TestCase):
     def test_switching_onto_or_off_icmp_is_refused(self):
         self.assertTrue(server.icmp_protocol_switch("dual", "icmp"))
