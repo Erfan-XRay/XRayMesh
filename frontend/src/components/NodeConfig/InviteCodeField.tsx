@@ -108,10 +108,10 @@ export const InviteCodeField: React.FC<InviteCodeFieldProps> = ({ value, onChang
               </React.Fragment>
             ))}
           </dl>
-          {parsed.invite.proto === 'icmp' && (
+          {(parsed.invite.proto === 'icmp' || parsed.invite.proto === 'pck') && (
             <p className="mt-2 flex items-start gap-1.5 text-xs text-text-muted leading-relaxed">
               <Radio className="w-3.5 h-3.5 mt-[0.2em] shrink-0 text-primary" aria-hidden="true" />
-              <span>{t('invite_preview_icmp')}</span>
+              <span>{t(parsed.invite.proto === 'icmp' ? 'invite_preview_icmp' : 'invite_preview_pck')}</span>
             </p>
           )}
           {!parsed.invite.endpoint && (

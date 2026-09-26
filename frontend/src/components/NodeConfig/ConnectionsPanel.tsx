@@ -2,9 +2,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Check, Copy, Link2, Loader2, Pencil, Plus, Radio, RefreshCw, Server, Share2, Trash2, Users } from 'lucide-react';
 import { MeshInviteData } from '../../types';
 import type { Translate, TranslationKey } from '../../i18n/translations';
-import { formatText } from '../../i18n/fillTemplate';
+import { fillTemplate, formatText } from '../../i18n/fillTemplate';
 import { addMeshPeer, fetchMeshInvite, removeMeshPeer } from '../../services/api';
-import { encodeInviteToken, sanitizePeerInput } from '../../utils/meshInvite';
+import { encodeInviteToken, isBackpackProtocol, sanitizePeerInput } from '../../utils/meshInvite';
 import { FieldError } from './FormControls';
 import { InviteSettingsSummary } from './InviteSettings';
 import { btnGhost, btnGhostSm, btnPrimary, btnSecondary, Callout, cardClass, EmptyState, iconBtn, inputClass, SectionHeader, Segmented } from '../ui';
@@ -87,6 +87,7 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
   const showFamily = Boolean(invite?.details.ipv6);
   const IPV6_REASON: Record<string, TranslationKey> = {
     icmp: 'node_invite_ipv6_icmp',
+    pck: 'node_invite_ipv6_pck',
     faketcp: 'node_invite_ipv6_faketcp',
     not_detected: 'node_invite_ipv6_not_detected',
   };
@@ -162,11 +163,11 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
 
         {inviteState === 'ready' && invite && (
           <div className="mt-4 space-y-4">
-            {invite.details.proto === 'icmp' && (
+            {isBackpackProtocol(invite.details.proto) && (
               <Callout
                 tone="info"
                 icon={<Radio className="w-4 h-4" />}
-                title={t('icmp_howto_title')}
+                title={t(invite.details.proto === 'pck' ? 'pck_howto_title' : 'icmp_howto_title')}
                 action={
                   <button type="button" onClick={loadInvite} className={btnGhostSm}>
                     <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
@@ -184,6 +185,18 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
                     </li>
                   ))}
                 </ol>
+                {invite.details.proto === 'pck' && invite.details.link && (
+                  <p className="mt-2">
+                    {fillTemplate(t('pck_howto_port'), {
+                      port: (
+                        <bdi dir="ltr" className="font-mono">
+                          {invite.details.link.p}/TCP
+                        </bdi>
+                      ),
+                    })}
+                  </p>
+                )}
+                {invite.details.enc !== false && <p className="mt-2">{t('backpack_howto_encryption')}</p>}
               </Callout>
             )}
 

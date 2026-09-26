@@ -3,7 +3,7 @@ import { Globe, Loader2, Trash2 } from 'lucide-react';
 import { MeshProtocol, NodeConfig } from '../../types';
 import type { Translate } from '../../i18n/translations';
 import { saveNodeConfig } from '../../services/api';
-import { generateSecret } from '../../utils/meshInvite';
+import { generateSecret, isBackpackProtocol } from '../../utils/meshInvite';
 import { changedFields, formFromConfig, formToPayload, NodeForm, SHARED_FIELDS, validateNodeForm } from '../../utils/nodeForm';
 import { btnDangerSoft, btnGhost, btnPrimary, btnSecondary, cardClass } from '../ui';
 import {
@@ -76,8 +76,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const changed = changedFields(form, baseline);
   const dirty = changed.length > 0;
   // SafeSync only broadcasts shared settings, so it is offered only when nothing else changed.
-  // ICMP needs a link per server pair, so switching onto or off it cannot be synced mesh-wide.
-  const icmpSwitch = form.protocol !== baseline.protocol && (form.protocol === 'icmp' || baseline.protocol === 'icmp');
+  // ICMP and PCK need a link per server pair, so switching onto or off them cannot be synced mesh-wide.
+  const icmpSwitch =
+    form.protocol !== baseline.protocol && (isBackpackProtocol(form.protocol) || isBackpackProtocol(baseline.protocol));
   const sharedOnly = dirty && !icmpSwitch && changed.every((field) => SHARED_FIELDS.includes(field));
 
   const update = <K extends keyof NodeForm>(key: K, value: NodeForm[K]) => {
@@ -195,7 +196,13 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
         <Section title={t('node_section_transport')} description={t('node_section_transport_desc')}>
           <div className="space-y-5">
-            <ProtocolPicker value={form.protocol} onChange={(v) => update('protocol', v)} hideLegend t={t} />
+            <ProtocolPicker
+              value={form.protocol}
+              onChange={(v) => update('protocol', v)}
+              encryption={form.encryption}
+              hideLegend
+              t={t}
+            />
             <SwitchField
               label={t('node_toggle_kcp')}
               hint={t('node_kcp_desc')}

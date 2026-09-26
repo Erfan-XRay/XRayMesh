@@ -211,7 +211,7 @@ export type ThemeMode = 'auto' | 'light' | 'dark';
 
 export type TabId = 'peers' | 'node' | 'speedtest' | 'ping' | 'tunnels';
 
-export type MeshProtocol = 'dual' | 'udp' | 'tcp' | 'ws' | 'wss' | 'quic' | 'faketcp' | 'icmp';
+export type MeshProtocol = 'dual' | 'udp' | 'tcp' | 'ws' | 'wss' | 'quic' | 'faketcp' | 'icmp' | 'pck';
 
 export interface RollbackInfo {
   occurred: boolean;
@@ -256,13 +256,15 @@ export interface MeshInviteData {
     mtu?: number;
     /** ICMP invites carry one BackPack link: its token, port and address slot. */
     icmp?: { t: string; p: number; i: number };
+    /** PCK invites carry their BackPack link here; `p` is the TCP port the joining server dials. */
+    link?: { t: string; p: number; i: number };
   };
   public_ip: string;
   public_ipv6?: string;
   /** "[v6]:port" when other servers can reach this one over IPv6. */
   endpoint_ipv6?: string;
   /** Why IPv6 cannot be offered: IPv6 is off, the protocol has no IPv6 listener, or no public address. */
-  ipv6_unavailable?: '' | 'disabled' | 'icmp' | 'faketcp' | 'not_detected';
+  ipv6_unavailable?: '' | 'disabled' | 'icmp' | 'pck' | 'faketcp' | 'not_detected';
   port: string | number;
 }
 

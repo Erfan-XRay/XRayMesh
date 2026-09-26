@@ -363,7 +363,13 @@ export const SetupFlow: React.FC<SetupFlowProps> = ({ config, t, onCopy, copiedK
                   disabled={busy}
                 />
               </div>
-              <ProtocolPicker value={form.protocol} onChange={(v) => update('protocol', v)} disabled={busy} t={t} />
+              <ProtocolPicker
+                value={form.protocol}
+                onChange={(v) => update('protocol', v)}
+                encryption={form.encryption}
+                disabled={busy}
+                t={t}
+              />
               <div className="space-y-4">
                 <SwitchField
                   label={t('node_toggle_kcp')}

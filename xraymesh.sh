@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="3.0.0-beta.8"
+readonly VERSION="3.0.0-beta.9"
 readonly DEFAULT_BRANCH="beta"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
@@ -30,9 +30,11 @@ readonly REALM_SERVICE_FILE="/etc/systemd/system/xraymesh-realm.service"
 readonly REALM_CONFIG_FILE="${REALM_CONFIG_FILE:-/etc/xraymesh/realm.json}"
 readonly REALM_TUNNEL_DIR="${REALM_TUNNEL_DIR:-/etc/xraymesh/realm-tunnels}"
 readonly FALLBACK_REALM_VERSION="v2.6.2"
-# ICMP transport: BackPack (https://github.com/AminMGMT/BackPack, AGPL-3.0) runs as a
-# separate, unmodified binary. Its direct layer-3 tunnel with the xDi carrier carries
-# packets inside ICMP echo, and EasyTier peers across the resulting point-to-point link.
+# ICMP and PCK transports: BackPack (https://github.com/AminMGMT/BackPack, AGPL-3.0) runs as a
+# separate, unmodified binary. Its direct layer-3 tunnel carries packets inside ICMP echo (xDi
+# carrier) or inside TCP segments built without the kernel's TCP stack (pck carrier), and
+# EasyTier peers across the resulting point-to-point link. Both carriers share the link files,
+# addresses and units below, which keep their original "icmp" names so existing links survive.
 readonly BACKPACK_BIN="${BIN_DIR}/backpack"
 # Both ends of a link must run the same BackPack version, so it is pinned with its checksums.
 readonly BACKPACK_VERSION="v1.8.4"
@@ -41,8 +43,14 @@ readonly ICMP_SERVICE_TEMPLATE="/etc/systemd/system/xraymesh-icmp@.service"
 # Each link takes one /30 from 10.214.0.0/16: index N maps to 10.214.(N/64).(N%64*4).
 readonly ICMP_LINK_PREFIX="10.214"
 readonly ICMP_LINK_MAX_INDEX=16383
-# EasyTier MTU across an ICMP link: BackPack's interface is 1400, minus ~72 bytes of EasyTier framing.
+# EasyTier MTU across a BackPack link: the link interface is 1380-1400, minus ~72 bytes of EasyTier framing.
 readonly ICMP_MESH_MTU="1280"
+# BackPack's interface MTU on a pck link: pck costs 52 bytes per packet against xDi's 33.
+readonly PCK_LINK_MTU="1380"
+# A pck link listens on a real TCP port. It stays below the kernel's ephemeral range (32768+),
+# where an outgoing connection could take the same local port and answer the link's segments.
+readonly PCK_PORT_MIN=20000
+readonly PCK_PORT_MAX=32767
 readonly WEB_DIR="${INSTALL_DIR}/web"
 readonly WEB_CONFIG_FILE="/etc/xraymesh/web.env"
 readonly WEB_SERVICE_FILE="/etc/systemd/system/xraymesh-web.service"
@@ -332,9 +340,9 @@ set -Eeuo pipefail
 source /etc/xraymesh/config.env
 proto_lower="$(echo "${PROTOCOL:-dual}" | tr '[:upper:]' '[:lower:]')"
 
-# An ICMP link adds ~66 bytes per packet, so a standard mesh MTU would fragment every full packet.
+# A BackPack link (ICMP or PCK) adds ~66-105 bytes per packet, so a standard mesh MTU would fragment every full packet.
 mesh_mtu="${MTU:-1380}"
-if [[ "$proto_lower" == "icmp" && "$mesh_mtu" =~ ^[0-9]+$ ]] && (( mesh_mtu > 1300 )); then
+if [[ "$proto_lower" =~ ^(icmp|pck)$ && "$mesh_mtu" =~ ^[0-9]+$ ]] && (( mesh_mtu > 1300 )); then
   mesh_mtu=1280
 fi
 
@@ -375,10 +383,10 @@ case "$proto_lower" in
   faketcp)
     args+=(--listeners "faketcp://0.0.0.0:${PORT}")
     ;;
-  icmp)
-    # ICMP peers arrive over BackPack xDi interfaces (xrmi*); the same UDP listener serves direct peers.
+  icmp|pck)
+    # ICMP/PCK peers arrive over BackPack link interfaces (xrmi*); the same UDP listener serves direct peers.
     # EasyTier otherwise binds peer sockets to the physical NIC (it skips tun devices), which would
-    # send traffic for the link's 10.214.x.x address out of eth0 instead of into the ICMP link.
+    # send traffic for the link's 10.214.x.x address out of eth0 instead of into the BackPack link.
     args+=(--listeners "udp://0.0.0.0:${PORT}" --bind-device false)
     ;;
   dual|*)
@@ -460,7 +468,7 @@ if [[ -n "${PEERS:-}" ]]; then
         faketcp)
           peer_args+=("faketcp://${target}")
           ;;
-        udp|icmp)
+        udp|icmp|pck)
           peer_args+=("udp://${target}")
           ;;
         dual|*)
@@ -589,9 +597,9 @@ apply_node_config() {
   # 5. Write service file, runner, iperf service, and reload systemd
   write_service
 
-  # 5b. Bring ICMP links up before EasyTier dials across them
-  if [[ "${PROTOCOL:-}" == "icmp" ]] || compgen -G "${ICMP_LINK_DIR}/*.env" >/dev/null; then
-    apply_icmp_links || warn "ICMP links need attention: journalctl -u 'xraymesh-icmp@*' -n 30"
+  # 5b. Bring BackPack (ICMP/PCK) links up before EasyTier dials across them
+  if is_backpack_proto "${PROTOCOL:-}" || compgen -G "${ICMP_LINK_DIR}/*.env" >/dev/null; then
+    apply_icmp_links || warn "BackPack links need attention: journalctl -u 'xraymesh-icmp@*' -n 30"
   fi
 
   # 6. Enable systemd units on boot
@@ -701,10 +709,13 @@ setup_node() {
     valid_ip "$ipv4" && break
     warn "Enter a valid address from the 10.x.x.x range."
   done
-  protocol="$(prompt_default "Preferred protocol (dual/udp/tcp/ws/wss/quic/faketcp/icmp)" "$default_protocol")"
-  [[ "$protocol" =~ ^(dual|udp|tcp|ws|wss|quic|faketcp|icmp)$ ]] || protocol="dual"
-  if [[ "$protocol" == "icmp" ]]; then
-    info "ICMP links are created per server: run 'xraymesh invite' here and join from the other server."
+  protocol="$(prompt_default "Preferred protocol (dual/udp/tcp/ws/wss/quic/faketcp/icmp/pck)" "$default_protocol")"
+  [[ "$protocol" =~ ^(dual|udp|tcp|ws|wss|quic|faketcp|icmp|pck)$ ]] || protocol="dual"
+  if is_backpack_proto "$protocol"; then
+    info "${protocol^^} links are created per server: run 'xraymesh invite' here and join from the other server."
+    [[ "$protocol" == "pck" ]] && info "PCK: create the invite on the server abroad and join from the server in Iran (Iran dials out)."
+    info "${protocol^^} links are already encrypted by BackPack (Noise). Answer 'no' to encryption below to save CPU,"
+    info "but only if every server in this mesh connects over ICMP or PCK links; direct peers would then be unencrypted."
     [[ "$default_mtu" == "1380" ]] && default_mtu="$ICMP_MESH_MTU"
   fi
 
@@ -740,6 +751,9 @@ setup_node() {
         ;;
       icmp)
         info "ICMP mode: EasyTier listens on udp://0.0.0.0:${port} and peers over BackPack xDi links"
+        ;;
+      pck)
+        info "PCK mode: EasyTier listens on udp://0.0.0.0:${port} and peers over BackPack pck links"
         ;;
       tcp)
         info "TCP-only listener: tcp://0.0.0.0:${port}"
@@ -835,8 +849,8 @@ show_mesh_invite() {
   fi
 
   local endpoint="${pub_ip}:${port}" family="IPv4"
-  # EasyTier adds [::] listeners except for FakeTCP, and BackPack's ICMP carrier is IPv4-only.
-  if [[ "$ipv6" == "yes" && "$proto" != "icmp" && "$proto" != "faketcp" ]]; then
+  # EasyTier adds [::] listeners except for FakeTCP, and BackPack links are IPv4-only.
+  if [[ "$ipv6" == "yes" && "$proto" != "faketcp" ]] && ! is_backpack_proto "$proto"; then
     pub_ip6="$(get_server_ipv6)"
   fi
   if [[ -n "$pub_ip6" ]]; then
@@ -855,15 +869,16 @@ show_mesh_invite() {
     fi
   fi
 
-  local icmp_link=""
-  if [[ "$proto" == "icmp" ]]; then
-    # Every invite carries one ICMP link; it is reused until a server has actually joined on it.
-    icmp_link="$(ensure_icmp_listen_link | tail -n1)"
+  local icmp_link="" link_key=""
+  if is_backpack_proto "$proto"; then
+    # Every invite carries one BackPack link; it is reused until a server has actually joined on it.
+    icmp_link="$(ensure_icmp_listen_link "$(backpack_carrier_for_proto "$proto")" | tail -n1)"
     if [[ "$icmp_link" != "{"* ]]; then
-      fail "Could not prepare an ICMP link for this invite."
+      fail "Could not prepare a ${proto^^} link for this invite."
       pause
       return 1
     fi
+    link_key="$(invite_link_key "$proto")"
     (( mtu > ICMP_MESH_MTU )) && mtu="$ICMP_MESH_MTU"
   fi
   invite_code="$(python3 -c "import sys, json, base64
@@ -881,10 +896,10 @@ d = {
     'mtu': int(a[9]),
 }
 if a[10]:
-    d['icmp'] = json.loads(a[10])
+    d[a[11]] = json.loads(a[10])
 token = base64.b64encode(json.dumps(d).encode('utf-8')).decode('utf-8')
 print(f'xrmesh://{token}')
-" "$net" "$secret" "$endpoint" "$proto" "$port" "$enc" "$kcp" "$ipv6" "$mtu" "$icmp_link" 2>/dev/null || true)"
+" "$net" "$secret" "$endpoint" "$proto" "$port" "$enc" "$kcp" "$ipv6" "$mtu" "$icmp_link" "$link_key" 2>/dev/null || true)"
 
   ok "Generated mesh invite code for this server."
   printf '\n'
@@ -902,11 +917,21 @@ print(f'xrmesh://{token}')
   say "  └─────────────────────────────────────────────────────────────" "$DIM$BLUE"
   printf '\n'
   info "On another server, run 'xraymesh join' and paste this code to connect instantly."
-  if [[ "$proto" == "icmp" ]]; then
-    say "  How ICMP links work:" "$BOLD$YELLOW"
+  if is_backpack_proto "$proto"; then
+    say "  How ${proto^^} links work:" "$BOLD$YELLOW"
     say "   1. This server is the main server; every other server joins with a code from here." "$YELLOW"
     say "   2. One code connects ONE server. Paste it with 'xraymesh join' on that server." "$YELLOW"
     say "   3. Once it shows up in 'xraymesh peers', run 'xraymesh invite' again for the next server." "$YELLOW"
+    if [[ "$proto" == "pck" ]]; then
+      local pck_port
+      pck_port="$(python3 -c 'import sys, json; print(json.loads(sys.argv[1])["p"])' "$icmp_link" 2>/dev/null || true)"
+      say "   • The joining server dials this one on TCP port ${pck_port:-?}: open it in the provider's firewall." "$YELLOW"
+      say "   • Run this on the server abroad and join from the server in Iran." "$YELLOW"
+    fi
+    if [[ "$enc" != "no" ]]; then
+      info "${proto^^} links are already encrypted by BackPack. If every server joins over ICMP or PCK links,"
+      info "you can turn off mesh encryption to save CPU. Direct peers would then be unencrypted."
+    fi
   fi
   pause
 }
@@ -929,7 +954,7 @@ if not isinstance(d, dict):
 endpoint = str(d.get("endpoint") or "").strip()
 m = re.fullmatch(r"\[?([^\[\]]+?)\]?:(\d{1,5})", endpoint)
 proto = str(d.get("proto") or "dual").strip().lower()
-if proto not in ("dual", "udp", "tcp", "ws", "wss", "quic", "faketcp", "icmp"):
+if proto not in ("dual", "udp", "tcp", "ws", "wss", "quic", "faketcp", "icmp", "pck"):
     proto = "dual"
 
 def num(key, lo, hi):
@@ -941,7 +966,9 @@ def flag(key, default):
     return ("yes" if v else "no") if isinstance(v, bool) else default
 
 host = m.group(1) if m else ""
-link = d.get("icmp") if isinstance(d.get("icmp"), dict) else {}
+# ICMP codes carry their BackPack link as "icmp" (kept for older joiners); other carriers as "link".
+link = d.get("link") if isinstance(d.get("link"), dict) else d.get("icmp")
+link = link if isinstance(link, dict) else {}
 for value in (
     str(d.get("net") or "").strip(),
     str(d.get("secret") or "").strip(),
@@ -1003,7 +1030,7 @@ join_mesh_invite() {
     pause
     return 1
   fi
-  if [[ "$proto" == "icmp" ]] && (( mtu_val > ICMP_MESH_MTU )); then
+  if is_backpack_proto "$proto" && (( mtu_val > ICMP_MESH_MTU )); then
     mtu_val="$ICMP_MESH_MTU"
   fi
 
@@ -1018,8 +1045,8 @@ join_mesh_invite() {
   printf '  │  • %-16s : %s\n' "Encryption" "$enc_val"
   printf '  │  • %-16s : %s\n' "IPv6" "$ipv6_val"
   say "  └─────────────────────────────────────────────────────────────" "$DIM$BLUE"
-  if [[ "$proto" == "icmp" ]]; then
-    info "This code creates an ICMP link to ${peer_host:-the other server} and works for this server only."
+  if is_backpack_proto "$proto"; then
+    info "This code creates a ${proto^^} link to ${peer_host:-the other server} and works for this server only."
   fi
   printf '\n'
 
@@ -1055,22 +1082,22 @@ join_mesh_invite() {
 
   local peers_val="$endpoint"
 
-  if [[ "$proto" == "icmp" ]]; then
+  if is_backpack_proto "$proto"; then
     local link_json peer_ip
     if [[ -z "$peer_host" || -z "$icmp_token" ]]; then
-      fail "This ICMP invite has no link details. Generate a new invite on the other server."
+      fail "This ${proto^^} invite has no link details. Generate a new invite on the other server."
       pause
       return 1
     fi
-    info "Creating the ICMP link to ${peer_host}..."
-    link_json="$(create_icmp_dial_link "$peer_host" "$icmp_port" "$icmp_token" "$icmp_idx" | tail -n1)"
+    info "Creating the ${proto^^} link to ${peer_host}..."
+    link_json="$(create_icmp_dial_link "$peer_host" "$icmp_port" "$icmp_token" "$icmp_idx" "$(backpack_carrier_for_proto "$proto")" | tail -n1)"
     peer_ip="$(python3 -c 'import sys, json; print(json.loads(sys.argv[1])["peer_ip"])' "$link_json" 2>/dev/null || true)"
     if [[ -z "$peer_ip" ]]; then
-      fail "The ICMP link could not be created."
+      fail "The ${proto^^} link could not be created."
       pause
       return 1
     fi
-    # EasyTier reaches the other server through the ICMP link, not its public address.
+    # EasyTier reaches the other server through the BackPack link, not its public address.
     peers_val="udp://${peer_ip}:${peer_port}"
   fi
 
@@ -1098,7 +1125,7 @@ delete_mesh_noninteractive() {
   if [[ -x "$IPTABLES_APPLY_SCRIPT" ]]; then
     "$IPTABLES_APPLY_SCRIPT" remove >/dev/null 2>&1 || true
   fi
-  # ICMP links pair this node with specific servers, so they go with the mesh configuration.
+  # BackPack (ICMP/PCK) links pair this node with specific servers, so they go with the mesh configuration.
   remove_all_icmp_links
   rm -f "$SERVICE_FILE" "$CONFIG_FILE" "${INSTALL_DIR}/xraymesh-runner"
   systemctl daemon-reload
@@ -1184,6 +1211,9 @@ render_network_overview() {
         ;;
       icmp)
         printf '  %-16s %b%s%b\n' "Transport" "$PINK" "ICMP (BackPack xDi)" "$RESET"
+        ;;
+      pck)
+        printf '  %-16s %b%s%b\n' "Transport" "$PINK" "PCK (BackPack raw TCP)" "$RESET"
         ;;
       tcp)
         printf '  %-16s %b%s only%b\n' "Transport" "$BLUE" "TCP" "$RESET"
@@ -1391,6 +1421,10 @@ diagnostics() {
       printf '  Transport:     ICMP (EasyTier over BackPack xDi links)\n'
       printf '  Listen port:   %s/UDP (reached through the ICMP links)\n' "$PORT"
       ;;
+    pck)
+      printf '  Transport:     PCK (EasyTier over BackPack pck links)\n'
+      printf '  Listen port:   %s/UDP (reached through the PCK links)\n' "$PORT"
+      ;;
     tcp)
       printf '  Transport:     TCP only\n'
       printf '  Listen port:   %s/TCP\n' "$PORT"
@@ -1430,6 +1464,9 @@ diagnostics() {
   elif [[ "$PROTOCOL" == "icmp" ]]; then
     list_icmp_links
     warn "ICMP echo (ping) must reach the listening server. Link logs: journalctl -u 'xraymesh-icmp@*' -n 30"
+  elif [[ "$PROTOCOL" == "pck" ]]; then
+    list_icmp_links
+    warn "The PCK link's TCP port must be open in the listening server's provider firewall. Link logs: journalctl -u 'xraymesh-icmp@*' -n 30"
   else
     warn "Open TCP and UDP port ${PORT} in UFW and the VPS provider firewall."
   fi
@@ -1705,6 +1742,7 @@ validate_haproxy_ports() {
   local tunnel_name="$1" port_spec="$2" definition port other_port
   local -A requested=()
   while IFS= read -r port; do requested["$port"]=1; done < <(expand_port_spec "$port_spec")
+  check_pck_link_ports "$port_spec" || return 1
 
   for definition in "$HAPROXY_TUNNEL_DIR"/*.env; do
     [[ -f "$definition" ]] || continue
@@ -1878,6 +1916,9 @@ validate_iptables_ports() {
   while IFS= read -r proto; do
     while IFS= read -r port; do requested["${proto}:${port}"]=1; done < <(expand_port_spec "$port_spec")
   done < <(iptables_protocols "$protocol")
+  if [[ "$protocol" == "tcp" || "$protocol" == "both" ]]; then
+    check_pck_link_ports "$port_spec" || return 1
+  fi
 
   for definition in "$IPTABLES_TUNNEL_DIR"/*.env; do
     [[ -f "$definition" ]] || continue
@@ -2290,6 +2331,9 @@ validate_gost_ports() {
   local definition port other_port
   local -A requested=()
   while IFS= read -r port; do requested["$port"]=1; done < <(expand_port_spec "$port_spec")
+  if [[ "$protocol" == "tcp" || "$protocol" == "both" ]]; then
+    check_pck_link_ports "$port_spec" || return 1
+  fi
 
   for definition in "$GOST_TUNNEL_DIR"/*.env; do
     [[ -f "$definition" ]] || continue
@@ -2675,6 +2719,9 @@ validate_realm_ports() {
   local definition port other_port
   local -A requested=()
   while IFS= read -r port; do requested["$port"]=1; done < <(expand_port_spec "$port_spec")
+  if [[ "$protocol" == "tcp" || "$protocol" == "both" ]]; then
+    check_pck_link_ports "$port_spec" || return 1
+  fi
 
   for definition in "$REALM_TUNNEL_DIR"/*.env; do
     [[ -f "$definition" ]] || continue
@@ -2780,11 +2827,31 @@ edit_realm_tunnel_noninteractive() {
 }
 
 # ==============================================================================
-# ICMP links (BackPack xDi)
+# BackPack links (ICMP via xDi, PCK)
 # ==============================================================================
-# A link is one BackPack layer-3 tunnel between two servers, carried inside ICMP echo.
+# A link is one BackPack layer-3 tunnel between two servers, carried inside ICMP echo (xdi)
+# or inside TCP segments that bypass the kernel's TCP stack (pck).
 # The server that issues the invite listens ("in-N"); the joining server dials ("out-N").
 # Both derive the same /30 from the link index N, and EasyTier peers across it over UDP.
+# Every carrier shares one index pool, so links of different carriers never overlap.
+
+is_backpack_proto() { [[ "$1" == "icmp" || "$1" == "pck" ]]; }
+
+# Mesh protocol -> BackPack carrier.
+backpack_carrier_for_proto() {
+  case "$1" in
+    icmp) echo "xdi" ;;
+    pck) echo "pck" ;;
+    *) return 1 ;;
+  esac
+}
+
+# The invite key that carries the link: ICMP keeps "icmp" so older joiners still read it.
+invite_link_key() {
+  if [[ "$1" == "icmp" ]]; then echo "icmp"; else echo "link"; fi
+}
+
+valid_backpack_carrier() { [[ "$1" == "xdi" || "$1" == "pck" ]]; }
 
 backpack_arch_asset() {
   case "$(uname -m)" in
@@ -2792,7 +2859,7 @@ backpack_arch_asset() {
     aarch64|arm64) echo "backpack_linux_arm64.tar.gz" ;;
     armv7*|armhf) echo "backpack_linux_armv7.tar.gz" ;;
     i686|i386) echo "backpack_linux_386.tar.gz" ;;
-    *) fail "Unsupported architecture for the ICMP transport: $(uname -m)"; return 1 ;;
+    *) fail "Unsupported architecture for BackPack (ICMP/PCK) links: $(uname -m)"; return 1 ;;
   esac
 }
 
@@ -2863,13 +2930,13 @@ install_backpack_runtime() {
   install -m 0755 "$bin" "$BACKPACK_BIN"
   printf '%s\n' "$BACKPACK_VERSION" > "${INSTALL_DIR}/backpack.version"
   rm -rf -- "$tmp"
-  ok "BackPack ${BACKPACK_VERSION} installed for the ICMP transport."
+  ok "BackPack ${BACKPACK_VERSION} installed for ICMP/PCK links."
 }
 
 write_icmp_service_template() {
   cat > "$ICMP_SERVICE_TEMPLATE" <<EOF_ICMP_SVC
 [Unit]
-Description=XRayMesh ICMP link %i (BackPack xDi)
+Description=XRayMesh BackPack link %i (ICMP/PCK)
 Documentation=https://github.com/AminMGMT/BackPack
 Wants=network-online.target
 After=network-online.target
@@ -2931,7 +2998,7 @@ icmp_free_index() {
 }
 
 save_icmp_link() {
-  local name="$1" role="$2" host="$3" link_port="$4" token="$5" idx="$6"
+  local name="$1" role="$2" host="$3" link_port="$4" token="$5" idx="$6" carrier="${7:-xdi}"
   local dial_ip listen_ip local_ip peer_ip
   idx=$(( 10#$idx ))
   IFS=$'\t' read -r dial_ip listen_ip < <(icmp_link_addrs "$idx")
@@ -2953,6 +3020,7 @@ save_icmp_link() {
       printf 'LINK_PORT=%q\n' "$link_port"
       printf 'TOKEN=%q\n' "$token"
       printf 'LINK_INDEX=%q\n' "$idx"
+      printf 'CARRIER=%q\n' "$carrier"
       printf 'LOCAL_IP=%q\n' "$local_ip"
       printf 'PEER_IP=%q\n' "$peer_ip"
       printf 'IFACE=%q\n' "xrmi${idx}"
@@ -2964,10 +3032,15 @@ save_icmp_link() {
 # The upper-case names come from the sourced link file.
 # shellcheck disable=SC2153
 generate_icmp_link_toml() {
-  local env="$1" addr
-  unset LINK_NAME ROLE PEER_HOST LINK_PORT TOKEN LINK_INDEX LOCAL_IP PEER_IP IFACE CLAIMED
+  local env="$1" addr carrier_opts=""
+  unset LINK_NAME ROLE PEER_HOST LINK_PORT TOKEN LINK_INDEX CARRIER LOCAL_IP PEER_IP IFACE CLAIMED
   # shellcheck disable=SC1090
   source "$env"
+  # Links written before PCK existed have no CARRIER and are ICMP links.
+  CARRIER="${CARRIER:-xdi}"
+  if [[ "$CARRIER" == "pck" ]]; then
+    carrier_opts="mtu      = ${PCK_LINK_MTU}"$'\n'
+  fi
   if [[ "$ROLE" == "listen" ]]; then
     addr="0.0.0.0:${LINK_PORT}"
   elif [[ "$PEER_HOST" == *:* ]]; then
@@ -2983,11 +3056,13 @@ generate_icmp_link_toml() {
 mode     = "${ROLE}"
 addr     = "${addr}"
 token    = "${TOKEN}"
-carrier  = "xdi"
+carrier  = "${CARRIER}"
 iface    = "${IFACE}"
 local_ip = "${LOCAL_IP}/30"
 peer_ip  = "${PEER_IP}"
 EOF_ICMP_TOML
+    # Carrier-specific keys go after the shared ones, so ICMP link files stay byte-identical.
+    [[ -z "$carrier_opts" ]] || printf '%s' "$carrier_opts" >> "${ICMP_LINK_DIR}/${LINK_NAME}.toml"
   )
 }
 
@@ -3013,6 +3088,11 @@ apply_icmp_links() {
 
   ((${#names[@]})) || return 0
   install_backpack_runtime || return 1
+  # Without iptables a pck link comes up but drops under load: BackPack needs it to drop the
+  # kernel's RSTs for the link's port and to keep the port out of connection tracking.
+  if grep -qx 'CARRIER=pck' "$ICMP_LINK_DIR"/*.env 2>/dev/null && ! command -v iptables >/dev/null 2>&1; then
+    install_iptables_runtime || warn "iptables is missing; PCK links will be unreliable until it is installed."
+  fi
   write_icmp_service_template
   systemctl daemon-reload
 
@@ -3048,13 +3128,86 @@ icmp_link_claimed() {
   return 1
 }
 
-# Print the invite details of an unclaimed listen link, creating one when none is left.
+# Print the carrier of a link file (links from before PCK are ICMP links).
+icmp_link_carrier() {
+  local carrier
+  carrier="$(sed -n 's/^CARRIER=//p' "$1" 2>/dev/null | head -n1)"
+  echo "${carrier:-xdi}"
+}
+
+# Print the name of the pck link listening on a TCP port, if any.
+pck_link_port_owner() {
+  local port="$1" env
+  for env in "$ICMP_LINK_DIR"/*.env; do
+    [[ -f "$env" ]] || continue
+    [[ "$(icmp_link_carrier "$env")" == "pck" ]] || continue
+    grep -qx 'ROLE=listen' "$env" || continue
+    if grep -qx "LINK_PORT=$(( 10#$port ))" "$env"; then
+      basename "$env" .env
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Fail when any listen port of a tunnel port spec is taken by a pck link.
+check_pck_link_ports() {
+  local port_spec="$1" port owner
+  while IFS= read -r port; do
+    [[ -n "$port" ]] || continue
+    if owner="$(pck_link_port_owner "$port")"; then
+      fail "TCP port ${port} is used by the PCK link '${owner}'."
+      return 1
+    fi
+  done < <(expand_port_spec "$port_spec")
+  return 0
+}
+
+# True when a TCP port can carry a pck link: nothing listens on it and no tunnel or link claims it.
+pck_port_available() {
+  local port="$1" dir env
+  [[ -n "$(ss -H -ltn "sport = :${port}" 2>/dev/null || true)" ]] && return 1
+  if [[ -f "$CONFIG_FILE" ]] && grep -qx "PORT=${port}" "$CONFIG_FILE"; then
+    return 1
+  fi
+  pck_link_port_owner "$port" >/dev/null && return 1
+  for dir in "$HAPROXY_TUNNEL_DIR" "$IPTABLES_TUNNEL_DIR" "$GOST_TUNNEL_DIR" "$REALM_TUNNEL_DIR"; do
+    for env in "$dir"/*.env; do
+      [[ -f "$env" ]] || continue
+      local spec
+      spec="$(bash -c 'source "$1" >/dev/null 2>&1; printf "%s" "${PORT_SPEC:-}"' _ "$env")"
+      [[ -n "$spec" ]] || continue
+      expand_port_spec "$spec" 2>/dev/null | grep -qx "$port" && return 1
+    done
+  done
+  return 0
+}
+
+pck_free_port() {
+  local port _
+  for _ in {1..64}; do
+    port=$(( PCK_PORT_MIN + ((RANDOM << 15) | RANDOM) % (PCK_PORT_MAX - PCK_PORT_MIN + 1) ))
+    if pck_port_available "$port"; then
+      echo "$port"
+      return 0
+    fi
+  done
+  fail "No free TCP port was found for a PCK link."
+  return 1
+}
+
+# Print the invite details of an unclaimed listen link of a carrier, creating one when none is left.
 ensure_icmp_listen_link() {
   require_root
-  local env pending="" idx token
+  local carrier="${1:-xdi}" env pending="" idx token link_port
+  if ! valid_backpack_carrier "$carrier"; then
+    fail "Unknown BackPack carrier '${carrier}'."
+    return 1
+  fi
   for env in "$ICMP_LINK_DIR"/*.env; do
     [[ -f "$env" ]] || continue
     grep -qx 'ROLE=listen' "$env" || continue
+    [[ "$(icmp_link_carrier "$env")" == "$carrier" ]] || continue
     if ! icmp_link_claimed "$env"; then
       pending="$env"
       break
@@ -3063,11 +3216,16 @@ ensure_icmp_listen_link() {
 
   if [[ -z "$pending" ]]; then
     idx="$(icmp_free_index)" || return 1
+    if [[ "$carrier" == "pck" ]]; then
+      link_port="$(pck_free_port)" || return 1
+    else
+      link_port="$(( 20000 + idx ))"
+    fi
     token="$(openssl rand -hex 24)"
-    save_icmp_link "in-${idx}" "listen" "" "$(( 20000 + idx ))" "$token" "$idx"
+    save_icmp_link "in-${idx}" "listen" "" "$link_port" "$token" "$idx" "$carrier"
     pending="${ICMP_LINK_DIR}/in-${idx}.env"
     if ! apply_icmp_links; then
-      fail "The ICMP link service failed to start."
+      fail "The ${carrier} link service failed to start."
       rm -f "$pending" "${pending%.env}.toml"
       apply_icmp_links >/dev/null 2>&1 || true
       return 1
@@ -3083,24 +3241,24 @@ ensure_icmp_listen_link() {
 # Create (or reuse) the dialling end of a link from invite details and print its peer address.
 create_icmp_dial_link() {
   require_root
-  local host="$1" link_port="$2" token="$3" idx="$4" name owner
-  if ! valid_icmp_host "$host" || ! valid_port "$link_port" || ! valid_icmp_token "$token" || ! valid_icmp_index "$idx"; then
-    fail "The ICMP link details in the invite are invalid."
+  local host="$1" link_port="$2" token="$3" idx="$4" carrier="${5:-xdi}" name owner
+  if ! valid_icmp_host "$host" || ! valid_port "$link_port" || ! valid_icmp_token "$token" || ! valid_icmp_index "$idx" || ! valid_backpack_carrier "$carrier"; then
+    fail "The BackPack link details in the invite are invalid."
     return 1
   fi
   idx=$(( 10#$idx ))
   name="out-${idx}"
   owner="$(icmp_index_owner "$idx" || true)"
   if [[ -n "$owner" && "$owner" != "$name" ]]; then
-    fail "This invite's link address is already used by ICMP link '${owner}'. Generate a new invite on the other server."
+    fail "This invite's link address is already used by link '${owner}'. Generate a new invite on the other server."
     return 1
   fi
 
   local previous=""
   [[ -f "${ICMP_LINK_DIR}/${name}.env" ]] && previous="$(cat "${ICMP_LINK_DIR}/${name}.env")"
-  save_icmp_link "$name" "dial" "$host" "$link_port" "$token" "$idx"
+  save_icmp_link "$name" "dial" "$host" "$link_port" "$token" "$idx" "$carrier"
   if ! apply_icmp_links; then
-    fail "The ICMP link service failed to start."
+    fail "The ${carrier} link service failed to start."
     if [[ -n "$previous" ]]; then
       printf '%s\n' "$previous" > "${ICMP_LINK_DIR}/${name}.env"
     else
@@ -3120,7 +3278,7 @@ delete_icmp_link() {
   require_root
   local name="$1"
   if ! valid_icmp_link_name "$name" || [[ ! -f "${ICMP_LINK_DIR}/${name}.env" ]]; then
-    fail "ICMP link '${name}' does not exist."
+    fail "Link '${name}' does not exist."
     return 1
   fi
   unset ROLE PEER_IP
@@ -3148,7 +3306,7 @@ delete_icmp_link() {
       info "Removed the mesh peer ${PEER_IP}; restart the node to apply it."
     fi
   fi
-  ok "ICMP link '${name}' deleted."
+  ok "Link '${name}' deleted."
 }
 
 # Remove dialling links that no configured peer uses any more (e.g. after joining another mesh).
@@ -3176,24 +3334,27 @@ remove_all_icmp_links() {
 }
 
 list_icmp_links() {
-  local env state rx tx
+  local env state rx tx kind
   if ! compgen -G "${ICMP_LINK_DIR}/*.env" >/dev/null; then
-    info "No ICMP links on this server."
+    info "No ICMP/PCK links on this server."
     return 0
   fi
-  printf '  %-10s %-7s %-22s %-16s %-10s %s\n' "LINK" "ROLE" "REMOTE" "PEER (TUNNEL)" "STATE" "RX/TX PACKETS"
+  printf '  %-10s %-6s %-7s %-22s %-16s %-10s %s\n' "LINK" "TYPE" "ROLE" "REMOTE" "PEER (TUNNEL)" "STATE" "RX/TX PACKETS"
   for env in "$ICMP_LINK_DIR"/*.env; do
     [[ -f "$env" ]] || continue
-    unset LINK_NAME ROLE PEER_HOST PEER_IP IFACE CLAIMED
+    unset LINK_NAME ROLE PEER_HOST LINK_PORT PEER_IP IFACE CLAIMED CARRIER
     # shellcheck disable=SC1090
     source "$env"
+    if [[ "${CARRIER:-xdi}" == "pck" ]]; then kind="PCK"; else kind="ICMP"; fi
     state="$(systemctl is-active "xraymesh-icmp@${LINK_NAME}.service" 2>/dev/null || echo inactive)"
     rx="$(cat "/sys/class/net/${IFACE}/statistics/rx_packets" 2>/dev/null || echo -)"
     tx="$(cat "/sys/class/net/${IFACE}/statistics/tx_packets" 2>/dev/null || echo -)"
     if [[ "$ROLE" == "listen" && "$CLAIMED" != "yes" ]]; then
       PEER_HOST="(waiting for invite)"
+    elif [[ "$ROLE" == "listen" && "$kind" == "PCK" ]]; then
+      PEER_HOST="any (tcp/${LINK_PORT})"
     fi
-    printf '  %-10s %-7s %-22s %-16s %-10s %s/%s\n' "$LINK_NAME" "$ROLE" "${PEER_HOST:-any}" "$PEER_IP" "$state" "$rx" "$tx"
+    printf '  %-10s %-6s %-7s %-22s %-16s %-10s %s/%s\n' "$LINK_NAME" "$kind" "$ROLE" "${PEER_HOST:-any}" "$PEER_IP" "$state" "$rx" "$tx"
   done
 }
 
@@ -4799,12 +4960,14 @@ main() {
   gost-start) require_root; require_linux; systemctl start xraymesh-gost.service ;;
   gost-stop) require_root; require_linux; systemctl stop xraymesh-gost.service ;;
   gost-restart) require_root; require_linux; systemctl restart xraymesh-gost.service ;;
-  icmp-invite) require_root; require_linux; ensure_icmp_listen_link ;;
-  icmp-join) shift; require_root; require_linux; create_icmp_dial_link "$@" ;;
-  icmp-list|icmp-links) require_linux; list_icmp_links ;;
-  icmp-delete) shift; require_root; require_linux; delete_icmp_link "$@" ;;
-  icmp-prune) require_root; require_linux; prune_icmp_links ;;
-  icmp-apply) require_root; require_linux; apply_icmp_links ;;
+  # link-* take the carrier (xdi or pck); the icmp-* names are kept for the ICMP-only panel calls.
+  icmp-invite) require_root; require_linux; ensure_icmp_listen_link xdi ;;
+  link-invite) shift; require_root; require_linux; ensure_icmp_listen_link "${1:-xdi}" ;;
+  icmp-join|link-join) shift; require_root; require_linux; create_icmp_dial_link "$@" ;;
+  icmp-list|icmp-links|link-list|links) require_linux; list_icmp_links ;;
+  icmp-delete|link-delete) shift; require_root; require_linux; delete_icmp_link "$@" ;;
+  icmp-prune|link-prune) require_root; require_linux; prune_icmp_links ;;
+  icmp-apply|link-apply) require_root; require_linux; apply_icmp_links ;;
   web|link|token|login-link) require_root; require_linux; generate_web_token ;;
   password|reset-password) require_root; require_linux; set_web_password ;;
   port|change-port) require_root; require_linux; configure_web_port ;;
@@ -4860,8 +5023,8 @@ main() {
     printf '  %-20s %s\n' "xraymesh status" "Show node, mesh, and Web UI status summary"
     printf '  %-20s %s\n' "xraymesh peers" "Show connected peers and live latency"
     printf '  %-20s %s\n' "xraymesh routes" "Show mesh routing table"
-    printf '  %-20s %s\n' "xraymesh icmp-list" "Show ICMP links (BackPack xDi) and their packet counters"
-    printf '  %-20s %s\n' "xraymesh icmp-delete" "Delete one ICMP link by name (e.g. out-1234)"
+    printf '  %-20s %s\n' "xraymesh link-list" "Show ICMP/PCK links (BackPack) and their packet counters"
+    printf '  %-20s %s\n' "xraymesh link-delete" "Delete one ICMP/PCK link by name (e.g. out-1234)"
     printf '  %-20s %s\n' "xraymesh logs" "Stream live systemd service logs"
     printf '  %-20s %s\n' "xraymesh self-test" "Run installation and service health self-tests"
     printf '  %-20s %s\n' "xraymesh start" "Start or apply node and start all services"

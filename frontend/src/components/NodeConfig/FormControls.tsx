@@ -1,8 +1,8 @@
 import React, { useId, useState } from 'react';
-import { AlertCircle, ChevronDown, Eye, EyeOff, RefreshCw } from 'lucide-react';
+import { AlertCircle, ChevronDown, Eye, EyeOff, Info, RefreshCw } from 'lucide-react';
 import { MeshProtocol } from '../../types';
 import type { Translate, TranslationKey } from '../../i18n/translations';
-import { MESH_PROTOCOLS, toAsciiDigits } from '../../utils/meshInvite';
+import { MESH_PROTOCOLS, isBackpackProtocol, toAsciiDigits } from '../../utils/meshInvite';
 import { hintClass, inputClass, labelClass } from '../ui';
 
 // Button and card recipes moved to components/ui; re-exported so existing imports keep working.
@@ -287,6 +287,7 @@ export const PROTOCOL_TEXT: Record<MeshProtocol, [TranslationKey, TranslationKey
   quic: ['proto_quic', 'proto_quic_desc'],
   faketcp: ['proto_faketcp', 'proto_faketcp_desc'],
   icmp: ['proto_icmp', 'proto_icmp_desc'],
+  pck: ['proto_pck', 'proto_pck_desc'],
 };
 
 interface ProtocolPickerProps {
@@ -295,10 +296,12 @@ interface ProtocolPickerProps {
   disabled?: boolean;
   /** Keep the legend for screen readers only when a section heading already names the group. */
   hideLegend?: boolean;
+  /** Current encryption setting; ICMP and PCK suggest turning it off since BackPack already encrypts. */
+  encryption?: boolean;
   t: Translate;
 }
 
-export const ProtocolPicker: React.FC<ProtocolPickerProps> = ({ value, onChange, disabled, hideLegend, t }) => {
+export const ProtocolPicker: React.FC<ProtocolPickerProps> = ({ value, onChange, disabled, hideLegend, encryption, t }) => {
   const name = useId();
   return (
     <fieldset className="min-w-0" disabled={disabled}>
@@ -351,10 +354,16 @@ export const ProtocolPicker: React.FC<ProtocolPickerProps> = ({ value, onChange,
           <span>{t('node_proto_udp_hint')}</span>
         </p>
       )}
-      {value === 'icmp' && (
+      {(value === 'icmp' || value === 'pck') && (
         <p className="mt-2 flex items-start gap-1.5 text-xs text-warning leading-relaxed">
           <AlertCircle className="w-3.5 h-3.5 mt-[0.2em] shrink-0" aria-hidden="true" />
-          <span>{t('node_proto_icmp_hint')}</span>
+          <span>{t(value === 'icmp' ? 'node_proto_icmp_hint' : 'node_proto_pck_hint')}</span>
+        </p>
+      )}
+      {isBackpackProtocol(value) && encryption !== false && (
+        <p className="mt-2 flex items-start gap-1.5 text-xs text-text-muted leading-relaxed">
+          <Info className="w-3.5 h-3.5 mt-[0.2em] shrink-0 text-primary" aria-hidden="true" />
+          <span>{t('node_proto_backpack_encryption_hint')}</span>
         </p>
       )}
     </fieldset>

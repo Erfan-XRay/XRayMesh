@@ -1,6 +1,13 @@
 import { MeshProtocol } from '../types';
 
-export const MESH_PROTOCOLS: MeshProtocol[] = ['dual', 'udp', 'tcp', 'ws', 'wss', 'quic', 'faketcp', 'icmp'];
+export const MESH_PROTOCOLS: MeshProtocol[] = ['dual', 'udp', 'tcp', 'ws', 'wss', 'quic', 'faketcp', 'icmp', 'pck'];
+
+/** Protocols whose peers connect over per-server BackPack links, encrypted by BackPack itself. */
+export const BACKPACK_PROTOCOLS: MeshProtocol[] = ['icmp', 'pck'];
+
+export function isBackpackProtocol(proto: string | undefined): boolean {
+  return BACKPACK_PROTOCOLS.includes(proto as MeshProtocol);
+}
 
 export interface MeshInvite {
   net: string;

@@ -34,7 +34,7 @@ import ssl
 from pathlib import Path
 
 # Paths & Defaults
-CURRENT_VERSION = "3.0.0-beta.8"
+CURRENT_VERSION = "3.0.0-beta.9"
 CURRENT_BRANCH = "beta"
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/xraymesh")
 BIN_DIR = os.path.join(INSTALL_DIR, "bin")
@@ -1271,8 +1271,10 @@ def sanitize_peer_endpoint(raw_peer, default_port="11010"):
     return hostport
 
 
-MESH_PROTOCOLS = ("dual", "udp", "tcp", "ws", "wss", "quic", "faketcp", "icmp")
-# EasyTier MTU across a BackPack xDi (ICMP) link; mirrors ICMP_MESH_MTU in xraymesh.sh.
+MESH_PROTOCOLS = ("dual", "udp", "tcp", "ws", "wss", "quic", "faketcp", "icmp", "pck")
+# Protocols whose peers connect over per-server BackPack links, and the carrier each one uses.
+BACKPACK_CARRIERS = {"icmp": "xdi", "pck": "pck"}
+# EasyTier MTU across a BackPack (ICMP or PCK) link; mirrors ICMP_MESH_MTU in xraymesh.sh.
 ICMP_MESH_MTU = 1280
 ICMP_LINK_MAX_INDEX = 16383
 ICMP_LINK_DIR = "/etc/xraymesh/icmp-links"
@@ -1354,9 +1356,16 @@ def decode_invite_token(raw):
         invite["port"] = port
     elif split_endpoint(invite["endpoint"]):
         invite["port"] = split_endpoint(invite["endpoint"])[1]
-    if invite["proto"] == "icmp":
-        invite["icmp"] = parse_icmp_link(data.get("icmp"), invite["endpoint"])
+    if invite["proto"] in BACKPACK_CARRIERS:
+        # ICMP codes carry their link as "icmp" (older joiners read it there); other carriers as "link".
+        link = data.get("link") if isinstance(data.get("link"), dict) else data.get("icmp")
+        invite["icmp"] = parse_icmp_link(link, invite["endpoint"], invite["proto"])
     return invite
+
+
+def invite_link_key(proto):
+    """The invite field that carries a BackPack link for a protocol."""
+    return "icmp" if proto == "icmp" else "link"
 
 
 def split_endpoint(endpoint):
@@ -1367,12 +1376,13 @@ def split_endpoint(endpoint):
     return m.group(1), int(m.group(2))
 
 
-def parse_icmp_link(link, endpoint):
-    """Validate the ICMP link an invite carries: which server to ping, and the link's token and slot."""
+def parse_icmp_link(link, endpoint, proto="icmp"):
+    """Validate the BackPack link an invite carries: which server to reach, and the link's token and slot."""
+    name = proto.upper()
     if not isinstance(link, dict) or not split_endpoint(endpoint):
         raise InviteTokenError(
             "invite_icmp_missing",
-            "This ICMP invite has no link details. Generate a new invite on the other server.",
+            f"This {name} invite has no link details. Generate a new invite on the other server.",
         )
     token, port, idx = link.get("t"), link.get("p"), link.get("i")
     host = split_endpoint(endpoint)[0]
@@ -1383,14 +1393,14 @@ def parse_icmp_link(link, endpoint):
         and re.fullmatch(r"[A-Za-z0-9.-]{1,253}|[0-9A-Fa-f:]{2,39}", host)
     )
     if not valid:
-        raise InviteTokenError("invite_icmp_missing", "The ICMP link details in this invite are invalid.")
+        raise InviteTokenError("invite_icmp_missing", f"The {name} link details in this invite are invalid.")
     return {"t": token, "p": port, "i": idx}
 
 
 def cli_version_mismatch_error():
     """Explain when the installed xraymesh.sh is a different release than this panel, else return None.
 
-    ICMP links are created by commands that only newer scripts have; an older script answers
+    ICMP/PCK links are created by commands that only newer scripts have; an older script answers
     with its usage text, which tells the user nothing.
     """
     try:
@@ -1512,16 +1522,16 @@ ALLOWED_CLUSTER_KEYS = (
 
 
 ICMP_SAFESYNC_ERROR = (
-    "ICMP links are created per server through invite codes, so SafeSync cannot switch "
-    "the whole mesh to or from ICMP. Change the protocol on this server and invite the others instead."
+    "ICMP and PCK links are created per server through invite codes, so SafeSync cannot switch "
+    "the whole mesh to or from ICMP or PCK. Change the protocol on this server and invite the others instead."
 )
 
 
 def icmp_protocol_switch(current, new):
-    """True when a synced protocol change would move a node onto or off ICMP, which needs per-link setup."""
+    """True when a synced protocol change would move a node onto, off or between BackPack links (ICMP/PCK)."""
     current = str(current or "dual").strip().lower()
     new = str(new or "").strip().lower()
-    return bool(new) and new != current and "icmp" in (current, new)
+    return bool(new) and new != current and (current in BACKPACK_CARRIERS or new in BACKPACK_CARRIERS)
 
 
 def cleanup_nonce_cache():
@@ -2563,34 +2573,36 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             }
 
             # Other servers may dial this one over IPv6 when it is enabled and reachable.
-            # EasyTier adds [::] listeners except for FakeTCP, and BackPack's ICMP carrier is IPv4-only.
+            # EasyTier adds [::] listeners except for FakeTCP, and BackPack links are IPv4-only.
             pub_ipv6 = ""
             ipv6_unavailable = ""
             if not ipv6_on:
                 ipv6_unavailable = "disabled"
-            elif proto == "icmp":
-                ipv6_unavailable = "icmp"
+            elif proto in BACKPACK_CARRIERS:
+                ipv6_unavailable = proto
             elif proto == "faketcp":
                 ipv6_unavailable = "faketcp"
             else:
                 pub_ipv6 = get_server_public_ipv6()
                 if not pub_ipv6:
                     ipv6_unavailable = "not_detected"
-            if proto == "icmp":
+            if proto in BACKPACK_CARRIERS:
+                name = proto.upper()
                 if not pub_ip:
-                    self.send_json({"ok": False, "error": "This server's public IP is unknown, so no ICMP link can be offered."}, status=500)
+                    self.send_json({"ok": False, "error": f"This server's public IP is unknown, so no {name} link can be offered."}, status=500)
                     return
                 mismatch = cli_version_mismatch_error()
                 if mismatch:
                     self.send_json({"ok": False, "error": mismatch}, status=500)
                     return
-                # Each ICMP invite carries one link; it is reused until a server actually joins on it.
-                ok, out = run_xraymesh_cmd(["icmp-invite"], timeout=120)
+                # Each ICMP/PCK invite carries one link; it is reused until a server actually joins on it.
+                cmd = ["icmp-invite"] if proto == "icmp" else ["link-invite", BACKPACK_CARRIERS[proto]]
+                ok, out = run_xraymesh_cmd(cmd, timeout=120)
                 link = last_json_line(out) if ok else None
                 if not link:
-                    self.send_json({"ok": False, "error": out or "Could not prepare an ICMP link for this invite."}, status=500)
+                    self.send_json({"ok": False, "error": out or f"Could not prepare a {name} link for this invite."}, status=500)
                     return
-                invite_obj["icmp"] = link
+                invite_obj[invite_link_key(proto)] = link
                 invite_obj["mtu"] = min(mtu, ICMP_MESH_MTU)
             token_str = base64.b64encode(json.dumps(invite_obj).encode("utf-8")).decode("utf-8")
             self.send_json({
@@ -3431,23 +3443,24 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             peer = invite["endpoint"]
             mtu = invite.get("mtu", 1380)
             icmp_link_name = None
-            if invite["proto"] == "icmp":
-                # EasyTier reaches the inviting server through the ICMP link, not its public address.
+            if invite["proto"] in BACKPACK_CARRIERS:
+                # EasyTier reaches the inviting server through the BackPack link, not its public address.
                 mismatch = cli_version_mismatch_error()
                 if mismatch:
                     self.send_json({"ok": False, "code": "icmp_link_failed", "error": mismatch}, status=500)
                     return
                 host, mesh_port = split_endpoint(invite["endpoint"])
                 link = invite["icmp"]
-                ok, out = run_xraymesh_cmd(
-                    ["icmp-join", host, str(link["p"]), link["t"], str(link["i"])], timeout=120
-                )
+                join_cmd = ["icmp-join", host, str(link["p"]), link["t"], str(link["i"])]
+                if invite["proto"] != "icmp":
+                    join_cmd = ["link-join", *join_cmd[1:], BACKPACK_CARRIERS[invite["proto"]]]
+                ok, out = run_xraymesh_cmd(join_cmd, timeout=120)
                 created = last_json_line(out) if ok else None
                 if not created or not valid_ipv4(str(created.get("peer_ip", ""))):
                     self.send_json({
                         "ok": False,
                         "code": "icmp_link_failed",
-                        "error": out or "The ICMP link could not be created."
+                        "error": out or f"The {invite['proto'].upper()} link could not be created."
                     }, status=500)
                     return
                 icmp_link_name = created.get("name")
@@ -3488,7 +3501,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 }, status=500)
                 return
 
-            # ICMP links that only served the previous mesh's peers are no longer needed.
+            # ICMP/PCK links that only served the previous mesh's peers are no longer needed.
             if os.path.isdir(ICMP_LINK_DIR):
                 run_xraymesh_cmd(["icmp-prune"])
 

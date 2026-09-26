@@ -2,6 +2,20 @@
 
 All notable XRayMesh changes are documented here.
 
+## [3.0.0-beta.9] - 2026-09-26
+
+### Added
+- Experimental PCK transport. Each server pair gets its own [BackPack](https://github.com/AminMGMT/BackPack) direct layer-3 link with the `pck` carrier, which sends TCP segments built without the kernel's TCP stack (no handshake or connection state for middleboxes to reset or throttle), and EasyTier peers across it exactly as with ICMP. For routes where normal TCP connects but then stalls, resets or gets throttled.
+- PCK invites carry one link each, like ICMP. The inviting server listens on a free TCP port between 20000 and 32767 that avoids the mesh port, local listeners, tunnels and other links; the invite panel and `xraymesh invite` name the port to open in the provider's firewall. Create the invite on the server abroad and join from the server in Iran.
+- iptables is installed automatically for PCK links: BackPack needs it to drop the kernel's RSTs and keep the link out of connection tracking.
+- HAProxy, iptables, GOST and Realm tunnels refuse TCP ports that a PCK link listens on.
+- Selecting ICMP or PCK now explains, in the panel and the terminal, that these links are already encrypted by BackPack (Noise), so mesh encryption can be turned off to save CPU when every server connects over them.
+- `xraymesh link-list` and `xraymesh link-delete` show and remove ICMP and PCK links; the `icmp-*` commands still work.
+
+### Changed
+- SafeSync refuses mesh-wide switches onto, off or between ICMP and PCK, since both need a link per server pair.
+- Existing ICMP links are untouched: their files and units keep their names, and their BackPack configuration is byte-identical, so updating does not restart them.
+
 ## [3.0.0-beta.8] - 2026-09-26
 
 ### Added

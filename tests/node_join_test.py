@@ -115,6 +115,15 @@ class InviteDecodingTests(unittest.TestCase):
         with self.assertRaises(server.InviteTokenError):
             server.decode_invite_token(make_invite(proto="icmp", icmp=link, endpoint="evil;host:11010"))
 
+    def test_pck_invite_reads_its_link(self):
+        link = {"t": "a" * 48, "p": 24567, "i": 42}
+        invite = server.decode_invite_token(make_invite(proto="pck", link=link))
+        self.assertEqual((invite["proto"], invite["icmp"]), ("pck", link))
+        with self.assertRaises(server.InviteTokenError) as ctx:
+            server.decode_invite_token(make_invite(proto="pck"))
+        self.assertEqual(ctx.exception.code, "invite_icmp_missing")
+        self.assertIn("PCK", str(ctx.exception))
+
     def test_unknown_protocol_falls_back_to_dual_and_keeps_transport_settings(self):
         invite = server.decode_invite_token(make_invite(proto="carrier-pigeon", enc=False, kcp=True, mtu=1300, ipv6=True))
         self.assertEqual(invite["proto"], "dual")
@@ -334,6 +343,52 @@ class NodeJoinEndpointTests(unittest.TestCase):
             self.assertEqual(f.read(), original)
 
 
+    def test_pck_invite_embeds_a_link(self):
+        self.write_existing_config()
+        cfg = server.load_env_file(server.CONFIG_FILE)
+        cfg["PROTOCOL"] = "pck"
+        server.save_node_config_env(cfg)
+        link_out = '  [OK] verified\n{"t":"' + "b" * 48 + '","p":24567,"i":42}'
+        with mock.patch.object(server, "get_server_public_ip", return_value="185.100.200.30"), \
+                mock.patch.object(server, "run_xraymesh_cmd", return_value=(True, link_out)) as run_cmd:
+            raw = call_handler("GET", "/api/node/invite")
+
+        status, payload = parse_single_response(self, raw)
+        self.assertEqual(status, 200)
+        run_cmd.assert_called_once_with(["link-invite", "pck"], timeout=120)
+        details = payload["data"]["details"]
+        # PCK links travel as "link"; "icmp" stays reserved for ICMP codes older joiners understand.
+        self.assertEqual(details["link"], {"t": "b" * 48, "p": 24567, "i": 42})
+        self.assertNotIn("icmp", details)
+        invite = server.decode_invite_token(payload["data"]["invite"])
+        self.assertEqual((invite["proto"], invite["mtu"]), ("pck", server.ICMP_MESH_MTU))
+
+    def test_pck_join_peers_across_the_link(self):
+        self.write_existing_config()
+        link = {"t": "c" * 48, "p": 24567, "i": 42}
+        calls = []
+
+        def fake_run(args, timeout=45):
+            calls.append(args)
+            if args[0] == "link-join":
+                return True, '{"name":"out-42","peer_ip":"10.214.0.170"}'
+            return True, "online"
+
+        with mock.patch.object(server, "run_xraymesh_cmd", side_effect=fake_run):
+            raw = call_handler("POST", "/api/node/join", {
+                "invite": make_invite(proto="pck", link=link, mtu=1380, enc=False),
+                "hostname": "tehran-edge",
+                "ipv4": "10.144.144.23",
+            })
+
+        status, payload = parse_single_response(self, raw)
+        self.assertEqual((status, payload["ok"]), (200, True))
+        self.assertEqual(calls[0], ["link-join", "185.100.200.30", "24567", "c" * 48, "42", "pck"])
+        cfg = server.load_env_file(server.CONFIG_FILE)
+        self.assertEqual(cfg["PEERS"], "udp://10.214.0.170:11010")
+        self.assertEqual((cfg["PROTOCOL"], cfg["MTU"], cfg["ENCRYPTION"]), ("pck", str(server.ICMP_MESH_MTU), "no"))
+
+
 class InviteCompletenessTests(unittest.TestCase):
     """Invite codes carry every setting a joining server needs, including the mesh port and address family."""
 
@@ -367,7 +422,12 @@ class InviteCompletenessTests(unittest.TestCase):
         self.assertEqual(data["ipv6_unavailable"], "")
 
     def test_ipv6_reasons(self):
-        cases = {"icmp": {"PROTOCOL": "icmp"}, "faketcp": {"PROTOCOL": "faketcp"}, "not_detected": {"PROTOCOL": "udp"}}
+        cases = {
+            "icmp": {"PROTOCOL": "icmp"},
+            "pck": {"PROTOCOL": "pck"},
+            "faketcp": {"PROTOCOL": "faketcp"},
+            "not_detected": {"PROTOCOL": "udp"},
+        }
         for reason, overrides in cases.items():
             with self.subTest(reason):
                 data = self.get_invite(ipv6_addr="2a01:4f8::10" if reason != "not_detected" else "", IPV6="yes", **overrides)
@@ -442,6 +502,12 @@ class IcmpSafeSyncTests(unittest.TestCase):
         self.assertFalse(server.icmp_protocol_switch("icmp", "icmp"))
         self.assertFalse(server.icmp_protocol_switch("icmp", ""))
         self.assertFalse(server.icmp_protocol_switch("tcp", "udp"))
+
+    def test_switching_onto_off_or_between_pck_is_refused(self):
+        self.assertTrue(server.icmp_protocol_switch("dual", "pck"))
+        self.assertTrue(server.icmp_protocol_switch("pck", "udp"))
+        self.assertTrue(server.icmp_protocol_switch("icmp", "pck"))
+        self.assertFalse(server.icmp_protocol_switch("pck", "pck"))
 
 
 if __name__ == "__main__":
