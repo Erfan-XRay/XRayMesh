@@ -4,6 +4,7 @@ import type { Translate } from '../../i18n/translations';
 import { fillTemplate } from '../../i18n/fillTemplate';
 import { InviteParseResult } from '../../utils/meshInvite';
 import { FieldError, PROTOCOL_TEXT } from './FormControls';
+import { inputClass } from '../ui';
 
 interface InviteCodeFieldProps {
   value: string;
@@ -34,7 +35,7 @@ export const InviteCodeField: React.FC<InviteCodeFieldProps> = ({ value, onChang
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
-        <label htmlFor={id} className="text-sm font-medium text-text-main">
+        <label htmlFor={id} className="text-sm font-medium text-text-primary">
           {t('invite_label')}
         </label>
         {canReadClipboard() && (
@@ -62,9 +63,7 @@ export const InviteCodeField: React.FC<InviteCodeFieldProps> = ({ value, onChang
         autoComplete="off"
         aria-invalid={hasError}
         aria-describedby={hasError ? errorId : undefined}
-        className={`w-full px-3 py-2.5 rounded-xl border bg-input font-mono text-xs leading-relaxed text-text-main placeholder:text-text-subtle break-all resize-none focus:outline-none transition-colors disabled:opacity-60 ${
-          hasError ? 'border-rose-500/70' : 'border-card-border hover:border-card-border-hover'
-        }`}
+        className={`${inputClass(hasError)} py-2.5 text-start font-mono text-xs leading-relaxed break-all resize-none`}
       />
 
       {parsed.status === 'invalid' && (
@@ -76,17 +75,17 @@ export const InviteCodeField: React.FC<InviteCodeFieldProps> = ({ value, onChang
       {parsed.status === 'incomplete' && <FieldError id={errorId} message={t('invite_err_incomplete')} />}
 
       {parsed.status === 'ok' && (
-        <div className="mt-1 p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 animate-fade-in">
+        <div className="mt-1 p-3 rounded-xl border border-success-border bg-success/5 animate-fade-in">
           <dl className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
             <dt className="text-text-muted">{t('node_label_network')}</dt>
-            <dd className="flex items-center gap-1.5 min-w-0 font-medium text-text-main">
-              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" aria-hidden="true" />
+            <dd className="flex items-center gap-1.5 min-w-0 font-medium text-text-primary">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-success" aria-hidden="true" />
               <bdi className="truncate">{parsed.invite.net}</bdi>
             </dd>
             {parsed.invite.endpoint && (
               <>
                 <dt className="text-text-muted">{t('invite_preview_endpoint')}</dt>
-                <dd className="text-text-main break-all">
+                <dd className="text-text-primary break-all">
                   <bdi dir="ltr" className="font-mono">
                     {parsed.invite.endpoint}
                   </bdi>
@@ -94,11 +93,11 @@ export const InviteCodeField: React.FC<InviteCodeFieldProps> = ({ value, onChang
               </>
             )}
             <dt className="text-text-muted">{t('node_label_protocol')}</dt>
-            <dd className="text-text-main">{t(PROTOCOL_TEXT[parsed.invite.proto][0])}</dd>
+            <dd className="text-text-primary">{t(PROTOCOL_TEXT[parsed.invite.proto][0])}</dd>
           </dl>
           {!parsed.invite.endpoint && (
-            <p className="mt-2 flex items-start gap-1.5 text-xs text-amber-400 leading-relaxed">
-              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />
+            <p className="mt-2 flex items-start gap-1.5 text-xs text-warning leading-relaxed">
+              <AlertTriangle className="w-3.5 h-3.5 mt-[0.2em] shrink-0" aria-hidden="true" />
               <span>{t('invite_no_endpoint')}</span>
             </p>
           )}

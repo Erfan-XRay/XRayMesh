@@ -1,16 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { Peer, SpeedtestData } from '../../types';
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts';
-import { ShieldCheck, Zap, Rocket, Target, Loader2, ArrowRight } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { ArrowRight, Gauge, Info, Loader2, Rocket, ShieldCheck, Target, Zap } from 'lucide-react';
+import type { Translate } from '../../i18n/translations';
+import { fillTemplate, formatText } from '../../i18n/fillTemplate';
+import { formatCount, localizeDigits } from '../../i18n/format';
 import { RoutePicker } from '../RoutePicker';
 import { LoadingSpinner } from '../LoadingSpinner';
+import { btnPrimary, cardClass, labelClass, Pill, SectionHeader, Segmented, selectClass } from '../ui';
 
 interface SpeedtestTabProps {
   peers: Peer[];
@@ -19,27 +16,39 @@ interface SpeedtestTabProps {
   isRunning: boolean;
   onRun: (target: string, protocol: 'tcp' | 'udp', duration: number, bandwidth: string, source?: string) => void;
   lastResult: SpeedtestData | null;
-  t: (key: any) => string;
+  /** Mirrors the chart's time axis for right-to-left reading. */
+  isRtl: boolean;
+  t: Translate;
 }
 
-export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
-  peers,
-  targetIp,
-  onTargetChange,
-  isRunning,
-  onRun,
-  lastResult,
-  t,
-}) => {
+type Preset = 'quick' | 'max' | 'udp';
+
+const formatBytes = (bytes?: number) => {
+  if (!bytes) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+};
+
+const Metric: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
+  <div className="p-3 rounded-xl bg-card border border-card-border">
+    <p className="text-xs text-text-muted truncate">{label}</p>
+    <p className="mt-1 font-mono text-sm font-semibold text-text-primary tabular-nums truncate">
+      {value}
+    </p>
+  </div>
+);
+
+export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({ peers, targetIp, onTargetChange, isRunning, onRun, lastResult, isRtl, t }) => {
   const [protocol, setProtocol] = useState<'tcp' | 'udp'>('tcp');
   const [duration, setDuration] = useState<number>(5);
   const [bandwidth, setBandwidth] = useState<string>('50M');
+  const [preset, setPreset] = useState<Preset | null>(null);
+  const fieldId = useId();
 
-  // Find default local node
   const currentPeer = peers.find((p) => p.is_current);
-  const [sourceIp, setSourceIp] = useState<string>(() => {
-    return currentPeer?.ipv4 || (peers.length > 0 ? peers[0].ipv4 : '');
-  });
+  const [sourceIp, setSourceIp] = useState<string>(() => currentPeer?.ipv4 || (peers.length > 0 ? peers[0].ipv4 : ''));
 
   // Synchronize sourceIp when peers list updates
   useEffect(() => {
@@ -51,13 +60,9 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
 
   // If targetIp is empty or identical to sourceIp, auto-pick another candidate peer
   useEffect(() => {
-    if (peers.length > 1) {
-      if (!targetIp || targetIp === sourceIp) {
-        const candidate = peers.find((p) => p.ipv4 !== sourceIp);
-        if (candidate) {
-          onTargetChange(candidate.ipv4);
-        }
-      }
+    if (peers.length > 1 && (!targetIp || targetIp === sourceIp)) {
+      const candidate = peers.find((p) => p.ipv4 !== sourceIp);
+      if (candidate) onTargetChange(candidate.ipv4);
     }
   }, [peers, sourceIp, targetIp, onTargetChange]);
 
@@ -68,9 +73,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
     setSourceIp(newSource);
     if (targetIp === newSource) {
       const nextTarget = peers.find((p) => p.ipv4 !== newSource);
-      if (nextTarget) {
-        onTargetChange(nextTarget.ipv4);
-      }
+      if (nextTarget) onTargetChange(nextTarget.ipv4);
     }
   };
 
@@ -78,28 +81,26 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
     onTargetChange(newTarget);
     if (sourceIp === newTarget) {
       const nextSource = peers.find((p) => p.ipv4 !== newTarget);
-      if (nextSource) {
-        setSourceIp(nextSource.ipv4);
-      }
+      if (nextSource) setSourceIp(nextSource.ipv4);
     }
   };
 
   const handleSwap = () => {
     if (!targetIp || !sourceIp) return;
     const oldSource = sourceIp;
-    const oldTarget = targetIp;
-    setSourceIp(oldTarget);
+    setSourceIp(targetIp);
     onTargetChange(oldSource);
   };
 
-  const applyPreset = (preset: 'quick' | 'max' | 'udp') => {
-    if (preset === 'quick') {
+  const applyPreset = (p: Preset) => {
+    setPreset(p);
+    if (p === 'quick') {
       setProtocol('tcp');
       setDuration(3);
-    } else if (preset === 'max') {
+    } else if (p === 'max') {
       setProtocol('tcp');
       setDuration(10);
-    } else if (preset === 'udp') {
+    } else {
       setProtocol('udp');
       setDuration(5);
       setBandwidth('50M');
@@ -111,155 +112,129 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
     onRun(targetIp, protocol, duration, bandwidth, sourceIp);
   };
 
-  const formatBytes = (bytes?: number) => {
-    if (!bytes || bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-  };
-
   const isRemoteRunner = sourcePeer && !sourcePeer.is_current;
+  const routeSource = lastResult?.source || sourceIp;
+  const routeTarget = lastResult?.target || targetIp;
+  const nameOf = (ip: string) => peers.find((p) => p.ipv4 === ip)?.hostname || ip;
+  const speed = lastResult ? lastResult.summary.sent_mbps || lastResult.summary.received_mbps || lastResult.summary.mbps || '0.00' : null;
+  const resultProto = lastResult?.summary.jitter_ms !== undefined ? 'udp' : protocol;
+  const intervals = lastResult?.intervals || [];
+  const num = (v: string | number) => localizeDigits(v, t);
+  const percent = (v: string | number) => t('percent').replace('{n}', num(v));
+
+  const presets: { id: Preset; icon: React.ReactNode; title: string; sub: string }[] = [
+    { id: 'quick', icon: <Rocket className="w-4 h-4" />, title: t('speed_profile_quick'), sub: t('speed_profile_quick_sub') },
+    { id: 'max', icon: <Gauge className="w-4 h-4" />, title: t('speed_profile_max'), sub: t('speed_profile_max_sub') },
+    { id: 'udp', icon: <Target className="w-4 h-4" />, title: t('speed_profile_udp'), sub: t('speed_profile_udp_sub') },
+  ];
 
   return (
-    <div className="p-4 sm:p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
-      {/* Panel Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-        <div>
-          <h2 className="text-base font-bold text-text-main flex items-center gap-2 leading-tight">
-            <Zap className="w-4 h-4 text-primary shrink-0" />
-            {t('speed_panel_title')}
-          </h2>
-          <p className="hidden sm:block text-xs text-text-muted mt-0.5">{t('speed_panel_desc')}</p>
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      {/* Controls */}
+      <section aria-labelledby="speed-heading" className={`${cardClass} lg:col-span-5 p-4 sm:p-6 space-y-5`}>
+        <SectionHeader id="speed-heading" icon={<Zap className="w-[18px] h-[18px]" />} title={t('speed_panel_title')} description={t('speed_panel_desc')} />
+
+        <div className="space-y-2">
+          <p className={labelClass}>{t('speed_profiles_label')}</p>
+          <div className="grid grid-cols-3 gap-2">
+            {presets.map((p) => {
+              const active = preset === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => applyPreset(p.id)}
+                  className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border text-center transition-colors cursor-pointer ${
+                    active ? 'border-primary bg-primary-subtle' : 'border-card-border hover:border-border-strong hover:bg-hover'
+                  }`}
+                >
+                  <span className={active ? 'text-primary' : 'text-text-muted'} aria-hidden="true">
+                    {p.icon}
+                  </span>
+                  <span className="text-sm font-semibold text-text-primary">{p.title}</span>
+                  <span className="text-2xs text-text-muted">{p.sub}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="hidden sm:flex items-center gap-2">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
-            <ShieldCheck className="w-4 h-4" />
-            <span>{t('speed_isolation_badge')}</span>
-          </div>
-          <span className="px-2.5 py-1 rounded-full text-xs font-mono font-semibold bg-purple-500/15 text-purple-400 border border-purple-500/30">
-            iperf3
-          </span>
-        </div>
-      </div>
+        <RoutePicker
+          peers={peers}
+          source={sourceIp}
+          target={targetIp}
+          onSourceChange={handleSourceChange}
+          onTargetChange={handleTargetChange}
+          onSwap={handleSwap}
+          sourceLabel={t('speed_source_label')}
+          targetLabel={t('speed_dest_label')}
+          sourcePlaceholder={t('speed_source_placeholder')}
+          targetPlaceholder={t('speed_dest_placeholder')}
+          swapLabel={t('speed_swap_nodes')}
+          currentLabel={t('route_this_server')}
+          stacked
+        />
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Controls */}
-        <div className="lg:col-span-5 space-y-4">
-          {/* Quick Profiles */}
-          <div>
-            <label className="block text-xs font-semibold text-text-muted mb-2">
-              {t('speed_profiles_label')}
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => applyPreset('quick')}
-                className="flex flex-col items-center p-2.5 rounded-xl bg-white/5 border border-card-border hover:border-primary/40 hover:bg-primary/10 text-xs transition-all"
-              >
-                <Rocket className="w-4 h-4 text-primary mb-1" />
-                <span className="font-semibold text-text-main">{t('speed_profile_quick')}</span>
-                <span className="text-xs text-text-muted">{t('speed_profile_quick_sub')}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => applyPreset('max')}
-                className="flex flex-col items-center p-2.5 rounded-xl bg-white/5 border border-card-border hover:border-primary/40 hover:bg-primary/10 text-xs transition-all"
-              >
-                <Zap className="w-4 h-4 text-amber-400 mb-1" />
-                <span className="font-semibold text-text-main">{t('speed_profile_max')}</span>
-                <span className="text-xs text-text-muted">{t('speed_profile_max_sub')}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => applyPreset('udp')}
-                className="flex flex-col items-center p-2.5 rounded-xl bg-white/5 border border-card-border hover:border-primary/40 hover:bg-primary/10 text-xs transition-all"
-              >
-                <Target className="w-4 h-4 text-emerald-400 mb-1" />
-                <span className="font-semibold text-text-main">{t('speed_profile_udp')}</span>
-                <span className="text-xs text-text-muted">{t('speed_profile_udp_sub')}</span>
-              </button>
-            </div>
-          </div>
-
-          <RoutePicker
-            peers={peers}
-            source={sourceIp}
-            target={targetIp}
-            onSourceChange={handleSourceChange}
-            onTargetChange={handleTargetChange}
-            onSwap={handleSwap}
-            sourceLabel={t('speed_source_label')}
-            targetLabel={t('speed_dest_label')}
-            sourcePlaceholder={t('speed_source_placeholder')}
-            targetPlaceholder={t('speed_dest_placeholder')}
-            swapLabel={t('speed_swap_nodes')}
+        <div className="space-y-2">
+          <p className={labelClass}>{t('speed_proto_label')}</p>
+          <Segmented
+            block
+            value={protocol}
+            onChange={(v) => {
+              setProtocol(v);
+              setPreset(null);
+            }}
+            ariaLabel={t('speed_proto_label')}
+            options={[
+              { value: 'tcp', label: t('speed_proto_tcp') },
+              { value: 'udp', label: t('speed_proto_udp') },
+            ]}
           />
+          <p className="text-xs text-text-muted leading-relaxed">{protocol === 'tcp' ? t('speed_proto_help_tcp') : t('speed_proto_help_udp')}</p>
+        </div>
 
-          {/* Protocol Selection */}
-          <div>
-            <label className="block text-xs font-medium text-text-muted mb-1.5">
-              {t('speed_proto_label')}
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setProtocol('tcp')}
-                className={`min-h-11 py-2 px-2 rounded-xl border text-xs font-medium leading-tight transition-all ${
-                  protocol === 'tcp'
-                    ? 'bg-primary/15 border-primary text-primary font-semibold shadow-sm'
-                    : 'bg-white/5 border-card-border text-text-muted hover:text-text-main'
-                }`}
-              >
-                {t('speed_proto_tcp')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setProtocol('udp')}
-                className={`min-h-11 py-2 px-2 rounded-xl border text-xs font-medium leading-tight transition-all ${
-                  protocol === 'udp'
-                    ? 'bg-primary/15 border-primary text-primary font-semibold shadow-sm'
-                    : 'bg-white/5 border-card-border text-text-muted hover:text-text-main'
-                }`}
-              >
-                {t('speed_proto_udp')}
-              </button>
-            </div>
-            <p className="text-xs text-text-subtle mt-1.5">
-              {protocol === 'tcp' ? t('speed_proto_help_tcp') : t('speed_proto_help_udp')}
-            </p>
-          </div>
-
-          {/* UDP Bandwidth (only if UDP) */}
+        <div className={`grid gap-4 ${protocol === 'udp' ? 'grid-cols-2' : 'grid-cols-1'}`}>
           {protocol === 'udp' && (
-            <div>
-              <label className="block text-xs font-medium text-text-muted mb-1.5">
+            <div className="flex flex-col gap-1.5 min-w-0">
+              <label htmlFor={`${fieldId}-bw`} className={labelClass}>
                 {t('speed_bandwidth_label')}
               </label>
               <select
+                id={`${fieldId}-bw`}
                 value={bandwidth}
-                onChange={(e) => setBandwidth(e.target.value)}
-                className="w-full h-11 px-3 bg-input border border-card-border rounded-xl text-sm font-mono text-text-main focus:outline-none focus:border-primary"
+                onChange={(e) => {
+                  setBandwidth(e.target.value);
+                  setPreset(null);
+                }}
+                className={`${selectClass} h-11`}
               >
-                <option value="20M">20 Mbps</option>
-                <option value="50M">50 Mbps</option>
-                <option value="100M">100 Mbps</option>
-                <option value="300M">300 Mbps</option>
-                <option value="1G">1 Gbps</option>
+                {[
+                  ['20M', 20, 'Mbps'],
+                  ['50M', 50, 'Mbps'],
+                  ['100M', 100, 'Mbps'],
+                  ['300M', 300, 'Mbps'],
+                  ['1G', 1, 'Gbps'],
+                ].map(([value, n, unit]) => (
+                  <option key={value} value={value}>
+                    {num(n)} {unit}
+                  </option>
+                ))}
               </select>
             </div>
           )}
-
-          {/* Duration */}
-          <div>
-            <label className="block text-xs font-medium text-text-muted mb-1.5">
+          <div className="flex flex-col gap-1.5 min-w-0">
+            <label htmlFor={`${fieldId}-dur`} className={labelClass}>
               {t('speed_duration_label')}
             </label>
             <select
+              id={`${fieldId}-dur`}
               value={duration}
-              onChange={(e) => setDuration(Number(e.target.value))}
-              className="w-full h-11 px-3 bg-input border border-card-border rounded-xl text-sm font-mono text-text-main focus:outline-none focus:border-primary"
+              onChange={(e) => {
+                setDuration(Number(e.target.value));
+                setPreset(null);
+              }}
+              className={`${selectClass} h-11`}
             >
               <option value={3}>{t('speed_duration_quick')}</option>
               <option value={5}>{t('speed_duration_std')}</option>
@@ -267,179 +242,144 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({
               <option value={15}>{t('speed_duration_tho')}</option>
             </select>
           </div>
+        </div>
 
-          {/* Run Button */}
-          <button
-            onClick={handleStart}
-            disabled={!targetIp || !sourceIp || targetIp === sourceIp || isRunning}
-            type="button"
-            className="w-full h-12 px-4 rounded-xl bg-primary text-black font-semibold text-sm hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg transition-all"
-          >
-            {isRunning ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>{t('speed_running')}</span>
-              </>
-            ) : (
-              <>
-                <Zap className="w-4 h-4" />
-                <span>{t('speed_btn_start')}</span>
-              </>
-            )}
-          </button>
+        <button
+          onClick={handleStart}
+          disabled={!targetIp || !sourceIp || targetIp === sourceIp || isRunning}
+          type="button"
+          className={`${btnPrimary} w-full h-12`}
+        >
+          {isRunning ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+              <span>{t('speed_running_short')}</span>
+            </>
+          ) : (
+            <>
+              <Zap className="w-4 h-4" aria-hidden="true" />
+              <span>{t('speed_btn_start')}</span>
+            </>
+          )}
+        </button>
 
-          {/* Footer note */}
-          <div className="pt-3 border-t border-white/5 text-xs text-text-muted leading-relaxed">
-            {t('speed_footer_note')}
+        <p className="flex items-start gap-2 pt-4 border-t border-card-border text-xs text-text-muted leading-relaxed">
+          <Info className="w-3.5 h-3.5 mt-[0.2em] shrink-0 text-text-subtle" aria-hidden="true" />
+          <span>{t('speed_footer_note')}</span>
+        </p>
+      </section>
+
+      {/* Result */}
+      <section aria-label={t('speed_result_label')} aria-live="polite" className={`${cardClass} lg:col-span-7 relative overflow-hidden flex flex-col p-4 sm:p-6 min-h-[22rem]`}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {routeSource && routeTarget ? (
+            <span className="inline-flex items-center gap-2 min-w-0 max-w-full h-8 px-3 rounded-full bg-surface border border-card-border text-sm">
+              <bdi className="font-medium text-text-primary truncate">{nameOf(routeSource)}</bdi>
+              <ArrowRight className="w-3.5 h-3.5 text-primary shrink-0 rtl:-scale-x-100" aria-hidden="true" />
+              <bdi className="font-medium text-text-primary truncate">{nameOf(routeTarget)}</bdi>
+            </span>
+          ) : (
+            <span />
+          )}
+          <div className="flex items-center gap-1.5">
+            {isRemoteRunner && <Pill tone="info">{t('ping_remote_runner')}</Pill>}
+            <Pill tone="success" icon={<ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />} title={t('speed_isolation_badge')}>
+              <span className="hidden sm:inline">{t('speed_isolation_short')}</span>
+              <span className="sm:hidden">iperf3</span>
+            </Pill>
           </div>
         </div>
 
-        {/* Right Column: Visualization & Metrics */}
-        <div className="lg:col-span-7 flex flex-col justify-between p-4 sm:p-6 rounded-2xl bg-surface border border-card-border relative overflow-hidden sm:min-h-[380px]">
-          {isRunning && (
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-md z-20 flex flex-col items-center justify-center p-6 text-center animate-fade-in">
-              <LoadingSpinner
-                size="lg"
-                glow={true}
-                label={t('speed_running')}
-                sublabel={`${sourcePeer?.hostname || sourceIp} -> ${selectedPeer?.hostname || targetIp}`}
-              />
-              {isRemoteRunner && (
-                <span className="mt-3 text-xs uppercase font-semibold px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 animate-pulse-subtle">
-                  Remote Runner via Node {sourceIp}
-                </span>
-              )}
+        <div className="flex-1 flex flex-col items-center justify-center text-center py-8">
+          <p className="text-xs font-medium text-text-muted">{t(resultProto === 'udp' ? 'speed_unit_udp' : 'speed_unit_tcp')}</p>
+          <p className={`mt-1 font-mono text-5xl sm:text-6xl font-bold tabular-nums ${speed ? 'text-primary' : 'text-text-subtle'}`}>
+            {num(speed ?? '0.00')}
+            <span className="ms-2 text-lg sm:text-xl font-semibold text-text-muted">Mbps</span>
+          </p>
+          {!lastResult && !isRunning && <p className="mt-3 max-w-xs text-sm text-text-muted">{t('speed_idle_hint')}</p>}
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <Metric
+            label={t('speed_metric_transferred')}
+            value={
+              lastResult
+                ? num(formatBytes(lastResult.summary.total_bytes_received || lastResult.summary.total_bytes_sent || lastResult.summary.total_bytes))
+                : '—'
+            }
+          />
+          <Metric
+            label={t('speed_metric_jitter')}
+            value={lastResult?.summary.jitter_ms !== undefined ? `${num(lastResult.summary.jitter_ms)} ms` : lastResult ? t('speed_na') : '—'}
+          />
+          <Metric
+            label={t('speed_metric_loss')}
+            value={lastResult?.summary.loss_percent !== undefined ? percent(lastResult.summary.loss_percent) : lastResult ? percent(0) : '—'}
+          />
+          <Metric label={t('speed_metric_retrans')} value={lastResult ? formatCount(Number(lastResult.summary.retransmits ?? lastResult.summary.lost_packets ?? 0), t) : '—'} />
+        </div>
+
+        {intervals.length > 0 && (
+          <div className="mt-5 pt-4 border-t border-card-border">
+            <div className="flex items-center justify-between mb-2 text-xs text-text-muted">
+              <span>{t('speed_chart_title')}</span>
+              <span>{formatText(t('speed_chart_duration'), { n: formatCount(intervals.length, t) })}</span>
             </div>
-          )}
-
-          {/* Speed Value & Live Gauge Indicator */}
-          <div className="flex flex-col items-center justify-center text-center my-auto py-4">
-            {/* Route indicator chip */}
-            {(lastResult?.source || sourceIp) && (lastResult?.target || targetIp) && (
-              <div className="inline-flex max-w-full min-w-0 items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-card-border text-xs font-mono text-text-muted mb-4">
-                <span className="text-text-main font-semibold truncate">
-                  {peers.find((p) => p.ipv4 === (lastResult?.source || sourceIp))?.hostname || (lastResult?.source || sourceIp)}
-                </span>
-                <ArrowRight className="w-3 h-3 text-primary shrink-0 rtl:-scale-x-100" />
-                <span className="text-text-main font-semibold truncate">
-                  {peers.find((p) => p.ipv4 === (lastResult?.target || targetIp))?.hostname || (lastResult?.target || targetIp)}
-                </span>
-                {lastResult?.source && !peers.find((p) => p.ipv4 === lastResult?.source)?.is_current && (
-                  <span className="text-xs uppercase font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300">
-                    Cluster
-                  </span>
-                )}
-              </div>
-            )}
-
-            <div dir="ltr" className="text-5xl md:text-6xl font-black font-mono tracking-tight text-primary drop-shadow-[0_0_25px_rgba(var(--primary-rgb),0.3)]">
-              {lastResult
-                ? lastResult.summary.sent_mbps ||
-                  lastResult.summary.received_mbps ||
-                  lastResult.summary.mbps ||
-                  '0.00'
-                : '0.00'}
-            </div>
-            <div className="text-xs md:text-sm font-mono text-text-muted mt-1 uppercase tracking-wider">
-              {protocol === 'tcp' ? 'Mbps (TCP Throughput)' : 'Mbps (UDP Bandwidth)'}
-            </div>
-
-            {/* Metrics Chips Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-6 w-full">
-              <div className="p-2.5 rounded-xl bg-black/30 border border-white/5 text-center">
-                <div className="text-xs text-text-muted">{t('speed_metric_transferred')}</div>
-                <div className="text-sm font-bold font-mono text-text-main mt-0.5 tabular-nums">
-                  {lastResult
-                    ? formatBytes(
-                        lastResult.summary.total_bytes_received ||
-                          lastResult.summary.total_bytes_sent ||
-                          lastResult.summary.total_bytes
-                      )
-                    : '--'}
-                </div>
-              </div>
-
-              <div className="p-2.5 rounded-xl bg-black/30 border border-white/5 text-center">
-                <div className="text-xs text-text-muted">{t('speed_metric_jitter')}</div>
-                <div className="text-sm font-bold font-mono text-text-main mt-0.5 tabular-nums">
-                  {lastResult?.summary.jitter_ms !== undefined ? `${lastResult.summary.jitter_ms} ms` : 'N/A (TCP)'}
-                </div>
-              </div>
-
-              <div className="p-2.5 rounded-xl bg-black/30 border border-white/5 text-center">
-                <div className="text-xs text-text-muted">{t('speed_metric_loss')}</div>
-                <div className="text-sm font-bold font-mono text-text-main mt-0.5 tabular-nums">
-                  {lastResult?.summary.loss_percent !== undefined ? `${lastResult.summary.loss_percent}%` : '0%'}
-                </div>
-              </div>
-
-              <div className="p-2.5 rounded-xl bg-black/30 border border-white/5 text-center">
-                <div className="text-xs text-text-muted">{t('speed_metric_retrans')}</div>
-                <div className="text-sm font-bold font-mono text-text-main mt-0.5 tabular-nums">
-                  {lastResult?.summary.retransmits ?? lastResult?.summary.lost_packets ?? 0}
-                </div>
-              </div>
+            <div className="h-32 w-full" dir="ltr">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={intervals} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+                  <defs>
+                    <linearGradient id="speedGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="rgb(var(--primary-rgb))" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="rgb(var(--primary-rgb))" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} stroke="var(--border-subtle)" strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="interval"
+                    reversed={isRtl}
+                    tick={{ fill: 'var(--text-subtle)', fontSize: 10 }}
+                    tickFormatter={(v) => num(v)}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    orientation={isRtl ? 'right' : 'left'}
+                    width={36}
+                    tick={{ fill: 'var(--text-subtle)', fontSize: 10 }}
+                    tickFormatter={(v) => num(v)}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <Tooltip
+                    cursor={{ stroke: 'var(--border-strong)' }}
+                    contentStyle={{
+                      backgroundColor: 'var(--bg-elevated)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 10,
+                      fontSize: 12,
+                      fontFamily: 'var(--font-mono)',
+                      color: 'var(--text-primary)',
+                    }}
+                    itemStyle={{ color: 'rgb(var(--primary-rgb))' }}
+                    labelStyle={{ color: 'var(--text-muted)' }}
+                    formatter={(val: any) => [`${num(val)} Mbps`, t('speed_chart_series')]}
+                    labelFormatter={(label: any) => formatText(t('speed_chart_time'), { s: num(label) })}
+                  />
+                  <Area type="monotone" dataKey="mbps" stroke="rgb(var(--primary-rgb))" strokeWidth={2} fill="url(#speedGradient)" />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </div>
+        )}
 
-          {/* Recharts Interval Area Chart */}
-          {lastResult && lastResult.intervals && lastResult.intervals.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-white/5">
-              <div className="text-xs font-mono text-text-muted mb-2 flex items-center justify-between">
-                <span>{t('speed_chart_title')}</span>
-                <span>{lastResult.intervals.length}s</span>
-              </div>
-              <div className="h-28 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={lastResult.intervals}>
-                    <defs>
-                      <linearGradient id="speedGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis
-                      dataKey="interval"
-                      stroke="#64748b"
-                      fontSize={10}
-                      tickLine={false}
-                      axisLine={false}
-                      unit="s"
-                    />
-                    <YAxis
-                      stroke="#64748b"
-                      fontSize={10}
-                      tickLine={false}
-                      axisLine={false}
-                      unit="M"
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#0f172a',
-                        borderColor: 'rgba(255,255,255,0.1)',
-                        borderRadius: '8px',
-                        fontSize: '11px',
-                        fontFamily: 'monospace',
-                      }}
-                      itemStyle={{ color: 'var(--primary)' }}
-                      formatter={(val: any) => [`${val} Mbps`, 'Throughput']}
-                      labelFormatter={(label: any) => `Time: ${label}s`}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="mbps"
-                      stroke="var(--primary)"
-                      strokeWidth={2}
-                      fillOpacity={1}
-                      fill="url(#speedGradient)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+        {isRunning && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 p-6 text-center bg-card animate-fade-in">
+            <LoadingSpinner size="lg" label={t('speed_running')} sublabel={fillTemplate(t('route_from_to'), { from: <bdi>{sourcePeer?.hostname || sourceIp}</bdi>, to: <bdi>{selectedPeer?.hostname || targetIp}</bdi> })} />
+            {isRemoteRunner && <Pill tone="info">{formatText(t('speed_remote_runner'), { ip: sourceIp })}</Pill>}
+          </div>
+        )}
+      </section>
     </div>
   );
 };

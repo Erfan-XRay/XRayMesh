@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   StatusResponse,
   Peer,
@@ -19,7 +19,7 @@ import { useNodeUpdates, UPDATED_TO_KEY } from './hooks/useNodeUpdates';
 import { useTunnels } from './hooks/useTunnels';
 import * as api from './services/api';
 
-import { Header } from './components/Header';
+import { Header, NavTab } from './components/Header';
 import { OverviewCards } from './components/OverviewCards';
 import { MobileDrawer } from './components/MobileDrawer';
 import { MobileBottomNav } from './components/MobileBottomNav';
@@ -37,6 +37,9 @@ import { TunnelsTab } from './components/Tabs/TunnelsTab';
 import { Users, Zap, Activity, Network, Settings, ArrowUpCircle, Sparkles } from 'lucide-react';
 import { copyToClipboard } from './utils/clipboard';
 import { LoadingSpinner } from './components/LoadingSpinner';
+import { formatText } from './i18n/fillTemplate';
+import { formatCount, localizeDigits } from './i18n/format';
+import { btnPrimary } from './components/ui';
 
 /** Version this server was just updated to, read once per page load (null when no update happened). */
 const JUST_UPDATED_TO: string | null = (() => {
@@ -63,7 +66,7 @@ const EMPTY_STATUS: StatusResponse = {
 
 export default function App() {
   // Hooks
-  const { paletteId, setPaletteId, themeMode, setThemeMode, availablePalettes } = useTheme();
+  const { paletteId, setPaletteId, themeMode, setThemeMode, availablePalettes, resolvedTheme } = useTheme();
   const { lang, setLang, isRtl, t } = useTranslation();
 
   // Auth state
@@ -180,7 +183,7 @@ export default function App() {
         addToast(t('btn_copied'), 'success');
         setTimeout(() => setCopiedKey(null), 2000);
       } else {
-        addToast('Could not copy to clipboard', 'error');
+        addToast(t('toast_copy_failed'), 'error');
       }
     },
     [addToast, t]
@@ -220,7 +223,7 @@ export default function App() {
 
   useEffect(() => {
     if (isAuthenticated && updatedTo !== null) {
-      addToast(t('update_after_reload_toast').replace('{version}', updatedTo ? `v${updatedTo}` : ''), 'success');
+      addToast(formatText(t('update_after_reload_toast'), { version: updatedTo ? `v${updatedTo}` : '' }), 'success');
       setUpdatedTo(null);
     }
   }, [isAuthenticated, updatedTo, addToast, t]);
@@ -236,7 +239,7 @@ export default function App() {
     await api.fetchVersionInfo(true).catch(() => undefined);
     await Promise.all([loadDashboard(), tunnelStore.refresh()]);
     setIsRefreshing(false);
-    addToast(t('btn_refresh') + ' ✓', 'success');
+    addToast(t('toast_refreshed'), 'success');
   }, [loadDashboard, tunnelStore, addToast, t]);
 
   // ─── Auth ───────────────────────────────────────────────
@@ -259,7 +262,7 @@ export default function App() {
         .then(() => {
           setIsAuthenticated(true);
           setShowLogin(false);
-          addToast('✓ Logged in via access token', 'success');
+          addToast(t('toast_token_accepted'), 'success');
         })
         .catch(() => {
           // Token exchange failed or was already consumed by server 302, check status
@@ -293,7 +296,7 @@ export default function App() {
         setIsAuthenticated(false);
         setShowLogin(true);
       });
-  }, [addToast]);
+  }, [addToast]); // Runs once on load; t only changes the toast wording.
 
   // Start polling once authenticated
   useEffect(() => {
@@ -314,9 +317,9 @@ export default function App() {
       await api.loginWithPassword(password);
       setIsAuthenticated(true);
       setShowLogin(false);
-      addToast('✓ Logged in', 'success');
+      addToast(t('toast_logged_in'), 'success');
     },
-    [addToast]
+    [addToast, t]
   );
 
   const handleLoginToken = useCallback(
@@ -324,9 +327,9 @@ export default function App() {
       await api.loginWithToken(token);
       setIsAuthenticated(true);
       setShowLogin(false);
-      addToast('✓ Token accepted', 'success');
+      addToast(t('toast_token_accepted'), 'success');
     },
-    [addToast]
+    [addToast, t]
   );
 
   const handleLogout = useCallback(async () => {
@@ -369,14 +372,14 @@ export default function App() {
         setSpeedResult(data);
         const mbps =
           data.summary?.sent_mbps || data.summary?.received_mbps || data.summary?.mbps || '?';
-        addToast(`Speedtest: ${mbps} Mbps`, 'success');
+        addToast(formatText(t('toast_speedtest_done'), { mbps: localizeDigits(mbps, t) }), 'success');
       } catch (e: any) {
-        addToast(e.message || 'Speedtest failed', 'error');
+        addToast(e.message || t('toast_speedtest_failed'), 'error');
       } finally {
         setIsSpeedtesting(false);
       }
     },
-    [addToast]
+    [addToast, t]
   );
 
   // ─── Ping ───────────────────────────────────────────────
@@ -387,14 +390,14 @@ export default function App() {
       try {
         const data = await api.runPing(target, count, source);
         setPingResult(data);
-        addToast(`Ping: avg ${data.avg_ms} ms`, 'success');
+        addToast(formatText(t('toast_ping_done'), { avg: localizeDigits(data.avg_ms, t) }), 'success');
       } catch (e: any) {
-        addToast(e.message || 'Ping failed', 'error');
+        addToast(e.message || t('toast_ping_failed'), 'error');
       } finally {
         setIsPinging(false);
       }
     },
-    [addToast]
+    [addToast, t]
   );
 
   // ─── Tunnel CRUD ────────────────────────────────────────
@@ -460,15 +463,15 @@ export default function App() {
             formData.originNode
           );
         }
-        addToast(msg || '✓ Saved', 'success');
+        addToast(msg || t('toast_saved'), 'success');
         setTunnelModalOpen(false);
         await tunnelStore.reloadNode(formData.originNode || (tunnelModalEdit ? tunnelModalData?._node_ip : undefined));
       } catch (e: any) {
-        addToast(e.message || 'Save failed', 'error');
+        addToast(e.message || t('toast_save_failed'), 'error');
         throw e;
       }
     },
-    [tunnelModalType, tunnelModalEdit, tunnelModalData, addToast, tunnelStore]
+    [tunnelModalType, tunnelModalEdit, tunnelModalData, addToast, tunnelStore, t]
   );
 
   const handleDeleteTunnelRequest = useCallback(
@@ -493,30 +496,28 @@ export default function App() {
       } else if (deleteTarget.type === 'realm') {
         msg = await api.deleteRealmTunnel(deleteTarget.name, deleteTarget.originNode);
       }
-      addToast(msg || '✓ Deleted', 'success');
+      addToast(msg || t('toast_deleted'), 'success');
       setDeleteModalOpen(false);
       setDeleteTarget(null);
       await tunnelStore.reloadNode(deleteTarget.originNode);
     } catch (e: any) {
-      addToast(e.message || 'Delete failed', 'error');
+      addToast(e.message || t('toast_delete_failed'), 'error');
     } finally {
       setIsDeleting(false);
     }
-  }, [deleteTarget, addToast, tunnelStore]);
+  }, [deleteTarget, addToast, tunnelStore, t]);
 
 
   // ─── Computed Values ────────────────────────────────────
   const avgLatency = (() => {
     const latencies = peers
-      .map((p) => {
-        const v = typeof p.lat_ms === 'string' ? parseFloat(p.lat_ms) : p.lat_ms;
-        return typeof v === 'number' && !isNaN(v) ? v : null;
-      })
-      .filter((v): v is number => v !== null);
-    if (latencies.length === 0) return '--';
-    const avg = latencies.reduce((a, b) => a + b, 0) / latencies.length;
-    return `${avg.toFixed(1)} ms`;
+      .filter((p) => !p.is_current)
+      .map((p) => (typeof p.lat_ms === 'string' ? parseFloat(p.lat_ms) : p.lat_ms))
+      .filter((v): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0);
+    if (latencies.length === 0) return null;
+    return latencies.reduce((a, b) => a + b, 0) / latencies.length;
   })();
+  const otherPeers = peers.filter((p) => !p.is_current).length;
 
   // ─── Tab Config ─────────────────────────────────────────
   const totalTunnels =
@@ -533,36 +534,39 @@ export default function App() {
     }
   }, [initialLoaded, isNodeConfigured, activeTab]);
 
-  const tabs: { id: TabId; label: string; short?: string; icon: React.ReactNode; badge?: number | string }[] = isNodeConfigured
+  const tabs: NavTab[] = isNodeConfigured
     ? [
-        { id: 'node', label: t('tab_node'), short: t('tab_short_node'), icon: <Settings className="w-4 h-4" /> },
-        { id: 'peers', label: t('tab_peers'), short: t('tab_short_peers'), icon: <Users className="w-4 h-4" />, badge: peers.length > 0 ? peers.length : undefined },
-        { id: 'tunnels', label: t('tab_tunnels'), short: t('tab_short_tunnels'), icon: <Network className="w-4 h-4" />, badge: totalTunnels > 0 ? totalTunnels : undefined },
-        { id: 'ping', label: t('tab_ping'), short: t('tab_short_ping'), icon: <Activity className="w-4 h-4" /> },
-        { id: 'speedtest', label: t('tab_speedtest'), short: t('tab_short_speedtest'), icon: <Zap className="w-4 h-4" /> },
+        { id: 'node', label: t('tab_node'), short: t('tab_short_node'), icon: <Settings className="w-[18px] h-[18px]" /> },
+        { id: 'peers', label: t('tab_peers'), short: t('tab_short_peers'), icon: <Users className="w-[18px] h-[18px]" />, badge: otherPeers > 0 ? formatCount(otherPeers, t) : undefined },
+        { id: 'tunnels', label: t('tab_tunnels'), short: t('tab_short_tunnels'), icon: <Network className="w-[18px] h-[18px]" />, badge: totalTunnels > 0 ? formatCount(totalTunnels, t) : undefined },
+        { id: 'ping', label: t('tab_ping'), short: t('tab_short_ping'), icon: <Activity className="w-[18px] h-[18px]" /> },
+        { id: 'speedtest', label: t('tab_speedtest'), short: t('tab_short_speedtest'), icon: <Zap className="w-[18px] h-[18px]" /> },
       ]
-    : [
-        { id: 'node', label: t('setup_title'), icon: <Sparkles className="w-4 h-4 text-primary" />, badge: t('setup_mode_badge') || 'Setup' },
-      ];
+    : [{ id: 'node', label: t('setup_title'), icon: <Sparkles className="w-[18px] h-[18px]" /> }];
+
+  const preferences = {
+    lang,
+    onSelectLang: setLang,
+    paletteId,
+    onSelectPalette: setPaletteId,
+    themeMode,
+    onSelectThemeMode: setThemeMode,
+    availablePalettes,
+    resolvedTheme,
+  };
 
   // ─── Loading / Auth Gate ────────────────────────────────
   if (isAuthenticated === null || (isAuthenticated && !initialLoaded)) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-5 bg-transparent px-4">
-        <LoadingSpinner
-          size="xl"
-          glow={true}
-          label={lang === 'fa' ? 'در حال بارگذاری و بررسی وضعیت نود...' : 'Connecting to XRayMesh Node...'}
-          sublabel={lang === 'fa' ? 'دریافت مشخصات شبکه و وضعیت نودها' : 'Synchronizing node status and mesh topology'}
-        />
+      <div className="flex flex-col items-center justify-center min-h-dvh px-4">
+        <LoadingSpinner size="xl" label={t('boot_loading')} sublabel={t('boot_loading_hint')} />
       </div>
     );
   }
 
   // ─── Render ─────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-transparent px-3 sm:px-6 py-3.5 sm:py-6 lg:px-8 max-w-7xl mx-auto pb-24 md:pb-12">
-      {/* Login Modal */}
+    <>
       <LoginModal
         isOpen={showLogin}
         passwordConfigured={passwordConfigured}
@@ -574,11 +578,7 @@ export default function App() {
         onSelectLang={setLang}
         themeMode={themeMode}
         onSelectThemeMode={setThemeMode}
-        notice={
-          updatedTo !== null
-            ? t('update_login_notice').replace('{version}', updatedTo ? `v${updatedTo}` : '')
-            : undefined
-        }
+        notice={updatedTo !== null ? formatText(t('update_login_notice'), { version: updatedTo ? `v${updatedTo}` : '' }) : undefined}
         t={t}
       />
 
@@ -588,15 +588,14 @@ export default function App() {
           role="alertdialog"
           aria-live="assertive"
           aria-label={t('update_overlay_title')}
-          className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-[var(--overlay)] backdrop-blur-sm animate-fade-in"
         >
-          <div className="glass-panel-elevated w-full max-w-sm rounded-3xl p-6 text-center">
+          <div className="w-full max-w-sm rounded-2xl bg-elevated border border-card-border shadow-pop px-6 py-8 text-center animate-modal-in">
             <LoadingSpinner
               size="lg"
-              glow={true}
               label={
                 localRestart.phase === 'success'
-                  ? t('update_overlay_done').replace('{version}', localRestart.targetVersion ? `v${localRestart.targetVersion}` : '')
+                  ? formatText(t('update_overlay_done'), { version: localRestart.targetVersion ? `v${localRestart.targetVersion}` : '' })
                   : localRestart.phase === 'rollback'
                     ? t('update_phase_rollback')
                     : t('update_overlay_title')
@@ -607,184 +606,143 @@ export default function App() {
         </div>
       )}
 
-      {/* Dashboard (shown when authenticated) */}
       {isAuthenticated && (
-        <>
-          {/* Header */}
-          <div className="relative z-50">
-            <Header
-              node={status.node}
-              isRefreshing={isRefreshing}
-              onRefresh={handleRefresh}
-              onLogout={handleLogout}
-              lang={lang}
-              onSelectLang={setLang}
-              paletteId={paletteId}
-              onSelectPalette={setPaletteId}
-              themeMode={themeMode}
-              onSelectThemeMode={setThemeMode}
-              availablePalettes={availablePalettes}
-              t={t}
-              isRtl={isRtl}
-              onOpenDrawer={() => setDrawerOpen(true)}
-            />
-          </div>
+        <div className="min-h-dvh flex flex-col">
+          <Header
+            node={status.node}
+            tabs={tabs}
+            activeTab={activeTab}
+            onSelectTab={setActiveTab}
+            showTabs={isNodeConfigured}
+            isRefreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            onLogout={handleLogout}
+            onOpenDrawer={() => setDrawerOpen(true)}
+            t={t}
+            {...preferences}
+          />
 
-          {/* Update notice for this server; the Peers tab holds the one-click update. */}
-          {isNodeConfigured && versionInfo?.update_available && activeTab !== 'peers' && (
-            <div className="relative z-20 mb-4 sm:mb-6 p-3.5 sm:p-4 rounded-2xl bg-card border border-primary-border backdrop-blur-xl shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-3 animate-fade-in">
-              <div className="flex items-start gap-3 min-w-0">
-                <span className="w-9 h-9 rounded-xl bg-primary-subtle text-primary flex items-center justify-center shrink-0" aria-hidden="true">
-                  <ArrowUpCircle className="w-5 h-5" />
-                </span>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-text-main">
-                    {t('version_update_available')}: <bdi dir="ltr" className="font-mono">{versionInfo.latest_version}</bdi>
-                  </p>
-                  {(versionInfo.release_notes || typeof versionInfo.changelog === 'string') && (
-                    <p className="text-xs text-text-muted mt-0.5 max-w-2xl leading-relaxed" dir="auto">
-                      {versionInfo.release_notes || (versionInfo.changelog as unknown as string)}
+          <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 sm:pt-6 pb-28 md:pb-12">
+            {/* Update notice for this server; the Peers tab holds the one-click update. */}
+            {isNodeConfigured && versionInfo?.update_available && activeTab !== 'peers' && (
+              <div className="mb-5 flex flex-col sm:flex-row sm:items-center gap-3 p-3.5 sm:ps-4 rounded-2xl bg-primary-subtle border border-primary-border animate-fade-in">
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  <span className="flex items-center justify-center w-9 h-9 shrink-0 rounded-xl bg-primary text-on-primary" aria-hidden="true">
+                    <ArrowUpCircle className="w-5 h-5" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-text-primary">
+                      {t('version_update_available')}{' '}
+                      <bdi dir="ltr" className="font-mono text-primary">
+                        {versionInfo.latest_version}
+                      </bdi>
                     </p>
-                  )}
+                    {(versionInfo.release_notes || typeof versionInfo.changelog === 'string') && (
+                      <p className="mt-0.5 text-xs text-text-muted leading-relaxed line-clamp-2" dir="auto">
+                        {versionInfo.release_notes || (versionInfo.changelog as unknown as string)}
+                      </p>
+                    )}
+                  </div>
                 </div>
+                <button type="button" onClick={() => setActiveTab('peers')} className={`${btnPrimary} w-full sm:w-auto shrink-0`}>
+                  {t('version_view_updates')}
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setActiveTab('peers')}
-                className="w-full md:w-auto shrink-0 inline-flex items-center justify-center gap-2 min-h-10 px-4 rounded-xl bg-primary text-on-primary text-sm font-semibold hover:bg-primary-hover transition-colors cursor-pointer"
-              >
-                {t('version_view_updates')}
-              </button>
-            </div>
-          )}
+            )}
 
-          {/* Overview Cards (Only shown after mesh node is configured) */}
-          {isNodeConfigured && (
-            <div className="relative z-10 animate-fade-in">
+            {isNodeConfigured && (
               <OverviewCards
                 node={status.node}
                 system={status.system}
-                peerCount={peers.length}
+                peers={peers}
                 avgLatency={avgLatency}
                 onCopy={handleCopy}
                 copiedKey={copiedKey}
                 t={t}
               />
-            </div>
-          )}
+            )}
 
-          {/* Tab Navigation (only once the node is configured) */}
-          {isNodeConfigured && (
-            <nav aria-label={t('drawer_tabs')} className="horizontal-scroll hidden md:flex flex-wrap gap-1.5 mb-4 sm:mb-6 p-1.5 rounded-2xl bg-card/80 border border-card-border backdrop-blur-xl shadow-lg" role="tablist">
-              {tabs.map((tab) => {
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    role="tab"
-                    aria-selected={isActive}
-                    aria-label={tab.label}
-                    tabIndex={isActive ? 0 : -1}
-                    className={`interactive-min-hit flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 active:scale-95 cursor-pointer whitespace-nowrap shrink-0 ${
-                      isActive
-                        ? 'bg-primary text-black shadow-md shadow-primary/20 font-bold'
-                        : 'text-text-muted hover:text-text-main hover:bg-white/5'
-                    }`}
-                  >
-                    <span className="shrink-0">{tab.icon}</span>
-                    <span>{tab.label}</span>
-                    {tab.badge !== undefined && (
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold leading-none shrink-0 ${
-                          isActive
-                            ? 'bg-black/25 text-black'
-                            : 'bg-primary/20 text-primary border border-primary/30'
-                        }`}
-                      >
-                        {tab.badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </nav>
-          )}
+            <main
+              id="dashboard-content"
+              key={activeTab}
+              role="tabpanel"
+              aria-labelledby={isNodeConfigured ? `tab-${activeTab}` : undefined}
+              aria-label={isNodeConfigured ? undefined : tabs[0]?.label}
+              className="animate-tab-in"
+            >
+              {activeTab === 'node' && (
+                <NodeConfigTab
+                  onRefreshStatus={loadDashboard}
+                  onNotify={addToast}
+                  onCopy={handleCopy}
+                  copiedKey={copiedKey}
+                  t={t}
+                  onOpenClusterSync={handleOpenClusterSync}
+                  reloadKey={nodeReloadKey}
+                />
+              )}
+              {activeTab === 'peers' && (
+                <PeersTab
+                  peers={peers}
+                  updateRuns={updateRuns}
+                  onStartUpdate={startUpdate}
+                  onDismissUpdate={dismissUpdate}
+                  onRefresh={loadDashboard}
+                  onQuickPing={handleQuickPing}
+                  onQuickSpeedtest={handleQuickSpeedtest}
+                  onNotify={addToast}
+                  onCopy={handleCopy}
+                  copiedKey={copiedKey}
+                  t={t}
+                />
+              )}
+              {activeTab === 'speedtest' && (
+                <SpeedtestTab
+                  peers={peers}
+                  targetIp={speedTarget}
+                  onTargetChange={setSpeedTarget}
+                  isRunning={isSpeedtesting}
+                  onRun={handleRunSpeedtest}
+                  lastResult={speedResult}
+                  isRtl={isRtl}
+                  t={t}
+                />
+              )}
+              {activeTab === 'ping' && (
+                <PingTab
+                  peers={peers}
+                  targetIp={pingTarget}
+                  onTargetChange={setPingTarget}
+                  isRunning={isPinging}
+                  onRun={handleRunPing}
+                  lastResult={pingResult}
+                  t={t}
+                />
+              )}
+              {activeTab === 'tunnels' && (
+                <TunnelsTab
+                  tunnels={tunnels}
+                  nodes={tunnelStore.nodes}
+                  byNode={tunnelStore.byNode}
+                  scope={tunnelStore.scope}
+                  onScopeChange={tunnelStore.setScope}
+                  onRetryNode={tunnelStore.loadNode}
+                  onRefresh={() => tunnelStore.refresh()}
+                  onOpenCreateHaproxy={() => openCreateTunnel('haproxy')}
+                  onOpenEditHaproxy={(item) => openEditTunnel('haproxy', item)}
+                  onOpenCreateIptables={() => openCreateTunnel('iptables')}
+                  onOpenEditIptables={(item) => openEditTunnel('iptables', item)}
+                  onOpenCreateGost={() => openCreateTunnel('gost')}
+                  onOpenEditGost={(item) => openEditTunnel('gost', item)}
+                  onOpenCreateRealm={() => openCreateTunnel('realm')}
+                  onOpenEditRealm={(item) => openEditTunnel('realm', item)}
+                  onDeleteTunnel={handleDeleteTunnelRequest}
+                  t={t}
+                />
+              )}
+            </main>
+          </div>
 
-          {/* Tab Content with Smooth Transition */}
-          <main id="dashboard-content" key={activeTab} role="tabpanel" aria-label={tabs.find((item) => item.id === activeTab)?.label} className="animate-tab-in">
-            {activeTab === 'node' && (
-              <NodeConfigTab
-                onRefreshStatus={loadDashboard}
-                onNotify={addToast}
-                onCopy={handleCopy}
-                copiedKey={copiedKey}
-                t={t}
-                onOpenClusterSync={handleOpenClusterSync}
-                reloadKey={nodeReloadKey}
-              />
-            )}
-            {activeTab === 'peers' && (
-              <PeersTab
-                peers={peers}
-                updateRuns={updateRuns}
-                onStartUpdate={startUpdate}
-                onDismissUpdate={dismissUpdate}
-                onRefresh={loadDashboard}
-                onQuickPing={handleQuickPing}
-                onQuickSpeedtest={handleQuickSpeedtest}
-                onNotify={addToast}
-                onCopy={handleCopy}
-                copiedKey={copiedKey}
-                t={t}
-              />
-            )}
-            {activeTab === 'speedtest' && (
-              <SpeedtestTab
-                peers={peers}
-                targetIp={speedTarget}
-                onTargetChange={setSpeedTarget}
-                isRunning={isSpeedtesting}
-                onRun={handleRunSpeedtest}
-                lastResult={speedResult}
-                t={t}
-              />
-            )}
-            {activeTab === 'ping' && (
-              <PingTab
-                peers={peers}
-                targetIp={pingTarget}
-                onTargetChange={setPingTarget}
-                isRunning={isPinging}
-                onRun={handleRunPing}
-                lastResult={pingResult}
-                t={t}
-              />
-            )}
-            {activeTab === 'tunnels' && (
-              <TunnelsTab
-                tunnels={tunnels}
-                nodes={tunnelStore.nodes}
-                byNode={tunnelStore.byNode}
-                scope={tunnelStore.scope}
-                onScopeChange={tunnelStore.setScope}
-                onRetryNode={tunnelStore.loadNode}
-                onRefresh={() => tunnelStore.refresh()}
-                onOpenCreateHaproxy={() => openCreateTunnel('haproxy')}
-                onOpenEditHaproxy={(t) => openEditTunnel('haproxy', t)}
-                onOpenCreateIptables={() => openCreateTunnel('iptables')}
-                onOpenEditIptables={(t) => openEditTunnel('iptables', t)}
-                onOpenCreateGost={() => openCreateTunnel('gost')}
-                onOpenEditGost={(t) => openEditTunnel('gost', t)}
-                onOpenCreateRealm={() => openCreateTunnel('realm')}
-                onOpenEditRealm={(t) => openEditTunnel('realm', t)}
-                onDeleteTunnel={handleDeleteTunnelRequest}
-                t={t}
-              />
-            )}
-          </main>
-
-          {/* Tunnel Create/Edit Modal */}
           <TunnelModal
             isOpen={tunnelModalOpen}
             type={tunnelModalType}
@@ -792,16 +750,13 @@ export default function App() {
             initialData={tunnelModalData}
             peers={peers}
             nodeStates={tunnelStore.nodes}
-            defaultOriginNode={
-              tunnelStore.scope !== 'local' && tunnelStore.scope !== 'all' ? tunnelStore.scope : ''
-            }
+            defaultOriginNode={tunnelStore.scope !== 'local' && tunnelStore.scope !== 'all' ? tunnelStore.scope : ''}
             interfaces={interfaces}
             onClose={() => setTunnelModalOpen(false)}
             onSubmit={handleTunnelSubmit}
             t={t}
           />
 
-          {/* Delete Confirm Modal */}
           <DeleteConfirmModal
             isOpen={deleteModalOpen}
             tunnelName={deleteTarget?.name || ''}
@@ -814,7 +769,6 @@ export default function App() {
             t={t}
           />
 
-          {/* Cluster SafeSync Modal */}
           {clusterSyncConfig && (
             <ClusterSyncModal
               isOpen={clusterSyncOpen}
@@ -827,20 +781,10 @@ export default function App() {
                 setNodeReloadKey((key) => key + 1);
               }}
               t={t}
-              isRtl={isRtl}
             />
           )}
 
-          {/* Mobile Navigation & Settings Drawer */}
-          {/* Mobile Sticky Bottom Navigation Bar */}
-          {isNodeConfigured && (
-            <MobileBottomNav
-              activeTab={activeTab}
-              onSelectTab={setActiveTab}
-              tabs={tabs}
-              t={t}
-            />
-          )}
+          {isNodeConfigured && <MobileBottomNav activeTab={activeTab} onSelectTab={setActiveTab} tabs={tabs} t={t} />}
 
           <MobileDrawer
             isOpen={drawerOpen}
@@ -849,24 +793,17 @@ export default function App() {
             activeTab={activeTab}
             onSelectTab={setActiveTab}
             tabs={tabs}
+            showTabs={isNodeConfigured}
             isRefreshing={isRefreshing}
             onRefresh={handleRefresh}
             onLogout={handleLogout}
-            lang={lang}
-            onSelectLang={setLang}
-            paletteId={paletteId}
-            onSelectPalette={setPaletteId}
-            themeMode={themeMode}
-            onSelectThemeMode={setThemeMode}
-            availablePalettes={availablePalettes}
             t={t}
-            isRtl={isRtl}
+            {...preferences}
           />
-        </>
+        </div>
       )}
 
-      {/* Toasts */}
       <ToastContainer toasts={toasts} />
-    </div>
+    </>
   );
 }

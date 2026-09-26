@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { Peer, PingResult } from '../../types';
-import { Activity, Send, Terminal, ArrowRight } from 'lucide-react';
+import { Activity, ArrowRight, ChevronDown, Loader2, Send, Terminal } from 'lucide-react';
+import type { Translate } from '../../i18n/translations';
+import { formatCount, localizeDigits } from '../../i18n/format';
+import { toAsciiDigits } from '../../utils/meshInvite';
 import { RoutePicker } from '../RoutePicker';
-import { LoadingDots } from '../LoadingSpinner';
+import { btnPrimary, cardClass, inputClass, labelClass, Pill, SectionHeader, Segmented } from '../ui';
 
 interface PingTabProps {
   peers: Peer[];
@@ -11,25 +14,24 @@ interface PingTabProps {
   isRunning: boolean;
   onRun: (target: string, count: number, source?: string) => void;
   lastResult: PingResult | null;
-  t: (key: any) => string;
+  t: Translate;
 }
 
-export const PingTab: React.FC<PingTabProps> = ({
-  peers,
-  targetIp,
-  onTargetChange,
-  isRunning,
-  onRun,
-  lastResult,
-  t,
-}) => {
-  const [count, setCount] = useState<number>(4);
+const Stat: React.FC<{ label: string; value: string; className?: string }> = ({ label, value, className = 'text-text-primary' }) => (
+  <div className="p-3.5 rounded-xl bg-surface border border-card-border">
+    <p className="text-xs text-text-muted">{label}</p>
+    <p className={`mt-1 font-mono text-xl font-semibold tabular-nums ${className}`}>
+      {value}
+    </p>
+  </div>
+);
 
-  // Find default local node
+export const PingTab: React.FC<PingTabProps> = ({ peers, targetIp, onTargetChange, isRunning, onRun, lastResult, t }) => {
+  const [count, setCount] = useState<number>(4);
+  const targetId = useId();
+
   const currentPeer = peers.find((p) => p.is_current);
-  const [sourceIp, setSourceIp] = useState<string>(() => {
-    return currentPeer?.ipv4 || (peers.length > 0 ? peers[0].ipv4 : '');
-  });
+  const [sourceIp, setSourceIp] = useState<string>(() => currentPeer?.ipv4 || (peers.length > 0 ? peers[0].ipv4 : ''));
 
   // Synchronize sourceIp when peers become available
   useEffect(() => {
@@ -41,13 +43,9 @@ export const PingTab: React.FC<PingTabProps> = ({
 
   // If targetIp is empty or identical to sourceIp, auto-pick candidate peer
   useEffect(() => {
-    if (peers.length > 1) {
-      if (!targetIp || targetIp === sourceIp) {
-        const candidate = peers.find((p) => p.ipv4 !== sourceIp);
-        if (candidate) {
-          onTargetChange(candidate.ipv4);
-        }
-      }
+    if (peers.length > 1 && (!targetIp || targetIp === sourceIp)) {
+      const candidate = peers.find((p) => p.ipv4 !== sourceIp);
+      if (candidate) onTargetChange(candidate.ipv4);
     }
   }, [peers, sourceIp, targetIp, onTargetChange]);
 
@@ -57,17 +55,14 @@ export const PingTab: React.FC<PingTabProps> = ({
     setSourceIp(newSource);
     if (targetIp === newSource) {
       const nextTarget = peers.find((p) => p.ipv4 !== newSource);
-      if (nextTarget) {
-        onTargetChange(nextTarget.ipv4);
-      }
+      if (nextTarget) onTargetChange(nextTarget.ipv4);
     }
   };
 
   const handleSwap = () => {
     if (!targetIp || !sourceIp) return;
     const oldSource = sourceIp;
-    const oldTarget = targetIp;
-    setSourceIp(oldTarget);
+    setSourceIp(targetIp);
     onTargetChange(oldSource);
   };
 
@@ -82,24 +77,20 @@ export const PingTab: React.FC<PingTabProps> = ({
   const resultSource = lastResult?.source || sourceIp;
   const resultTarget = lastResult?.target || targetIp;
   const nameOf = (ip: string) => peers.find((p) => p.ipv4 === ip)?.hostname || ip;
+  const canSend = Boolean(targetIp.trim() && sourceIp && targetIp.trim() !== sourceIp && !isRunning);
 
   return (
-    <div className="p-4 sm:p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
-      <div className="flex items-start justify-between gap-3 mb-5">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0" aria-hidden="true">
-            <Activity className="w-[18px] h-[18px]" />
-          </span>
-          <h2 className="text-base font-bold text-text-main leading-tight">{t('ping_panel_title')}</h2>
-        </div>
-        {isRemoteRunner && (
-          <span className="shrink-0 text-[11px] font-semibold px-2 py-1 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/30">
-            {t('ping_remote_runner')}
-          </span>
-        )}
-      </div>
+    <section aria-labelledby="ping-heading" className={`${cardClass} p-4 sm:p-6`}>
+      <SectionHeader
+        id="ping-heading"
+        icon={<Activity className="w-[18px] h-[18px]" />}
+        title={t('ping_panel_title')}
+        description={t('ping_panel_desc')}
+        actions={isRemoteRunner ? <Pill tone="info">{t('ping_remote_runner')}</Pill> : undefined}
+        className="mb-6"
+      />
 
-      <form onSubmit={handleSend} className="space-y-4">
+      <form onSubmit={handleSend} className="space-y-5">
         <RoutePicker
           peers={peers}
           source={sourceIp}
@@ -112,57 +103,52 @@ export const PingTab: React.FC<PingTabProps> = ({
           sourcePlaceholder={t('ping_source_placeholder')}
           targetPlaceholder={t('ping_dest_select_placeholder')}
           swapLabel={t('ping_swap_nodes')}
+          currentLabel={t('route_this_server')}
         />
 
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4">
-          <label className="block min-w-0">
-            <span className="block text-xs font-medium text-text-muted mb-1.5">{t('ping_target_ip_label')}</span>
+        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-4 items-end">
+          <div className="flex flex-col gap-1.5 min-w-0">
+            <label htmlFor={targetId} className={labelClass}>
+              {t('ping_target_ip_label')}
+            </label>
             <input
+              id={targetId}
               type="text"
               inputMode="decimal"
               dir="ltr"
               value={targetIp}
-              onChange={(e) => onTargetChange(e.target.value)}
+              onChange={(e) => onTargetChange(toAsciiDigits(e.target.value))}
               placeholder="10.144.144.2"
-              className="w-full h-11 px-3.5 bg-input border border-card-border rounded-xl text-sm font-mono text-text-main placeholder-text-subtle focus:outline-none focus:border-primary text-start"
+              autoComplete="off"
+              spellCheck={false}
+              className={`${inputClass()} h-11 font-mono`}
             />
-          </label>
+          </div>
 
-          <div>
-            <span className="block text-xs font-medium text-text-muted mb-1.5">{t('ping_count_label')}</span>
-            <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-input border border-card-border" role="radiogroup" aria-label={t('ping_count_label')}>
-              {[4, 8, 10].map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  role="radio"
-                  aria-checked={count === n}
-                  onClick={() => setCount(n)}
-                  className={`h-9 sm:w-14 rounded-lg text-sm font-mono font-semibold transition-colors ${
-                    count === n ? 'bg-primary text-black' : 'text-text-muted hover:text-text-main'
-                  }`}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <span className={labelClass} id={`${targetId}-count`}>
+              {t('ping_count_label')}
+            </span>
+            <Segmented
+              block
+              value={count}
+              onChange={setCount}
+              ariaLabel={t('ping_count_label')}
+              className="h-11 sm:w-48"
+              options={[4, 8, 10].map((n) => ({ value: n, label: formatCount(n, t) }))}
+            />
           </div>
         </div>
 
-        <button
-          type="submit"
-          disabled={!targetIp.trim() || !sourceIp || targetIp.trim() === sourceIp || isRunning}
-          className="btn-interactive w-full sm:w-auto h-11 px-6 rounded-xl bg-primary text-black font-semibold text-sm hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
-        >
+        <button type="submit" disabled={!canSend} className={`${btnPrimary} h-11 w-full sm:w-auto sm:px-6`}>
           {isRunning ? (
             <>
-              <div className="loader-dual-ring w-4 h-4" />
+              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
               <span>{t('ping_running')}</span>
-              <LoadingDots />
             </>
           ) : (
             <>
-              <Send className="w-4 h-4 rtl:-scale-x-100" />
+              <Send className="w-4 h-4 rtl:-scale-x-100" aria-hidden="true" />
               <span>{t('ping_btn_send')}</span>
             </>
           )}
@@ -170,46 +156,41 @@ export const PingTab: React.FC<PingTabProps> = ({
       </form>
 
       {lastResult && (
-        <div className="mt-6 pt-5 border-t border-card-border space-y-4 animate-modal-in">
+        <div className="mt-6 pt-6 border-t border-card-border space-y-4 animate-fade-in" aria-live="polite">
           {resultSource && resultTarget && (
-            <div className="flex items-center gap-2 min-w-0 text-xs font-mono text-text-muted">
-              <span className="text-text-main font-semibold truncate">{nameOf(resultSource)}</span>
-              <ArrowRight className="w-3.5 h-3.5 text-primary shrink-0 rtl:-scale-x-100" />
-              <span className="text-text-main font-semibold truncate">{nameOf(resultTarget)}</span>
-            </div>
+            <p className="flex items-center gap-2 min-w-0 text-sm">
+              <span className="text-text-muted shrink-0">{t('ping_route_display')}</span>
+              <span className="inline-flex items-center gap-2 min-w-0 font-medium text-text-primary">
+                <bdi className="truncate">{nameOf(resultSource)}</bdi>
+                <ArrowRight className="w-3.5 h-3.5 text-primary shrink-0 rtl:-scale-x-100" aria-hidden="true" />
+                <bdi className="truncate">{nameOf(resultTarget)}</bdi>
+              </span>
+            </p>
           )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {[
-              { label: t('ping_min'), value: `${lastResult.min_ms} ms`, cls: 'text-text-main' },
-              { label: t('ping_avg'), value: `${lastResult.avg_ms} ms`, cls: 'text-primary' },
-              { label: t('ping_max'), value: `${lastResult.max_ms} ms`, cls: 'text-text-main' },
-              {
-                label: t('ping_loss'),
-                value: `${lastResult.packet_loss_percent}%`,
-                cls: lossPct === 0 ? 'text-emerald-400' : lossPct < 10 ? 'text-amber-400' : 'text-rose-400',
-              },
-            ].map((m) => (
-              <div key={m.label} className="p-3 rounded-xl bg-black/20 border border-white/5">
-                <div className="text-[11px] text-text-muted">{m.label}</div>
-                <div className={`text-lg font-bold font-mono mt-0.5 tabular-nums ${m.cls}`} dir="ltr">
-                  {m.value}
-                </div>
-              </div>
-            ))}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <Stat label={t('ping_min')} value={`${localizeDigits(lastResult.min_ms, t)} ms`} />
+            <Stat label={t('ping_avg')} value={`${localizeDigits(lastResult.avg_ms, t)} ms`} className="text-primary" />
+            <Stat label={t('ping_max')} value={`${localizeDigits(lastResult.max_ms, t)} ms`} />
+            <Stat
+              label={t('ping_loss')}
+              value={t('percent').replace('{n}', localizeDigits(lastResult.packet_loss_percent, t))}
+              className={lossPct === 0 ? 'text-success' : lossPct < 10 ? 'text-warning' : 'text-danger'}
+            />
           </div>
 
-          <details className="group rounded-xl bg-black/30 border border-card-border">
-            <summary className="flex items-center gap-2 px-3.5 py-2.5 text-xs font-medium text-text-muted cursor-pointer select-none">
-              <Terminal className="w-3.5 h-3.5" />
-              {t('ping_raw_output')}
+          <details className="group rounded-xl bg-surface border border-card-border overflow-hidden">
+            <summary className="flex items-center gap-2 px-3.5 min-h-11 text-sm font-medium text-text-muted hover:text-text-primary cursor-pointer select-none">
+              <Terminal className="w-4 h-4" aria-hidden="true" />
+              <span className="flex-1">{t('ping_raw_output')}</span>
+              <ChevronDown className="w-4 h-4 transition-transform group-open:rotate-180" aria-hidden="true" />
             </summary>
-            <pre className="px-3.5 pb-3.5 text-xs font-mono text-cyan-300 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed" dir="ltr">
+            <pre className="px-3.5 pb-3.5 max-h-72 overflow-auto text-start font-mono text-xs text-text-secondary whitespace-pre-wrap break-all leading-relaxed" dir="ltr">
               {lastResult.raw}
             </pre>
           </details>
         </div>
       )}
-    </div>
+    </section>
   );
 };

@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Check, Copy, Link2, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, Copy, Link2, Loader2, Pencil, Plus, Server, Share2, Trash2, Users } from 'lucide-react';
 import { MeshInviteData } from '../../types';
 import type { Translate } from '../../i18n/translations';
 import { formatText } from '../../i18n/fillTemplate';
 import { addMeshPeer, fetchMeshInvite, removeMeshPeer } from '../../services/api';
 import { encodeInviteToken, sanitizePeerInput } from '../../utils/meshInvite';
-import { btnGhost, btnPrimary, btnSecondary, cardClass, FieldError, iconBtn } from './FormControls';
+import { FieldError } from './FormControls';
+import { btnGhost, btnGhostSm, btnPrimary, btnSecondary, cardClass, EmptyState, iconBtn, inputClass, SectionHeader } from '../ui';
+import { formatCount } from '../../i18n/format';
 
 interface ConnectionsPanelProps {
   port: number;
@@ -103,10 +105,13 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
   return (
     <div className="space-y-4">
       <section className={`${cardClass} p-5 sm:p-6`} aria-labelledby="node-invite-heading">
-        <h3 id="node-invite-heading" className="text-base font-semibold text-text-main">
-          {t('node_invite_heading')}
-        </h3>
-        <p className="mt-1 text-sm text-text-muted leading-relaxed">{t('node_invite_help')}</p>
+        <SectionHeader
+          as="h3"
+          id="node-invite-heading"
+          icon={<Share2 className="w-[18px] h-[18px]" />}
+          title={t('node_invite_heading')}
+          description={t('node_invite_help')}
+        />
 
         {inviteState === 'loading' && (
           <p className="mt-4 flex items-center gap-2 text-sm text-text-muted" role="status">
@@ -127,7 +132,7 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
         {inviteState === 'ready' && invite && (
           <div className="mt-4 space-y-4">
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="node-invite-address" className="text-sm font-medium text-text-main">
+              <label htmlFor="node-invite-address" className="text-sm font-medium text-text-primary">
                 {t('node_invite_address')}
               </label>
               {editingAddress ? (
@@ -140,7 +145,7 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
                     dir="ltr"
                     autoComplete="off"
                     spellCheck={false}
-                    className="w-full min-h-10 px-3 py-2 rounded-xl border border-card-border bg-input font-mono text-sm text-text-main placeholder:text-text-subtle focus:outline-none"
+                    className={`${inputClass()} font-mono`}
                   />
                   {endpoint && (
                     <button type="button" onClick={() => setEditingAddress(false)} className={`${btnSecondary} shrink-0`}>
@@ -150,47 +155,51 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-sm text-text-main" dir="ltr">
+                  <span className="font-mono text-sm text-text-primary" dir="ltr">
                     {endpoint}
                   </span>
-                  <button type="button" onClick={() => setEditingAddress(true)} className={`${btnGhost} min-h-8 px-2 text-xs`}>
+                  <button type="button" onClick={() => setEditingAddress(true)} className={btnGhostSm}>
                     <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>{t('node_invite_address_change')}</span>
                   </button>
                 </div>
               )}
               {missingAddress && (
-                <p className="flex items-start gap-1.5 text-xs text-amber-400 leading-relaxed">
-                  <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />
+                <p className="flex items-start gap-1.5 text-xs text-warning leading-relaxed">
+                  <AlertTriangle className="w-3.5 h-3.5 mt-[0.2em] shrink-0" aria-hidden="true" />
                   <span>{t('node_invite_no_ip_warning')}</span>
                 </p>
               )}
             </div>
 
-            <div
-              dir="ltr"
-              className="p-3 rounded-xl bg-input border border-card-border font-mono text-xs leading-relaxed text-text-main break-all select-all"
-            >
-              {code}
+            <div className="rounded-xl bg-surface border border-card-border overflow-hidden">
+              <div dir="ltr" className="p-3 max-h-32 overflow-y-auto text-start font-mono text-xs leading-relaxed text-text-primary break-all select-all">
+                {code}
+              </div>
+              <div className="flex justify-end p-2 border-t border-card-border bg-card">
+                <button type="button" onClick={() => onCopy(code)} disabled={missingAddress} className={`${btnPrimary} w-full sm:w-auto`}>
+                  {copiedKey === code ? <Check className="w-4 h-4" aria-hidden="true" /> : <Copy className="w-4 h-4" aria-hidden="true" />}
+                  <span>{copiedKey === code ? t('btn_copied_short') : t('node_btn_copy_code')}</span>
+                </button>
+              </div>
             </div>
-            <button type="button" onClick={() => onCopy(code)} disabled={missingAddress} className={btnPrimary}>
-              {copiedKey === code ? <Check className="w-4 h-4" aria-hidden="true" /> : <Copy className="w-4 h-4" aria-hidden="true" />}
-              <span>{t('node_btn_copy_code')}</span>
-            </button>
           </div>
         )}
       </section>
 
       <section className={`${cardClass} p-5 sm:p-6`} aria-labelledby="node-peers-heading">
-        <div className="flex items-center gap-2">
-          <h3 id="node-peers-heading" className="text-base font-semibold text-text-main">
-            {t('node_peers_heading')}
-          </h3>
-          {peers.length > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-surface border border-card-border text-xs font-medium text-text-muted">{peers.length}</span>
-          )}
-        </div>
-        <p className="mt-1 text-sm text-text-muted leading-relaxed">{t('node_peers_help')}</p>
+        <SectionHeader
+          as="h3"
+          id="node-peers-heading"
+          icon={<Users className="w-[18px] h-[18px]" />}
+          title={
+            <span className="inline-flex items-center gap-2">
+              {t('node_peers_heading')}
+              {peers.length > 0 && <span className="text-sm font-medium text-text-subtle tabular-nums">{formatCount(peers.length, t)}</span>}
+            </span>
+          }
+          description={t('node_peers_help')}
+        />
 
         <form onSubmit={handleAddPeer} noValidate className="mt-4 flex gap-2">
           <input
@@ -207,9 +216,7 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
             dir="ltr"
             autoComplete="off"
             spellCheck={false}
-            className={`w-full min-h-10 px-3 py-2 rounded-xl border bg-input font-mono text-sm text-text-main placeholder:text-text-subtle focus:outline-none ${
-              peerError ? 'border-rose-500/70' : 'border-card-border hover:border-card-border-hover'
-            }`}
+            className={`${inputClass(Boolean(peerError))} font-mono`}
           />
           <button type="submit" disabled={adding || !newPeer.trim()} className={`${btnSecondary} shrink-0`}>
             {adding ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Plus className="w-4 h-4" aria-hidden="true" />}
@@ -223,14 +230,14 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
         )}
 
         {peers.length === 0 ? (
-          <p className="mt-4 p-4 rounded-xl border border-dashed border-card-border text-sm text-text-muted text-center">
-            {t('node_peers_empty')}
-          </p>
+          <div className="mt-4">
+            <EmptyState compact icon={<Server className="w-5 h-5" />} title={t('node_peers_empty')} />
+          </div>
         ) : (
-          <ul className="mt-4 rounded-xl border border-card-border divide-y divide-card-border">
+          <ul className="mt-4 rounded-xl border border-card-border divide-y divide-card-border overflow-hidden">
             {peers.map((peer) => (
-              <li key={peer} className="flex items-center justify-between gap-2 ps-3 pe-1 py-1">
-                <span className="font-mono text-sm text-text-main truncate" dir="ltr">
+              <li key={peer} className="flex items-center justify-between gap-2 ps-3.5 pe-1 py-1 hover:bg-hover transition-colors">
+                <span className="font-mono text-sm text-text-primary truncate" dir="ltr">
                   {peer}
                 </span>
                 <button
@@ -239,7 +246,7 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
                   disabled={removing !== null}
                   title={formatText(t('node_peer_remove'), { peer })}
                   aria-label={formatText(t('node_peer_remove'), { peer })}
-                  className={`${iconBtn} hover:text-rose-400`}
+                  className={`${iconBtn} hover:text-danger hover:bg-danger-subtle`}
                 >
                   {removing === peer ? (
                     <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
@@ -254,10 +261,7 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
       </section>
 
       <section className={`${cardClass} p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4`}>
-        <div className="min-w-0">
-          <h3 className="text-base font-semibold text-text-main">{t('node_move_title')}</h3>
-          <p className="mt-1 text-sm text-text-muted leading-relaxed">{t('node_move_desc')}</p>
-        </div>
+        <SectionHeader as="h3" icon={<Link2 className="w-[18px] h-[18px]" />} title={t('node_move_title')} description={t('node_move_desc')} />
         <button type="button" onClick={onJoinRequest} className={`${btnSecondary} shrink-0`}>
           <Link2 className="w-4 h-4" aria-hidden="true" />
           <span>{t('node_move_btn')}</span>

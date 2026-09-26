@@ -9,21 +9,26 @@ import {
   RealmTunnel,
 } from '../../types';
 import { TunnelScope } from '../../hooks/useTunnels';
+import { ArrowRight, Boxes, Cpu, Globe, History, Lock, Network, Pencil, Plus, RefreshCw, Search, Server, Trash2, Waypoints, X, Zap } from 'lucide-react';
+import type { Translate, TranslationKey } from '../../i18n/translations';
+import { formatText } from '../../i18n/fillTemplate';
+import { formatCount, localizeDigits } from '../../i18n/format';
 import {
-  Network,
-  Plus,
-  RefreshCw,
-  Trash2,
-  Edit3,
-  Cpu,
-  Zap,
-  Server,
-  Search,
-  AlertTriangle,
-  Globe,
-  Lock,
-  History,
-} from 'lucide-react';
+  btnSecondarySm,
+  btnTonalSm,
+  Callout,
+  cardClass,
+  EmptyState,
+  iconBtnSm,
+  inputClass,
+  Pill,
+  SectionHeader,
+  Segmented,
+  selectClass,
+  StatusDot,
+  Tone,
+  toneSoft,
+} from '../ui';
 
 type AnyTunnel = HaproxyTunnel | IptablesTunnel | GostTunnel | RealmTunnel;
 
@@ -44,131 +49,105 @@ interface TunnelsTabProps {
   onOpenCreateGost: () => void;
   onOpenEditGost: (t: GostTunnel) => void;
   onDeleteTunnel: (type: TunnelType, name: string, originNode?: string) => void;
-  t: (key: any) => string;
+  t: Translate;
 }
 
-// Full class strings so Tailwind can see them.
-const ACCENTS = {
-  emerald: {
-    text: 'text-emerald-400',
-    soft: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25',
-    button: 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border-emerald-500/30',
-    pill: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-    bar: 'bg-emerald-400',
-  },
-  primary: {
-    text: 'text-primary',
-    soft: 'bg-sky-500/10 text-sky-400 border-sky-500/25',
-    button: 'bg-primary/15 text-primary hover:bg-primary/25 border-primary/30',
-    pill: 'bg-primary/20 text-primary border-primary/30',
-    bar: 'bg-primary',
-  },
-  amber: {
-    text: 'text-amber-400',
-    soft: 'bg-amber-500/10 text-amber-400 border-amber-500/25',
-    button: 'bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 border-amber-500/30',
-    pill: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-    bar: 'bg-amber-400',
-  },
-} as const;
+const protoLabel = (p?: string) => {
+  const v = (p || 'both').toLowerCase();
+  return v === 'both' || v === 'tcp,udp' ? 'TCP + UDP' : v.toUpperCase();
+};
 
 interface SectionConfig {
   type: TunnelType;
   icon: React.ReactNode;
-  accent: keyof typeof ACCENTS;
-  titleKey: string;
-  descKey: string;
-  newKey: string;
-  emptyKey: string;
-  emptyDescKey: string;
-  subtabKey: string;
-  badge: (item: AnyTunnel) => string;
-  details: (item: AnyTunnel, t: (key: any) => string) => React.ReactNode;
+  tone: Tone;
+  titleKey: TranslationKey;
+  descKey: TranslationKey;
+  newKey: TranslationKey;
+  emptyKey: TranslationKey;
+  emptyDescKey: TranslationKey;
+  subtabKey: TranslationKey;
+  protocol: (item: AnyTunnel) => string;
+  details?: (item: AnyTunnel, t: Translate) => React.ReactNode;
 }
 
 const SECTIONS: SectionConfig[] = [
   {
     type: 'realm',
-    icon: <Cpu className="w-4 h-4 text-emerald-400" />,
-    accent: 'emerald',
+    icon: <Cpu className="w-[18px] h-[18px]" />,
+    tone: 'success',
     titleKey: 'tunnels_realm_title',
     descKey: 'tunnels_realm_desc',
     newKey: 'tunnels_btn_new_realm',
     emptyKey: 'tunnels_empty_realm',
     emptyDescKey: 'tunnels_empty_realm_desc',
     subtabKey: 'tunnels_subtab_realm',
-    badge: (i) => `${((i as RealmTunnel).PROTOCOL || 'both').toUpperCase()} Relay`,
-    details: (i, t) => (
-      <span>
-        {t('tunnels_col_protocol')}: {((i as RealmTunnel).PROTOCOL || 'both').toUpperCase()}
-      </span>
-    ),
+    protocol: (i) => protoLabel((i as RealmTunnel).PROTOCOL),
   },
   {
     type: 'haproxy',
-    icon: <Network className="w-4 h-4 text-primary" />,
-    accent: 'primary',
+    icon: <Network className="w-[18px] h-[18px]" />,
+    tone: 'primary',
     titleKey: 'tunnels_haproxy_title',
     descKey: 'tunnels_haproxy_desc',
     newKey: 'tunnels_btn_new_haproxy',
     emptyKey: 'tunnels_empty_haproxy',
     emptyDescKey: 'tunnels_empty_haproxy_desc',
     subtabKey: 'tunnels_subtab_haproxy',
-    badge: () => 'TCP Proxy',
-    details: () => null,
+    protocol: () => 'TCP',
   },
   {
     type: 'iptables',
-    icon: <Cpu className="w-4 h-4 text-emerald-400" />,
-    accent: 'emerald',
+    icon: <Boxes className="w-[18px] h-[18px]" />,
+    tone: 'info',
     titleKey: 'tunnels_iptables_title',
     descKey: 'tunnels_iptables_desc',
     newKey: 'tunnels_btn_new_iptables',
     emptyKey: 'tunnels_empty_iptables',
     emptyDescKey: 'tunnels_empty_iptables_desc',
     subtabKey: 'tunnels_subtab_iptables',
-    badge: (i) => `${((i as IptablesTunnel).FORWARD_PROTOCOL || 'udp').toUpperCase()} DNAT`,
+    protocol: (i) => protoLabel((i as IptablesTunnel).FORWARD_PROTOCOL || 'udp'),
     details: (i, t) => {
       const ipt = i as IptablesTunnel;
       return (
-        <span className="flex flex-wrap justify-between gap-x-3">
-          <span>
-            {t('tunnels_col_interface')}: <span dir="ltr">{ipt.IN_IF || 'any'}</span>
-          </span>
-          <span>
-            {t('tunnels_col_source_cidr')}: <span dir="ltr">{ipt.SOURCE_CIDR || '0.0.0.0/0'}</span>
-          </span>
-        </span>
+        <>
+          <Meta label={t('tunnels_col_interface')} value={ipt.IN_IF || 'any'} />
+          <Meta label={t('tunnels_col_source_cidr')} value={ipt.SOURCE_CIDR || '0.0.0.0/0'} />
+        </>
       );
     },
   },
   {
     type: 'gost',
-    icon: <Zap className="w-4 h-4 text-amber-400" />,
-    accent: 'amber',
+    icon: <Zap className="w-[18px] h-[18px]" />,
+    tone: 'warning',
     titleKey: 'tunnels_gost_title',
     descKey: 'tunnels_gost_desc',
     newKey: 'tunnels_btn_new_gost',
     emptyKey: 'tunnels_empty_gost',
     emptyDescKey: 'tunnels_empty_gost_desc',
     subtabKey: 'tunnels_subtab_gost',
-    badge: (i) => `${((i as GostTunnel).PROTOCOL || 'both').toUpperCase()} Forwarder`,
-    details: (i, t) => (
-      <span>
-        {t('tunnels_col_protocol')}: {((i as GostTunnel).PROTOCOL || 'both').toUpperCase()}
-      </span>
-    ),
+    protocol: (i) => protoLabel((i as GostTunnel).PROTOCOL),
   },
 ];
 
+const Meta: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div className="flex items-center justify-between gap-3 min-w-0">
+    <dt className="text-text-subtle shrink-0">{label}</dt>
+    <dd className="font-mono text-text-secondary truncate" dir="ltr">
+      {value}
+    </dd>
+  </div>
+);
+
 const isFailed = (n?: TunnelNodeState) => Boolean(n && n.status !== 'ok' && n.status !== 'idle');
 
-function timeAgo(ts: number | null | undefined, t: (key: any) => string): string {
+function timeAgo(ts: number | null | undefined, t: Translate): string {
   if (!ts) return '';
   const sec = Math.max(0, Math.round(Date.now() / 1000 - ts));
-  if (sec < 60) return t('tunnels_ago_seconds').replace('{n}', String(sec));
-  if (sec < 3600) return t('tunnels_ago_minutes').replace('{n}', String(Math.round(sec / 60)));
-  return t('tunnels_ago_hours').replace('{n}', String(Math.round(sec / 3600)));
+  if (sec < 60) return formatText(t('tunnels_ago_seconds'), { n: formatCount(sec, t) });
+  if (sec < 3600) return formatText(t('tunnels_ago_minutes'), { n: formatCount(Math.round(sec / 60), t) });
+  return formatText(t('tunnels_ago_hours'), { n: formatCount(Math.round(sec / 3600), t) });
 }
 
 function countTunnels(d?: TunnelsData): number {
@@ -209,6 +188,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
   const localNode = nodes.find((n) => n.is_local);
   const remoteNodes = nodes.filter((n) => !n.is_local);
   const showOrigin = scope !== 'local';
+  const pickedNode = scope !== 'local' && scope !== 'all' ? scope : '';
   const nodesInScope =
     scope === 'all' ? nodes : scope === 'local' ? (localNode ? [localNode] : []) : nodes.filter((n) => n.ip === scope);
   const failedInScope = nodesInScope.filter(isFailed);
@@ -235,302 +215,294 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
 
   const statusLabel = (n: TunnelNodeState) => {
     if (n.loading && !byNode[n.ip]) return t('tunnels_node_loading');
-    if (n.status === 'ok') return n.latency_ms ? `${n.latency_ms} ms` : t('tunnels_node_ok');
+    if (n.status === 'ok') return n.latency_ms ? `${localizeDigits(n.latency_ms, t)} ms` : t('tunnels_node_ok');
     if (n.status === 'idle') return t('tunnels_node_idle');
-    return t(`tunnels_node_error_${n.status}`);
+    return t(`tunnels_node_error_${n.status}` as TranslationKey);
   };
 
-  const dotClass = (n: TunnelNodeState) => {
-    if (n.loading) return 'bg-sky-400 animate-pulse';
-    if (n.status === 'ok') return 'bg-emerald-400';
-    if (n.status === 'idle') return 'bg-slate-500';
-    return n.stale ? 'bg-amber-400' : 'bg-rose-400';
+  const nodeTone = (n: TunnelNodeState): Tone => {
+    if (n.loading) return 'info';
+    if (n.status === 'ok') return 'success';
+    if (n.status === 'idle') return 'neutral';
+    return n.stale ? 'warning' : 'danger';
   };
 
-  const segBtn = (active: boolean) =>
-    `flex items-center justify-center gap-1.5 h-9 px-3 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${
-      active ? 'bg-primary/20 text-primary border border-primary/30 font-semibold' : 'text-text-muted hover:text-text-main hover:bg-white/5 border border-transparent'
-    }`;
+  const visibleSections = SECTIONS.filter((s) => filter === 'all' || filter === s.type).filter((s) => !query || filtered[s.type].length > 0);
 
   return (
     <div className="space-y-4">
-      {/* Toolbar: scope, search, refresh */}
-      <div className="flex flex-col lg:flex-row lg:items-center gap-3 p-2 rounded-xl bg-card border border-card-border backdrop-blur-md">
-        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-1.5" role="group" aria-label={t('tunnels_scope_label')}>
-          <button type="button" aria-pressed={scope === 'local'} onClick={() => onScopeChange('local')} className={segBtn(scope === 'local')}>
-            <Server className="w-3.5 h-3.5" />
-            {t('tunnels_scope_local')}
-          </button>
+      {/* Toolbar: where to look, what to find */}
+      <div className={`${cardClass} p-3 flex flex-col lg:flex-row lg:items-center gap-3`}>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
+          <Segmented
+            value={scope === 'local' ? 'local' : scope === 'all' ? 'all' : 'node'}
+            onChange={(v) => (v === 'node' ? undefined : onScopeChange(v))}
+            ariaLabel={t('tunnels_scope_label')}
+            block
+            className="sm:w-auto"
+            options={[
+              { value: 'local', label: t('tunnels_scope_local'), icon: <Server className="w-4 h-4" /> },
+              ...(remoteNodes.length > 0 ? [{ value: 'all' as const, label: t('tunnels_scope_all'), icon: <Globe className="w-4 h-4" /> }] : []),
+            ]}
+          />
           {remoteNodes.length > 0 && (
-            <>
-              <button type="button" aria-pressed={scope === 'all'} onClick={() => onScopeChange('all')} className={segBtn(scope === 'all')}>
-                <Globe className="w-3.5 h-3.5" />
-                {t('tunnels_scope_all')}
-              </button>
-              <select
-                value={scope !== 'local' && scope !== 'all' ? scope : ''}
-                onChange={(e) => e.target.value && onScopeChange(e.target.value)}
-                aria-label={t('tunnels_scope_pick')}
-                className={`col-span-2 w-full sm:w-auto min-w-0 h-9 bg-input border rounded-lg px-2 text-xs font-mono focus:outline-none focus:border-primary ${
-                  scope !== 'local' && scope !== 'all' ? 'border-primary/40 text-primary' : 'border-card-border text-text-muted'
-                }`}
-              >
-                <option value="">{t('tunnels_scope_pick')}</option>
-                {remoteNodes.map((n) => (
-                  <option key={n.ip} value={n.ip}>
-                    {n.name} ({n.ip}){isFailed(n) ? ` - ${t('tunnels_node_unreachable_short')}` : ''}
-                  </option>
-                ))}
-              </select>
-            </>
+            <select
+              value={pickedNode}
+              onChange={(e) => e.target.value && onScopeChange(e.target.value)}
+              aria-label={t('tunnels_scope_pick')}
+              className={`${selectClass} sm:w-60 ${pickedNode ? 'border-primary text-primary' : ''}`}
+            >
+              <option value="">{t('tunnels_scope_pick')}</option>
+              {remoteNodes.map((n) => (
+                <option key={n.ip} value={n.ip}>
+                  {n.name} ({n.ip}){isFailed(n) ? ` · ${t('tunnels_node_unreachable_short')}` : ''}
+                </option>
+              ))}
+            </select>
           )}
         </div>
 
         <div className="flex items-center gap-2 lg:ms-auto">
-          <div className="relative flex-1 lg:w-64">
-            <Search className="w-3.5 h-3.5 text-text-subtle absolute top-1/2 -translate-y-1/2 start-2.5 pointer-events-none" />
+          <div className="relative flex-1 lg:w-72" role="search">
+            <Search className="w-4 h-4 text-text-subtle absolute top-1/2 -translate-y-1/2 start-3 pointer-events-none" aria-hidden="true" />
             <input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t('tunnels_search_placeholder')}
               aria-label={t('tunnels_search_placeholder')}
-              className="w-full bg-input border border-card-border rounded-lg ps-8 pe-2.5 py-1.5 text-xs text-text-main placeholder-text-subtle focus:outline-none focus:border-primary"
+              className={`${inputClass()} ps-9 pe-9`}
             />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                aria-label={t('btn_clear_search')}
+                className="absolute end-1.5 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-7 h-7 rounded-lg text-text-muted hover:text-text-primary hover:bg-hover cursor-pointer"
+              >
+                <X className="w-4 h-4" aria-hidden="true" />
+              </button>
+            )}
           </div>
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={anyLoading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-card-border text-xs font-medium text-text-muted hover:text-text-main transition-colors disabled:opacity-60"
-          >
-            <RefreshCw className={`w-3 h-3 ${anyLoading ? 'animate-spin' : ''}`} />
+          <button type="button" onClick={onRefresh} disabled={anyLoading} className={`${btnSecondarySm} min-h-10 rounded-xl px-3`}>
+            <RefreshCw className={`w-4 h-4 ${anyLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
             <span className="hidden sm:inline">{t('btn_refresh')}</span>
+            <span className="sr-only sm:hidden">{t('btn_refresh')}</span>
           </button>
         </div>
       </div>
 
-      {/* Node health strip (only when looking beyond this node) */}
+      {/* Node health (only when looking beyond this node) */}
       {scope !== 'local' && nodesInScope.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+        <ul className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2" aria-label={t('tunnels_nodes_label')}>
           {nodesInScope.map((n) => {
             const failed = isFailed(n);
+            const tone = nodeTone(n);
             return (
-              <div
+              <li
                 key={n.ip}
-                className={`flex items-center gap-2.5 p-2.5 rounded-xl border bg-card transition-colors ${
-                  failed ? (n.stale ? 'border-amber-500/30' : 'border-rose-500/30') : 'border-card-border'
+                className={`flex items-center gap-3 p-2.5 ps-3 rounded-xl border bg-card transition-colors ${
+                  failed ? (n.stale ? 'border-warning-border' : 'border-danger-border') : pickedNode === n.ip ? 'border-primary' : 'border-card-border'
                 }`}
               >
-                <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass(n)}`} aria-hidden="true" />
-                <button
-                  type="button"
-                  onClick={() => onScopeChange(n.ip)}
-                  className="min-w-0 flex-1 text-start"
-                  title={n.error || undefined}
-                >
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-text-main truncate">
-                    {n.name}
-                    {n.is_local && <span className="text-[10px] font-normal text-text-subtle">({t('tunnels_scope_local')})</span>}
-                  </div>
-                  <div className="text-[11px] text-text-muted font-mono truncate">
-                    <span dir="ltr">{n.ip}</span> · {countTunnels(byNode[n.ip])} · {statusLabel(n)}
-                    {failed && n.stale && ` · ${timeAgo(n.fetched_at, t)}`}
-                  </div>
+                <StatusDot tone={tone} pulse={n.loading} />
+                <button type="button" onClick={() => onScopeChange(n.ip)} className="min-w-0 flex-1 text-start cursor-pointer" title={n.error || undefined}>
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-text-primary truncate">
+                    <span className="truncate" dir="auto">
+                      {n.name}
+                    </span>
+                    {n.is_local && <span className="text-2xs font-normal text-text-subtle shrink-0">({t('tunnels_scope_local')})</span>}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-xs text-text-muted truncate">
+                    <span className="font-mono" dir="ltr">
+                      {n.ip}
+                    </span>
+                    <span aria-hidden="true">·</span>
+                    <span>{formatText(t('tunnels_count'), { n: formatCount(countTunnels(byNode[n.ip]), t) })}</span>
+                    <span aria-hidden="true">·</span>
+                    <span className={failed ? (n.stale ? 'text-warning' : 'text-danger') : ''}>{statusLabel(n)}</span>
+                    {failed && n.stale && <span className="text-text-subtle">· {timeAgo(n.fetched_at, t)}</span>}
+                  </span>
                 </button>
                 {failed && (
-                  <button
-                    type="button"
-                    onClick={() => onRetryNode(n.ip)}
-                    disabled={n.loading}
-                    aria-label={t('tunnels_retry')}
-                    className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-white/5 border border-card-border text-text-muted hover:text-text-main disabled:opacity-60"
-                  >
-                    <RefreshCw className={`w-3 h-3 ${n.loading ? 'animate-spin' : ''}`} />
+                  <button type="button" onClick={() => onRetryNode(n.ip)} disabled={n.loading} className={btnSecondarySm}>
+                    <RefreshCw className={`w-3.5 h-3.5 ${n.loading ? 'animate-spin' : ''}`} aria-hidden="true" />
                     {t('tunnels_retry')}
                   </button>
                 )}
-              </div>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
 
       {failedInScope.length > 0 && (
-        <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-300">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-          <p className="leading-relaxed">{t('tunnels_nodes_failed_banner').replace('{n}', String(failedInScope.length))}</p>
-        </div>
+        <Callout tone="warning" role="status">
+          {formatText(t('tunnels_nodes_failed_banner'), { n: formatCount(failedInScope.length, t) })}
+        </Callout>
       )}
 
-      {/* Type filter */}
-      <div className="no-scrollbar flex sm:flex-wrap gap-1.5 overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0" role="group" aria-label={t('tunnels_subtab_all')}>
-        <button type="button" aria-pressed={filter === 'all'} onClick={() => setFilter('all')} className={segBtn(filter === 'all')}>
-          {t('tunnels_subtab_all')} <span className="opacity-70">{totalCount}</span>
-        </button>
-        {SECTIONS.map((s) => (
-          <button
-            key={s.type}
-            type="button"
-            aria-pressed={filter === s.type}
-            onClick={() => setFilter(s.type)}
-            className={`h-9 px-3 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 transition-colors border ${
-              filter === s.type ? `${ACCENTS[s.accent].pill} font-semibold` : 'text-text-muted hover:text-text-main hover:bg-white/5 border-transparent'
-            }`}
-          >
-            {t(s.subtabKey)} <span className="opacity-70">{filtered[s.type].length}</span>
-          </button>
-        ))}
+      {/* Engine filter */}
+      <div className="no-scrollbar flex gap-1.5 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap" role="group" aria-label={t('tunnels_filter_label')}>
+        {[{ id: 'all' as const, label: t('tunnels_subtab_all'), count: totalCount, tone: 'primary' as Tone }, ...SECTIONS.map((s) => ({ id: s.type, label: t(s.subtabKey), count: filtered[s.type].length, tone: s.tone }))].map(
+          (f) => {
+            const active = filter === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setFilter(f.id)}
+                className={`inline-flex items-center gap-2 h-9 px-3 rounded-full border text-sm font-medium whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
+                  active ? toneSoft(f.tone) : 'border-card-border bg-card text-text-muted hover:text-text-primary hover:border-border-strong'
+                }`}
+              >
+                {f.label}
+                <span className={`text-xs tabular-nums ${active ? '' : 'text-text-subtle'}`}>{formatCount(f.count, t)}</span>
+              </button>
+            );
+          }
+        )}
       </div>
 
       {initialLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3" aria-busy="true" aria-label={t('tunnels_loading')}>
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-36 rounded-2xl bg-card border border-card-border animate-pulse" />
+            <div key={i} className="h-36 rounded-2xl skeleton" />
           ))}
         </div>
       ) : query && totalCount === 0 ? (
-        <div className="p-8 text-center rounded-2xl bg-card border border-dashed border-card-border text-xs text-text-muted">
-          {t('tunnels_no_results')}
-        </div>
+        <EmptyState icon={<Search className="w-5 h-5" />} title={t('tunnels_no_results')} />
       ) : (
-        SECTIONS.filter((s) => filter === 'all' || filter === s.type)
-          .filter((s) => !query || filtered[s.type].length > 0)
-          .map((s) => {
-            const accent = ACCENTS[s.accent];
-            const items = filtered[s.type];
-            const compactEmpty = filter === 'all';
-            return (
-              <section key={s.type} className="p-4 sm:p-5 rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg">
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-bold text-text-main flex items-center gap-2">
-                      {s.icon}
-                      {t(s.titleKey)}
-                      <span className="text-xs font-mono font-normal text-text-subtle">{items.length}</span>
-                    </h3>
-                    <p className="hidden sm:block text-xs text-text-muted mt-0.5">{t(s.descKey)}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handlers[s.type].create}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${accent.button}`}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    {t(s.newKey).replace(/^\+\s*/, '')}
+        visibleSections.map((s) => {
+          const items = filtered[s.type];
+          const compactEmpty = filter === 'all';
+          return (
+            <section key={s.type} aria-labelledby={`tunnels-${s.type}`} className={`${cardClass} p-4 sm:p-5`}>
+              <SectionHeader
+                id={`tunnels-${s.type}`}
+                as="h3"
+                title={
+                  <span className="inline-flex items-center gap-2">
+                    {t(s.titleKey)}
+                    <span className="text-sm font-medium text-text-subtle tabular-nums">{formatCount(items.length, t)}</span>
+                  </span>
+                }
+                description={<span className="hidden sm:inline">{t(s.descKey)}</span>}
+                icon={s.icon}
+                iconClassName={`border ${toneSoft(s.tone)}`}
+                actions={
+                  <button type="button" onClick={handlers[s.type].create} className={btnTonalSm}>
+                    <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+                    {t(s.newKey)}
                   </button>
-                </div>
+                }
+                className="mb-4"
+              />
 
-                {items.length === 0 ? (
-                  compactEmpty ? (
-                    <p className="text-xs text-text-subtle px-3 py-2.5 rounded-xl bg-white/[0.02] border border-dashed border-card-border">
-                      {t(s.emptyKey)}
-                    </p>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center p-8 text-center rounded-xl bg-white/[0.02] border border-dashed border-card-border">
-                      <p className="text-xs font-semibold text-text-main mb-1">{t(s.emptyKey)}</p>
-                      <p className="text-xs text-text-muted max-w-sm mb-3">{t(s.emptyDescKey)}</p>
-                      <button
-                        type="button"
-                        onClick={handlers[s.type].create}
-                        className={`px-3.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${accent.button}`}
-                      >
+              {items.length === 0 ? (
+                compactEmpty ? (
+                  <p className="px-3.5 py-3 rounded-xl border border-dashed border-card-border text-sm text-text-subtle">{t(s.emptyKey)}</p>
+                ) : (
+                  <EmptyState
+                    icon={<Waypoints className="w-5 h-5" />}
+                    title={t(s.emptyKey)}
+                    description={t(s.emptyDescKey)}
+                    action={
+                      <button type="button" onClick={handlers[s.type].create} className={btnTonalSm}>
+                        <Plus className="w-3.5 h-3.5" aria-hidden="true" />
                         {t(s.newKey)}
                       </button>
-                    </div>
-                  )
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {items.map((item) => {
-                      const node = item._node_ip ? nodeByIp.get(item._node_ip) : undefined;
-                      const readOnly = !item._is_local && isFailed(node);
-                      const details = s.details(item, t);
-                      return (
-                        <div
-                          key={`${item._node_ip || 'local'}:${item.TUNNEL_NAME}`}
-                          className={`interactive-card relative overflow-hidden p-4 rounded-2xl bg-card/90 border border-card-border hover:border-card-border-hover shadow-md transition-all ${
-                            readOnly ? 'opacity-75' : ''
-                          }`}
-                        >
-                          <span className={`absolute inset-y-0 start-0 w-0.5 ${accent.bar}`} aria-hidden="true" />
-                          <div className="flex items-start justify-between gap-2 mb-3">
-                            <div className="min-w-0">
-                              <div className={`text-sm font-bold font-mono truncate ${accent.text}`} dir="ltr">
-                                {item.TUNNEL_NAME}
-                              </div>
-                              {showOrigin && item._node_name && (
-                                <div className="flex items-center gap-1 mt-1 text-[11px] text-text-muted">
-                                  <Server className="w-3 h-3 text-primary shrink-0" />
-                                  <span className="text-primary font-medium truncate">{item._node_name}</span>
-                                  <span className="text-text-subtle font-mono" dir="ltr">
-                                    {item._node_ip}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex flex-col items-end gap-1 shrink-0">
-                              <span className={`px-2 py-0.5 rounded border text-[11px] font-mono ${accent.soft}`}>{s.badge(item)}</span>
-                              {readOnly && node?.stale && (
-                                <span
-                                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/25"
-                                  title={timeAgo(node.fetched_at, t)}
-                                >
-                                  <History className="w-2.5 h-2.5" />
-                                  {t('tunnels_node_stale')}
+                    }
+                  />
+                )
+              ) : (
+                <ul className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {items.map((item) => {
+                    const node = item._node_ip ? nodeByIp.get(item._node_ip) : undefined;
+                    const readOnly = !item._is_local && isFailed(node);
+                    return (
+                      <li
+                        key={`${item._node_ip || 'local'}:${item.TUNNEL_NAME}`}
+                        className={`group flex flex-col gap-3 p-3.5 rounded-xl border border-card-border bg-surface transition-colors hover:border-border-strong ${
+                          readOnly ? 'opacity-75' : ''
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-mono text-sm font-semibold text-text-primary truncate" dir="ltr">
+                              {item.TUNNEL_NAME}
+                            </p>
+                            {showOrigin && item._node_name && (
+                              <p className="flex items-center gap-1 mt-0.5 text-xs text-text-muted min-w-0">
+                                <Server className="w-3 h-3 shrink-0" aria-hidden="true" />
+                                <span className="truncate" dir="auto">
+                                  {item._node_name}
                                 </span>
-                              )}
-                            </div>
+                              </p>
+                            )}
                           </div>
-
-                          <dl className="p-2.5 rounded-lg bg-black/20 text-xs mb-3 space-y-1.5">
-                            <div className="flex items-center justify-between gap-2">
-                              <dt className="text-text-muted">{t('tunnels_col_destination')}</dt>
-                              <dd className="font-mono text-text-main truncate" dir="ltr">
-                                {item.TARGET_IP || '--'}
-                              </dd>
-                            </div>
-                            <div className="flex items-center justify-between gap-2">
-                              <dt className="text-text-muted">{t('tunnels_col_ports')}</dt>
-                              <dd className="font-mono text-text-main font-medium truncate" dir="ltr">
-                                {item.PORT_SPEC}
-                              </dd>
-                            </div>
-                            {details && <div className="text-text-subtle pt-1 border-t border-white/5">{details}</div>}
-                          </dl>
-
                           {readOnly ? (
-                            <div className="flex items-center gap-1.5 text-[11px] text-text-subtle">
-                              <Lock className="w-3 h-3 shrink-0" />
-                              {t('tunnels_readonly_hint')}
-                            </div>
+                            <span className="inline-flex items-center gap-1 text-xs text-text-subtle" title={t('tunnels_readonly_hint')}>
+                              <Lock className="w-3.5 h-3.5" aria-hidden="true" />
+                            </span>
                           ) : (
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center -me-1.5 -mt-1 shrink-0">
                               <button
                                 type="button"
                                 onClick={() => handlers[s.type].edit(item)}
-                                className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-text-main border border-card-border transition-colors"
+                                aria-label={formatText(t('tunnels_edit_label'), { name: item.TUNNEL_NAME })}
+                                title={t('btn_edit')}
+                                className={iconBtnSm}
                               >
-                                <Edit3 className="w-3 h-3 text-text-muted" />
-                                {t('btn_edit')}
+                                <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => onDeleteTunnel(s.type, item.TUNNEL_NAME, item._node_ip)}
-                                className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-xs text-rose-400 border border-rose-500/25 transition-colors"
+                                aria-label={formatText(t('tunnels_delete_label'), { name: item.TUNNEL_NAME })}
+                                title={t('btn_delete')}
+                                className={`${iconBtnSm} hover:text-danger hover:bg-danger-subtle`}
                               >
-                                <Trash2 className="w-3 h-3" />
-                                {t('btn_delete')}
+                                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                               </button>
                             </div>
                           )}
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </section>
-            );
-          })
+
+                        {/* Route: listen ports on the origin → destination in the mesh */}
+                        <div dir="ltr" className="flex items-center gap-2 min-w-0 px-3 py-2 rounded-lg bg-card border border-card-border font-mono text-xs">
+                          <span className="text-text-primary font-medium truncate" title={t('tunnels_col_ports')}>
+                            :{item.PORT_SPEC}
+                          </span>
+                          <ArrowRight className="w-3.5 h-3.5 shrink-0 text-text-subtle" aria-hidden="true" />
+                          <span className="text-text-secondary truncate" title={t('tunnels_col_destination')}>
+                            {item.TARGET_IP || '—'}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Pill tone={s.tone} mono>
+                            {s.protocol(item)}
+                          </Pill>
+                          {readOnly && node?.stale && (
+                            <Pill tone="warning" icon={<History className="w-3 h-3" aria-hidden="true" />} title={timeAgo(node.fetched_at, t)}>
+                              {t('tunnels_node_stale')}
+                            </Pill>
+                          )}
+                        </div>
+
+                        {s.details && <dl className="space-y-1 text-xs pt-2 border-t border-card-border">{s.details(item, t)}</dl>}
+
+                        {readOnly && <p className="text-xs text-text-subtle">{t('tunnels_readonly_hint')}</p>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+          );
+        })
       )}
     </div>
   );

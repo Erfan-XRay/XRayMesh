@@ -5,12 +5,8 @@ import type { Translate } from '../../i18n/translations';
 import { saveNodeConfig } from '../../services/api';
 import { generateSecret } from '../../utils/meshInvite';
 import { changedFields, formFromConfig, formToPayload, NodeForm, SHARED_FIELDS, validateNodeForm } from '../../utils/nodeForm';
+import { btnDangerSoft, btnGhost, btnPrimary, btnSecondary, cardClass } from '../ui';
 import {
-  btnDangerSoft,
-  btnGhost,
-  btnPrimary,
-  btnSecondary,
-  cardClass,
   Disclosure,
   ErrorPanel,
   ProtocolPicker,
@@ -40,10 +36,18 @@ interface SettingsPanelProps {
   onDeleteRequest: () => void;
 }
 
-const Section: React.FC<{ title: string; children: React.ReactNode; first?: boolean }> = ({ title, children, first }) => (
-  <section className={first ? '' : 'pt-6 border-t border-card-border'}>
-    <h3 className="text-sm font-semibold text-text-main mb-4">{title}</h3>
-    {children}
+const Section: React.FC<{ title: string; description?: string; children: React.ReactNode; first?: boolean }> = ({
+  title,
+  description,
+  children,
+  first,
+}) => (
+  <section className={`grid grid-cols-1 lg:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] gap-x-8 gap-y-4 ${first ? '' : 'pt-6 border-t border-card-border'}`}>
+    <div>
+      <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
+      {description && <p className="mt-1 text-xs text-text-muted leading-relaxed">{description}</p>}
+    </div>
+    <div className="min-w-0">{children}</div>
   </section>
 );
 
@@ -130,8 +134,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   return (
     <div className="space-y-4">
       <div className={`${cardClass} p-5 sm:p-6 space-y-6`}>
-        <Section title={t('node_section_identity')} first>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Section title={t('node_section_identity')} description={t('node_section_identity_desc')} first>
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-4">
             <TextField
               label={t('node_field_hostname')}
               hint={t('node_field_hostname_hint')}
@@ -164,7 +168,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           </div>
         </Section>
 
-        <Section title={t('node_section_network')}>
+        <Section title={t('node_section_network')} description={t('node_section_network_desc')}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <TextField
               label={t('node_field_network')}
@@ -187,7 +191,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           </div>
         </Section>
 
-        <Section title={t('node_section_transport')}>
+        <Section title={t('node_section_transport')} description={t('node_section_transport_desc')}>
           <div className="space-y-5">
             <ProtocolPicker value={form.protocol} onChange={(v) => update('protocol', v)} hideLegend t={t} />
             <SwitchField
@@ -226,9 +230,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         </Section>
       </div>
 
-      <section className="rounded-2xl border border-rose-500/25 bg-rose-500/5 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <section className="rounded-2xl border border-danger-border bg-danger/5 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-rose-400">{t('node_danger_title')}</h3>
+          <h3 className="text-sm font-semibold text-danger">{t('node_danger_title')}</h3>
           <p className="mt-1 text-sm text-text-muted leading-relaxed max-w-xl">{t('node_delete_desc')}</p>
         </div>
         <button type="button" onClick={onDeleteRequest} className={`${btnDangerSoft} shrink-0`}>
@@ -238,16 +242,19 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
       </section>
 
       {dirty && (
-        <div className="sticky bottom-20 md:bottom-4 z-30">
+        <div className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4 z-30">
           <div
             role="region"
             aria-label={t('node_unsaved')}
-            className="glass-panel-elevated rounded-2xl p-3 sm:p-4 space-y-3 animate-fade-in"
+            className="rounded-2xl bg-elevated border border-primary-border shadow-pop p-3 sm:p-4 space-y-3 animate-fade-in"
           >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-text-main">{t('node_unsaved')}</p>
+              <div className="min-w-0 flex items-start gap-2.5">
+                <span className="mt-[0.45em] w-2 h-2 shrink-0 rounded-full bg-warning" aria-hidden="true" />
+                <div className="min-w-0">
+                <p className="text-sm font-semibold text-text-primary">{t('node_unsaved')}</p>
                 <p className="text-xs text-text-muted">{t('node_unsaved_hint')}</p>
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button type="button" onClick={discard} disabled={saving} className={btnGhost}>

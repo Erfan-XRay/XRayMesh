@@ -206,7 +206,7 @@ export interface PingResult {
 
 export type Language = 'en' | 'fa';
 
-export type PaletteId = 'sky' | 'emerald' | 'violet' | 'amber' | 'rose' | 'oled';
+export type PaletteId = 'firouzeh' | 'ocean' | 'iris' | 'saffron' | 'graphite' | 'midnight';
 export type ThemeMode = 'auto' | 'light' | 'dark';
 
 export type TabId = 'peers' | 'node' | 'speedtest' | 'ping' | 'tunnels';

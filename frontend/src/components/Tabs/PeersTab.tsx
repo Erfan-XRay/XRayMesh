@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { Check, Search, Server, X } from 'lucide-react';
+import { formatCount } from '../../i18n/format';
 import { Peer } from '../../types';
 import type { Translate, TranslationKey } from '../../i18n/translations';
 import { fillTemplate, formatText } from '../../i18n/fillTemplate';
 import { NodeActionError, setNodeUpdateChannel } from '../../services/api';
 import { UpdateRun } from '../../hooks/useNodeUpdates';
-import { cardClass } from '../NodeConfig/FormControls';
+import { cardClass, EmptyState, inputClass, SectionHeader, Segmented } from '../ui';
 import { ConfirmModal } from '../Modals/ConfirmModal';
 import { PEER_GRID, PeerRow } from '../Peers/PeerRow';
 import { ThisServerCard } from '../Peers/ThisServerCard';
@@ -30,7 +31,7 @@ interface PeersTabProps {
 
 const Bullet: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <li className="flex items-start gap-2 text-sm text-text-muted leading-relaxed">
-    <Check className="w-4 h-4 mt-0.5 shrink-0 text-emerald-400" aria-hidden="true" />
+    <Check className="w-4 h-4 mt-[0.2em] shrink-0 text-success" aria-hidden="true" />
     <span>{children}</span>
   </li>
 );
@@ -126,12 +127,7 @@ export const PeersTab: React.FC<PeersTabProps> = ({
 
       <section aria-labelledby="peers-heading" className={`${cardClass} overflow-hidden`}>
         <header className="p-4 sm:p-5 space-y-4">
-          <div>
-            <h2 id="peers-heading" className="text-base font-semibold text-text-main">
-              {t('peers_heading')}
-            </h2>
-            <p className="mt-0.5 text-sm text-text-muted">{t('peers_subheading')}</p>
-          </div>
+          <SectionHeader id="peers-heading" title={t('peers_heading')} description={t('peers_subheading')} />
           {others.length > 0 && (
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
               <div className="relative flex-1" role="search">
@@ -142,51 +138,44 @@ export const PeersTab: React.FC<PeersTabProps> = ({
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder={t('peers_search_hint')}
                   aria-label={t('peers_search_label')}
-                  className="w-full min-h-10 ps-9 pe-9 rounded-xl border border-card-border bg-input text-sm text-text-main placeholder:text-text-subtle focus:outline-none"
+                  className={`${inputClass()} ps-9 pe-9`}
                 />
                 {search && (
                   <button
                     type="button"
                     onClick={() => setSearch('')}
                     aria-label={t('btn_clear_search')}
-                    className="absolute end-1.5 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-7 h-7 rounded-lg text-text-muted hover:text-text-main hover:bg-surface cursor-pointer"
+                    className="absolute end-1.5 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-7 h-7 rounded-lg text-text-muted hover:text-text-primary hover:bg-hover cursor-pointer"
                   >
                     <X className="w-4 h-4" aria-hidden="true" />
                   </button>
                 )}
               </div>
               {filters.length > 1 && (
-                <div role="group" aria-label={t('peers_filter_label')} className="inline-flex p-1 rounded-xl bg-surface border border-card-border self-start">
-                  {filters.map(({ id, label }) => (
-                    <button
-                      key={id}
-                      type="button"
-                      aria-pressed={activeFilter === id}
-                      onClick={() => setFilter(id)}
-                      className={`inline-flex items-center gap-1.5 min-h-8 px-3 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                        activeFilter === id ? 'bg-card text-text-main shadow-sm' : 'text-text-muted hover:text-text-main'
-                      }`}
-                    >
-                      {t(label)}
-                      <span className={`tabular-nums ${id === 'updates' ? 'text-primary' : 'text-text-subtle'}`}>{counts[id]}</span>
-                    </button>
-                  ))}
-                </div>
+                <Segmented
+                  size="sm"
+                  value={activeFilter}
+                  onChange={setFilter}
+                  ariaLabel={t('peers_filter_label')}
+                  className="self-start"
+                  options={filters.map(({ id, label }) => ({ value: id, label: t(label), count: formatCount(counts[id], t) }))}
+                />
               )}
             </div>
           )}
         </header>
 
         {others.length === 0 ? (
-          <div className="px-5 pb-8 pt-2 flex flex-col items-center text-center gap-2">
-            <Server className="w-8 h-8 text-text-subtle" aria-hidden="true" />
-            <p className="max-w-sm text-sm text-text-muted">{t('peers_none')}</p>
+          <div className="px-4 pb-5 sm:px-5">
+            <EmptyState icon={<Server className="w-5 h-5" />} title={t('peers_none_title')} description={t('peers_none')} />
           </div>
         ) : visible.length === 0 ? (
-          <p className="px-5 pb-8 pt-2 text-center text-sm text-text-muted">{t('peers_no_results')}</p>
+          <div className="px-4 pb-5 sm:px-5">
+            <EmptyState compact icon={<Search className="w-5 h-5" />} title={t('peers_no_results')} />
+          </div>
         ) : (
           <>
-            <div className={`hidden ${PEER_GRID} px-5 py-2 border-y border-card-border bg-surface text-xs font-medium text-text-subtle`} aria-hidden="true">
+            <div className={`hidden ${PEER_GRID} px-5 py-2.5 border-y border-card-border bg-surface text-xs font-medium text-text-muted`} aria-hidden="true">
               <span>{t('peers_col_server')}</span>
               <span>{t('peers_col_connection')}</span>
               <span>{t('peers_col_latency')}</span>
@@ -228,7 +217,7 @@ export const PeersTab: React.FC<PeersTabProps> = ({
       >
         <ul className="space-y-2">
           {pendingUpdate && isLegacyPeer(pendingUpdate) ? (
-            <li className="text-sm text-amber-400 leading-relaxed">{t('update_point_legacy')}</li>
+            <li className="text-sm text-warning leading-relaxed">{t('update_point_legacy')}</li>
           ) : (
             <>
               <Bullet>{t('update_point_verify')}</Bullet>

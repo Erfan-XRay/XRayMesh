@@ -5,16 +5,19 @@ import { UpdatePhase, UpdateRun } from '../../hooks/useNodeUpdates';
 
 export type LatencyTone = 'good' | 'fair' | 'poor' | 'none';
 
+export const latencyTone = (ms: number | null): LatencyTone =>
+  ms === null ? 'none' : ms < 60 ? 'good' : ms < 150 ? 'fair' : 'poor';
+
 export function latencyOf(peer: Peer): { ms: number | null; tone: LatencyTone } {
-  const ms = typeof peer.lat_ms === 'number' ? peer.lat_ms : parseFloat(String(peer.lat_ms ?? ''));
-  if (!Number.isFinite(ms) || ms <= 0) return { ms: null, tone: 'none' };
-  return { ms, tone: ms < 60 ? 'good' : ms < 150 ? 'fair' : 'poor' };
+  const raw = typeof peer.lat_ms === 'number' ? peer.lat_ms : parseFloat(String(peer.lat_ms ?? ''));
+  const ms = Number.isFinite(raw) && raw > 0 ? raw : null;
+  return { ms, tone: latencyTone(ms) };
 }
 
 export const LATENCY_TEXT: Record<LatencyTone, string> = {
-  good: 'text-emerald-400',
-  fair: 'text-amber-400',
-  poor: 'text-rose-400',
+  good: 'text-success',
+  fair: 'text-warning',
+  poor: 'text-danger',
   none: 'text-text-subtle',
 };
 

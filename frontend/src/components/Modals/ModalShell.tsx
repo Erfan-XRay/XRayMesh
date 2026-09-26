@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { X } from 'lucide-react';
+import { iconBtnSm } from '../ui';
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
@@ -30,9 +32,13 @@ export const ModalShell: React.FC<ModalShellProps> = ({
     const previous = document.activeElement as HTMLElement | null;
     const panel = panelRef.current;
     if (panel && !panel.contains(document.activeElement)) {
-      (panel.querySelector<HTMLElement>(FOCUSABLE) ?? panel).focus();
+      (panel.querySelector<HTMLElement>('[autofocus], [data-autofocus]') ?? panel.querySelector<HTMLElement>(FOCUSABLE) ?? panel).focus();
     }
-    return () => previous?.focus?.();
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+      previous?.focus?.();
+    };
   }, [isOpen]);
 
   useEffect(() => {
@@ -64,22 +70,27 @@ export const ModalShell: React.FC<ModalShellProps> = ({
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4">
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
-        onClick={closable ? onClose : undefined}
-        aria-hidden="true"
-      />
+      <div className="absolute inset-0 bg-[var(--overlay)] backdrop-blur-[2px] animate-fade-in" onClick={closable ? onClose : undefined} aria-hidden="true" />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}
         tabIndex={-1}
-        className={`relative w-full ${maxWidth} max-h-[92dvh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-modal border border-card-border shadow-2xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-6 animate-modal-in focus:outline-none`}
+        className={`relative w-full ${maxWidth} max-h-[92dvh] overflow-y-auto rounded-t-3xl sm:rounded-2xl bg-elevated border border-card-border shadow-pop p-5 pt-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-6 animate-sheet-up sm:animate-modal-in focus:outline-none`}
       >
+        {/* Grab handle hints that the phone sheet can be dismissed. */}
+        <span className="sm:hidden absolute top-2 inset-x-0 mx-auto w-10 h-1 rounded-full bg-border-strong" aria-hidden="true" />
         {children}
       </div>
     </div>,
     document.body
   );
 };
+
+/** Close button placed at the dialog's top inline end. */
+export const ModalClose: React.FC<{ onClick: () => void; label: string; disabled?: boolean }> = ({ onClick, label, disabled }) => (
+  <button type="button" onClick={onClick} disabled={disabled} aria-label={label} title={label} className={`${iconBtnSm} w-9 h-9 -me-2 -mt-1`}>
+    <X className="w-4 h-4" aria-hidden="true" />
+  </button>
+);

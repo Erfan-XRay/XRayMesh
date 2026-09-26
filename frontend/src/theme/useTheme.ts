@@ -1,29 +1,45 @@
 import { useState, useEffect } from 'react';
 import { PaletteId, ThemeMode } from '../types';
-import { PALETTES } from './palettes';
+import { LEGACY_PALETTES, PALETTES } from './palettes';
 
 const THEME_STORAGE_KEY = 'xraymesh_theme_palette';
 const THEME_MODE_STORAGE_KEY = 'xraymesh_theme_mode';
 
+const read = (key: string) => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const write = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Private mode or blocked storage: the choice just won't persist.
+  }
+};
+
+function initialPalette(): PaletteId {
+  const saved = read(THEME_STORAGE_KEY) || '';
+  const id = LEGACY_PALETTES[saved] || saved;
+  return id in PALETTES ? (id as PaletteId) : 'firouzeh';
+}
+
 export function useTheme() {
-  const [paletteId, setPaletteId] = useState<PaletteId>(() => {
-    const saved = localStorage.getItem(THEME_STORAGE_KEY);
-    return (saved && saved in PALETTES) ? (saved as PaletteId) : 'sky';
-  });
+  const [paletteId, setPaletteIdState] = useState<PaletteId>(initialPalette);
   const [themeMode, setThemeModeState] = useState<ThemeMode>(() => {
-    const saved = localStorage.getItem(THEME_MODE_STORAGE_KEY);
+    const saved = read(THEME_MODE_STORAGE_KEY);
     return saved === 'light' || saved === 'dark' || saved === 'auto' ? saved : 'auto';
   });
-  const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(() => {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  });
+  const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(() =>
+    window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  );
 
   useEffect(() => {
     const query = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (event: MediaQueryListEvent) => {
-      setSystemTheme(event.matches ? 'dark' : 'light');
-    };
-
+    const handleChange = (event: MediaQueryListEvent) => setSystemTheme(event.matches ? 'dark' : 'light');
     query.addEventListener('change', handleChange);
     return () => query.removeEventListener('change', handleChange);
   }, []);
@@ -32,22 +48,21 @@ export function useTheme() {
 
   const setThemeMode = (mode: ThemeMode) => {
     setThemeModeState(mode);
-    localStorage.setItem(THEME_MODE_STORAGE_KEY, mode);
+    write(THEME_MODE_STORAGE_KEY, mode);
+  };
+
+  const setPaletteId = (id: PaletteId) => {
+    setPaletteIdState(id);
+    write(THEME_STORAGE_KEY, id);
   };
 
   useEffect(() => {
-    const def = PALETTES[paletteId] || PALETTES.sky;
     const root = document.documentElement;
-    const vars = resolvedTheme === 'light' ? def.lightVars : def.vars;
-
-    Object.entries(vars).forEach(([key, val]) => {
-      root.style.setProperty(key, val);
-    });
     root.dataset.theme = resolvedTheme;
-    root.classList.toggle('dark', resolvedTheme === 'dark');
-    root.classList.toggle('light', resolvedTheme === 'light');
-    root.style.colorScheme = resolvedTheme;
-    localStorage.setItem(THEME_STORAGE_KEY, paletteId);
+    root.dataset.palette = paletteId;
+    // Keeps the mobile browser chrome in step with the page background.
+    const bg = getComputedStyle(root).getPropertyValue('--bg-base').trim();
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bg || '#0b0e13');
   }, [paletteId, resolvedTheme]);
 
   return {
@@ -56,7 +71,7 @@ export function useTheme() {
     themeMode,
     setThemeMode,
     resolvedTheme,
-    currentPalette: PALETTES[paletteId] || PALETTES.sky,
+    currentPalette: PALETTES[paletteId],
     availablePalettes: Object.values(PALETTES),
   };
 }

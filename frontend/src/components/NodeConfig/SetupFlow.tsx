@@ -14,13 +14,11 @@ import {
   validateNodeForm,
   validatePort,
 } from '../../utils/nodeForm';
+import { btnPrimary, btnSecondary, cardClass, iconBtn } from '../ui';
+import { XRayMeshLogo } from '../XRayMeshLogo';
 import {
-  btnPrimary,
-  btnSecondary,
-  cardClass,
   Disclosure,
   ErrorPanel,
-  iconBtn,
   ProtocolPicker,
   SecretField,
   SwitchField,
@@ -60,18 +58,18 @@ const ChoiceCard: React.FC<{ icon: React.ReactNode; title: string; desc: string;
   <button
     type="button"
     onClick={onClick}
-    className="group flex flex-col text-start p-4 sm:p-5 rounded-2xl border border-card-border hover:border-primary-border hover:bg-primary-subtle transition-colors cursor-pointer"
+    className="group flex flex-col text-start p-4 sm:p-5 rounded-2xl border border-card-border bg-card hover:border-primary hover:bg-primary/5 transition-colors cursor-pointer"
   >
-    <span className="flex items-center justify-between gap-3 mb-3">
+    <span className="flex items-center justify-between gap-3 mb-4">
       <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary-subtle text-primary" aria-hidden="true">
         {icon}
       </span>
       <ArrowRight
-        className="w-4 h-4 text-text-subtle group-hover:text-primary transition-colors rtl:-scale-x-100"
+        className="w-4 h-4 text-text-subtle group-hover:text-primary transition-[color,transform] duration-200 group-hover:translate-x-0.5 rtl:-scale-x-100 rtl:group-hover:-translate-x-0.5"
         aria-hidden="true"
       />
     </span>
-    <span className="text-base font-semibold text-text-main">{title}</span>
+    <span className="text-base font-semibold text-text-primary">{title}</span>
     <span className="mt-1 text-sm text-text-muted leading-relaxed">{desc}</span>
   </button>
 );
@@ -185,7 +183,7 @@ export const SetupFlow: React.FC<SetupFlowProps> = ({ config, t, onCopy, copiedK
       <button type="button" onClick={() => goTo('choose')} disabled={busy} aria-label={t('btn_back')} title={t('btn_back')} className={iconBtn}>
         <ArrowLeft className="w-4 h-4 rtl:-scale-x-100" aria-hidden="true" />
       </button>
-      <h2 id="setup-title" className="text-lg font-bold text-text-main">
+      <h2 id="setup-title" className="text-lg font-bold text-text-primary">
         {title}
       </h2>
     </div>
@@ -205,11 +203,12 @@ export const SetupFlow: React.FC<SetupFlowProps> = ({ config, t, onCopy, copiedK
     <section aria-labelledby="setup-title" className={`${cardClass} max-w-2xl mx-auto p-5 sm:p-7 animate-fade-in`}>
       {step === 'choose' && (
         <div className="space-y-6">
-          <header>
-            <h2 id="setup-title" className="text-lg sm:text-xl font-bold text-text-main">
+          <header className="flex flex-col items-center text-center pt-2">
+            <XRayMeshLogo className="w-12 h-12 mb-4" size={48} glow />
+            <h2 id="setup-title" className="text-xl sm:text-2xl font-bold text-text-primary">
               {t('setup_title')}
             </h2>
-            <p className="mt-1 text-sm text-text-muted leading-relaxed">{t('setup_desc')}</p>
+            <p className="mt-1.5 max-w-md text-sm text-text-muted leading-relaxed">{t('setup_desc')}</p>
           </header>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <ChoiceCard
@@ -225,7 +224,7 @@ export const SetupFlow: React.FC<SetupFlowProps> = ({ config, t, onCopy, copiedK
               onClick={() => goTo('create')}
             />
           </div>
-          <p className="text-xs text-text-subtle">{t('setup_mode_locked_notice')}</p>
+          <p className="text-xs text-text-subtle text-center">{t('setup_mode_locked_notice')}</p>
         </div>
       )}
 
@@ -409,11 +408,11 @@ export const SetupFlow: React.FC<SetupFlowProps> = ({ config, t, onCopy, copiedK
       {step === 'done' && result && (
         <div className="space-y-5 animate-fade-in">
           <header className="flex items-start gap-3">
-            <span className="flex items-center justify-center w-10 h-10 shrink-0 rounded-xl bg-emerald-500/15 text-emerald-400" aria-hidden="true">
+            <span className="flex items-center justify-center w-10 h-10 shrink-0 rounded-xl bg-success-subtle text-success" aria-hidden="true">
               <CheckCircle2 className="w-5 h-5" />
             </span>
             <div className="min-w-0">
-              <h2 id="setup-title" className="text-lg font-bold text-text-main">
+              <h2 id="setup-title" className="text-lg font-bold text-text-primary">
                 {fillTemplate(t(result.mode === 'join' ? 'setup_done_join_title' : 'setup_done_create_title'), {
                   network: <bdi>{result.network}</bdi>,
                 })}
@@ -427,7 +426,7 @@ export const SetupFlow: React.FC<SetupFlowProps> = ({ config, t, onCopy, copiedK
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <div className="p-3 rounded-xl bg-surface border border-card-border">
               <dt className="text-xs text-text-muted">{t('node_field_hostname')}</dt>
-              <dd className="mt-0.5 font-medium text-text-main truncate">
+              <dd className="mt-0.5 font-medium text-text-primary truncate">
                 <bdi dir="ltr" className="font-mono">
                   {result.hostname}
                 </bdi>
@@ -435,7 +434,7 @@ export const SetupFlow: React.FC<SetupFlowProps> = ({ config, t, onCopy, copiedK
             </div>
             <div className="p-3 rounded-xl bg-surface border border-card-border">
               <dt className="text-xs text-text-muted">{t('node_field_vip')}</dt>
-              <dd className="mt-0.5 font-medium text-text-main">
+              <dd className="mt-0.5 font-medium text-text-primary">
                 <bdi dir="ltr" className="font-mono">
                   {result.ipv4}
                 </bdi>
@@ -445,13 +444,13 @@ export const SetupFlow: React.FC<SetupFlowProps> = ({ config, t, onCopy, copiedK
 
           {result.inviteCode && (
             <div className="space-y-2">
-              <p className="text-sm font-medium text-text-main">{t('invite_label')}</p>
-              <div dir="ltr" className="p-3 rounded-xl bg-input border border-card-border font-mono text-xs leading-relaxed text-text-main break-all select-all">
+              <p className="text-sm font-medium text-text-primary">{t('invite_label')}</p>
+              <div dir="ltr" className="p-3 rounded-xl bg-surface border border-card-border text-start font-mono text-xs leading-relaxed text-text-primary break-all select-all">
                 {result.inviteCode}
               </div>
               <button type="button" onClick={() => onCopy(result.inviteCode!)} className={btnSecondary}>
                 {copiedKey === result.inviteCode ? (
-                  <Check className="w-4 h-4 text-emerald-400" aria-hidden="true" />
+                  <Check className="w-4 h-4 text-success" aria-hidden="true" />
                 ) : (
                   <Copy className="w-4 h-4" aria-hidden="true" />
                 )}
@@ -459,7 +458,7 @@ export const SetupFlow: React.FC<SetupFlowProps> = ({ config, t, onCopy, copiedK
               </button>
             </div>
           )}
-          {result.noPublicIp && <p className="text-sm text-amber-400 leading-relaxed">{t('setup_done_no_ip')}</p>}
+          {result.noPublicIp && <p className="text-sm text-warning leading-relaxed">{t('setup_done_no_ip')}</p>}
 
           <div className="flex justify-end pt-1">
             <button type="button" onClick={onFinished} className={`${btnPrimary} w-full sm:w-auto`}>

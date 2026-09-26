@@ -6,7 +6,8 @@ import { fillTemplate } from '../../i18n/fillTemplate';
 import { joinMeshNetwork } from '../../services/api';
 import { MESH_PROTOCOLS, parseInviteToken, suggestVirtualIp } from '../../utils/meshInvite';
 import { validateHostname, validateIpv4, validatePort } from '../../utils/nodeForm';
-import { btnDanger, btnPrimary, btnSecondary, Disclosure, ErrorPanel, PROTOCOL_TEXT, TextField } from '../NodeConfig/FormControls';
+import { Disclosure, ErrorPanel, PROTOCOL_TEXT, TextField } from '../NodeConfig/FormControls';
+import { btnDanger, btnPrimary, btnSecondary, iconBtnSm } from '../ui';
 import { InviteCodeField } from '../NodeConfig/InviteCodeField';
 import { describeJoinError } from '../NodeConfig/joinErrors';
 import { ModalShell } from './ModalShell';
@@ -31,13 +32,13 @@ interface ComparisonRow {
 }
 
 const Comparison: React.FC<{ title: string; rows: ComparisonRow[]; highlight?: boolean }> = ({ title, rows, highlight }) => (
-  <div className={`p-3 rounded-xl border ${highlight ? 'border-primary-border bg-primary-subtle' : 'border-card-border bg-surface'}`}>
+  <div className={`p-3.5 rounded-xl border ${highlight ? 'border-primary-border bg-primary-subtle' : 'border-card-border bg-surface'}`}>
     <p className={`text-xs font-semibold ${highlight ? 'text-primary' : 'text-text-muted'}`}>{title}</p>
     <dl className="mt-2 space-y-1.5 text-sm">
       {rows.map(({ label, value, technical }) => (
         <div key={label} className="flex items-baseline justify-between gap-3 min-w-0">
           <dt className="text-text-muted shrink-0">{label}</dt>
-          <dd className="text-text-main truncate">
+          <dd className="text-text-primary truncate">
             {technical ? (
               <bdi dir="ltr" className="font-mono">
                 {value}
@@ -99,7 +100,7 @@ export const JoinMeshModal: React.FC<JoinMeshModalProps> = ({ current, t, onClos
         <form onSubmit={handleContinue} noValidate className="space-y-5">
           <header className="flex items-start justify-between gap-3">
             <div>
-              <h2 id="join-mesh-title" className="text-lg font-bold text-text-main">
+              <h2 id="join-mesh-title" className="text-lg font-bold text-text-primary">
                 {t('join_title')}
               </h2>
               <p className="mt-1 text-sm text-text-muted leading-relaxed">{t('join_desc')}</p>
@@ -108,7 +109,7 @@ export const JoinMeshModal: React.FC<JoinMeshModalProps> = ({ current, t, onClos
               type="button"
               onClick={onClose}
               aria-label={t('btn_cancel')}
-              className="inline-flex items-center justify-center w-9 h-9 shrink-0 rounded-lg text-text-muted hover:text-text-main hover:bg-surface transition-colors cursor-pointer"
+              className={`${iconBtnSm} w-9 h-9 -me-2 -mt-1`}
             >
               <X className="w-4 h-4" aria-hidden="true" />
             </button>
@@ -166,10 +167,10 @@ export const JoinMeshModal: React.FC<JoinMeshModalProps> = ({ current, t, onClos
       {step === 'confirm' && invite && (
         <div className="space-y-5">
           <header className="flex items-start gap-3">
-            <span className="flex items-center justify-center w-10 h-10 shrink-0 rounded-xl bg-rose-500/15 text-rose-400" aria-hidden="true">
+            <span className="flex items-center justify-center w-10 h-10 shrink-0 rounded-xl bg-danger-subtle text-danger" aria-hidden="true">
               <AlertTriangle className="w-5 h-5" />
             </span>
-            <h2 id="join-mesh-title" className="pt-2 text-lg font-bold text-text-main">
+            <h2 id="join-mesh-title" className="pt-1.5 text-lg font-bold text-text-primary">
               {t('join_confirm_title')}
             </h2>
           </header>
@@ -197,20 +198,20 @@ export const JoinMeshModal: React.FC<JoinMeshModalProps> = ({ current, t, onClos
           </div>
 
           <ul className="space-y-2 text-sm leading-relaxed">
-            <li className="flex items-start gap-2 text-text-main">
-              <X className="w-4 h-4 mt-0.5 shrink-0 text-rose-400" aria-hidden="true" />
+            <li className="flex items-start gap-2 text-text-primary">
+              <X className="w-4 h-4 mt-[0.2em] shrink-0 text-danger" aria-hidden="true" />
               <span>{fillTemplate(t('join_confirm_leave'), { network: <bdi className="font-semibold">{current.network_name}</bdi> })}</span>
             </li>
-            <li className="flex items-start gap-2 text-text-main">
-              <X className="w-4 h-4 mt-0.5 shrink-0 text-rose-400" aria-hidden="true" />
+            <li className="flex items-start gap-2 text-text-primary">
+              <X className="w-4 h-4 mt-[0.2em] shrink-0 text-danger" aria-hidden="true" />
               <span>{t('join_confirm_replaced')}</span>
             </li>
             <li className="flex items-start gap-2 text-text-muted">
-              <Check className="w-4 h-4 mt-0.5 shrink-0 text-emerald-400" aria-hidden="true" />
+              <Check className="w-4 h-4 mt-[0.2em] shrink-0 text-success" aria-hidden="true" />
               <span>{t('join_confirm_kept')}</span>
             </li>
             <li className="flex items-start gap-2 text-text-muted">
-              <Check className="w-4 h-4 mt-0.5 shrink-0 text-emerald-400" aria-hidden="true" />
+              <Check className="w-4 h-4 mt-[0.2em] shrink-0 text-success" aria-hidden="true" />
               <span>{t('join_confirm_restore')}</span>
             </li>
           </ul>
@@ -231,7 +232,7 @@ export const JoinMeshModal: React.FC<JoinMeshModalProps> = ({ current, t, onClos
       {step === 'working' && invite && (
         <div className="py-8 flex flex-col items-center text-center gap-3" role="status" aria-live="polite">
           <Loader2 className="w-8 h-8 animate-spin text-primary" aria-hidden="true" />
-          <h2 id="join-mesh-title" className="text-base font-semibold text-text-main">
+          <h2 id="join-mesh-title" className="text-base font-semibold text-text-primary">
             {fillTemplate(t('join_working'), { network: <bdi>{invite.net}</bdi> })}
           </h2>
           <p className="max-w-sm text-sm text-text-muted leading-relaxed">{t('join_working_hint')}</p>

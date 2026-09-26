@@ -1,131 +1,119 @@
 /** @type {import("tailwindcss").Config} */
+
+// Channel-based tokens (e.g. "45 212 191") so opacity modifiers like bg-primary/10 work.
+const channel = (name) => `rgb(var(${name}) / <alpha-value>)`;
+const tone = (name) => ({
+  DEFAULT: channel(`--${name}-rgb`),
+  subtle: `rgb(var(--${name}-rgb) / 0.12)`,
+  border: `rgb(var(--${name}-rgb) / 0.32)`,
+});
+
 export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
-  darkMode: "class",
+  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  darkMode: ["selector", '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {
-        // 60% Surfaces & Background Layers
-        bg: {
-          base: "var(--bg-base)",
-          subtle: "var(--bg-subtle)",
-          card: "var(--bg-card)",
-          elevated: "var(--bg-elevated)",
-        },
-        // Backward-compatible surface aliases
-        canvas: "var(--bg-base, var(--bg-dark))",
-        surface: "var(--bg-subtle, var(--surface-dark))",
+        // Surfaces, from the page backdrop up to floating layers.
+        canvas: "var(--bg-base)",
+        surface: "var(--bg-subtle)",
+        elevated: "var(--bg-elevated)",
+        modal: "var(--bg-elevated)",
         input: "var(--input-bg)",
-        modal: "var(--modal-bg)",
+        hover: "var(--bg-hover)",
+        pressed: "var(--bg-active)",
         card: {
-          DEFAULT: "var(--bg-card, var(--card-bg))",
-          border: "var(--card-border)",
-          "border-hover": "var(--card-border-hover)",
+          DEFAULT: "var(--bg-card)",
+          border: "var(--border-subtle)",
+          "border-hover": "var(--border-strong)",
         },
-
-        // Borders & Dividers Hierarchy
         border: {
           subtle: "var(--border-subtle)",
           strong: "var(--border-strong)",
         },
 
-        // 30% Text & Typography Hierarchy
+        // Text hierarchy.
         text: {
           primary: "var(--text-primary)",
+          main: "var(--text-primary)",
           secondary: "var(--text-secondary)",
           muted: "var(--text-muted)",
           subtle: "var(--text-subtle)",
-          main: "var(--text-primary, var(--text-main))",
         },
 
-        // 10% Brand / Primary & Accent Tokens
+        // Brand accent (palette-driven) and status tones (mode-driven).
         primary: {
-          DEFAULT: "var(--primary)",
+          ...tone("primary"),
           hover: "var(--primary-hover)",
-          subtle: "var(--primary-subtle)",
-          border: "var(--primary-border)",
-          glow: "var(--accent-glow)",
         },
-        "on-primary": "var(--on-primary, #000000)",
-
-        // Functional Indicators
-        accent: {
-          green: "var(--accent-green)",
-          yellow: "var(--accent-yellow)",
-          red: "var(--accent-red)",
-        },
+        "on-primary": "var(--on-primary)",
+        success: tone("success"),
+        warning: tone("warning"),
+        danger: tone("danger"),
+        info: tone("info"),
+        "on-danger": "var(--on-danger)",
+        "on-warning": "var(--on-warning)",
       },
       fontFamily: {
-        sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
-        mono: ["JetBrains Mono", "monospace"],
-        persian: ["Vazirmatn", "Shabnam", "Tahoma", "sans-serif"],
+        sans: ["var(--font-sans)"],
+        persian: ["var(--font-fa)"],
+        mono: ["var(--font-mono)"],
+      },
+      // Persian script needs a slightly larger size and taller lines at small sizes;
+      // index.css raises these variables under [dir="rtl"].
+      fontSize: {
+        "2xs": ["var(--fs-2xs)", { lineHeight: "var(--lh-2xs)" }],
+        xs: ["var(--fs-xs)", { lineHeight: "var(--lh-xs)" }],
+        sm: ["var(--fs-sm)", { lineHeight: "var(--lh-sm)" }],
+        base: ["var(--fs-base)", { lineHeight: "var(--lh-base)" }],
+      },
+      boxShadow: {
+        card: "var(--shadow-card)",
+        pop: "var(--shadow-pop)",
       },
       transitionTimingFunction: {
-        "spring": "cubic-bezier(0.16, 1, 0.3, 1)",
-        "bounce-soft": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+        spring: "cubic-bezier(0.16, 1, 0.3, 1)",
       },
       animation: {
-        "pulse-subtle": "pulseSubtle 2.5s ease-in-out infinite",
-        "modal-in": "modalIn 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
-        "fade-in": "fadeIn 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
-        "tab-in": "tabEnter 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
-        "card-in": "cardEnter 240ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
-        "radar-ping": "radarPing 2.5s cubic-bezier(0, 0, 0.2, 1) infinite",
-        "shimmer": "shimmer 2s linear infinite",
-        "spin-smooth": "spinSmooth 1s cubic-bezier(0.4, 0, 0.2, 1) infinite",
-        "orbit-spin": "orbitSpin 2.4s linear infinite",
-        "glow-pulse": "glowPulse 2s ease-in-out infinite",
-        "ping-wave": "pingWave 1.8s cubic-bezier(0, 0, 0.2, 1) infinite",
+        "fade-in": "fadeIn 180ms cubic-bezier(0.16, 1, 0.3, 1) both",
+        "modal-in": "modalIn 220ms cubic-bezier(0.16, 1, 0.3, 1) both",
+        "sheet-up": "sheetUp 260ms cubic-bezier(0.16, 1, 0.3, 1) both",
+        "pop-in": "popIn 160ms cubic-bezier(0.16, 1, 0.3, 1) both",
+        "tab-in": "tabIn 220ms cubic-bezier(0.16, 1, 0.3, 1) both",
+        "spin-smooth": "spin 0.9s linear infinite",
+        "pulse-dot": "pulseDot 2s ease-in-out infinite",
+        shimmer: "shimmer 1.6s linear infinite",
       },
       keyframes: {
-        modalIn: {
-          from: { opacity: "0", transform: "scale(0.96) translateY(6px)" },
-          to: { opacity: "1", transform: "scale(1) translateY(0)" },
-        },
         fadeIn: {
           from: { opacity: "0", transform: "translateY(4px)" },
-          to: { opacity: "1", transform: "translateY(0)" },
+          to: { opacity: "1", transform: "none" },
         },
-        tabEnter: {
-          from: { opacity: "0", transform: "translateY(8px) scale(0.995)" },
-          to: { opacity: "1", transform: "translateY(0) scale(1)" },
+        modalIn: {
+          from: { opacity: "0", transform: "translateY(8px) scale(0.98)" },
+          to: { opacity: "1", transform: "none" },
         },
-        cardEnter: {
-          from: { opacity: "0", transform: "translateY(10px)" },
-          to: { opacity: "1", transform: "translateY(0)" },
+        sheetUp: {
+          from: { transform: "translateY(100%)" },
+          to: { transform: "none" },
         },
-        pulseSubtle: {
-          "0%, 100%": { opacity: "1", transform: "scale(1)" },
-          "50%": { opacity: "0.55", transform: "scale(1.08)" },
+        popIn: {
+          from: { opacity: "0", transform: "translateY(-4px) scale(0.98)" },
+          to: { opacity: "1", transform: "none" },
         },
-        radarPing: {
-          "0%": { transform: "scale(1)", opacity: "0.6" },
-          "75%, 100%": { transform: "scale(2.2)", opacity: "0" },
+        tabIn: {
+          from: { opacity: "0", transform: "translateY(6px)" },
+          to: { opacity: "1", transform: "none" },
+        },
+        pulseDot: {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.45" },
         },
         shimmer: {
           "0%": { backgroundPosition: "-200% 0" },
           "100%": { backgroundPosition: "200% 0" },
         },
-        spinSmooth: {
-          "0%": { transform: "rotate(0deg)" },
-          "100%": { transform: "rotate(360deg)" },
-        },
-        orbitSpin: {
-          "0%": { transform: "rotate(0deg)" },
-          "100%": { transform: "rotate(360deg)" },
-        },
-        glowPulse: {
-          "0%, 100%": { opacity: "0.4", transform: "scale(0.95)" },
-          "50%": { opacity: "0.85", transform: "scale(1.05)" },
-        },
-        pingWave: {
-          "0%": { transform: "scale(0.8)", opacity: "0.9" },
-          "70%, 100%": { transform: "scale(2)", opacity: "0" },
-        },
-      }
+      },
     },
   },
   plugins: [],

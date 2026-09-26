@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Settings, Share2 } from 'lucide-react';
+import { Settings, Share2 } from 'lucide-react';
 import { JoinMeshResult, NodeConfig } from '../../types';
 import type { Translate, TranslationKey } from '../../i18n/translations';
 import { formatText } from '../../i18n/fillTemplate';
@@ -13,7 +13,9 @@ import {
 } from '../../services/api';
 import { formFromConfig } from '../../utils/nodeForm';
 import { LoadingSpinner } from '../LoadingSpinner';
-import { btnGhost, btnSecondary, cardClass, ErrorPanel } from '../NodeConfig/FormControls';
+import { ErrorPanel } from '../NodeConfig/FormControls';
+import { btnGhost, btnSecondary, Callout, cardClass } from '../ui';
+import { formatCount } from '../../i18n/format';
 import { NodeHeader, ServiceAction } from '../NodeConfig/NodeHeader';
 import { SetupFlow } from '../NodeConfig/SetupFlow';
 import { ClusterSyncConfig, SettingsPanel } from '../NodeConfig/SettingsPanel';
@@ -145,7 +147,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
     }
     return (
       <div className={`${cardClass} flex flex-col items-center justify-center p-16`}>
-        <LoadingSpinner size="lg" glow label={t('mesh_connecting')} />
+        <LoadingSpinner size="lg" label={t('mesh_connecting')} />
       </div>
     );
   }
@@ -178,21 +180,23 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
   return (
     <div className="space-y-4">
       {config.last_rollback?.occurred && (
-        <div role="status" className="p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 flex flex-col sm:flex-row sm:items-start gap-3">
-          <AlertTriangle className="w-5 h-5 shrink-0 text-amber-400" aria-hidden="true" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-amber-300">{t('cluster_rollback_alert_title')}</p>
-            <p className="mt-1 text-sm text-text-muted leading-relaxed">{t('cluster_rollback_alert_desc')}</p>
-            {config.last_rollback.reason && (
-              <p dir="ltr" className="mt-2 font-mono text-xs text-text-muted break-words">
-                {config.last_rollback.reason}
-              </p>
-            )}
-          </div>
-          <button type="button" onClick={handleDismissRollback} className={`${btnGhost} shrink-0`}>
-            {t('cluster_rollback_dismiss_btn')}
-          </button>
-        </div>
+        <Callout
+          role="status"
+          tone="warning"
+          title={t('cluster_rollback_alert_title')}
+          action={
+            <button type="button" onClick={handleDismissRollback} className={btnGhost}>
+              {t('cluster_rollback_dismiss_btn')}
+            </button>
+          }
+        >
+          <p>{t('cluster_rollback_alert_desc')}</p>
+          {config.last_rollback.reason && (
+            <p dir="ltr" className="mt-2 text-start font-mono text-xs text-text-muted break-words">
+              {config.last_rollback.reason}
+            </p>
+          )}
+        </Callout>
       )}
 
       <NodeHeader
@@ -207,7 +211,7 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
       <div
         role="tablist"
         aria-label={t('tab_node')}
-        className="inline-flex p-1 rounded-xl bg-surface border border-card-border"
+        className="grid grid-cols-2 sm:inline-grid gap-1 p-1 rounded-xl bg-surface border border-card-border"
         onKeyDown={(e) => {
           if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
             const next = tab === 'settings' ? 'connections' : 'settings';
@@ -228,14 +232,14 @@ export const NodeConfigTab: React.FC<NodeConfigTabProps> = ({
               aria-controls={`node-panel-${id}`}
               tabIndex={selected ? 0 : -1}
               onClick={() => setTab(id)}
-              className={`inline-flex items-center gap-2 min-h-9 px-3.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                selected ? 'bg-card text-text-main shadow-sm' : 'text-text-muted hover:text-text-main'
+              className={`inline-flex items-center justify-center gap-2 min-h-9 px-3.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                selected ? 'bg-card text-text-primary shadow-card' : 'text-text-muted hover:text-text-primary'
               }`}
             >
-              {icon}
+              <span className={selected ? 'text-primary' : ''}>{icon}</span>
               <span>{t(label)}</span>
               {id === 'connections' && peers.length > 0 && (
-                <span className="px-1.5 rounded-md bg-primary-subtle text-primary text-xs font-semibold tabular-nums">{peers.length}</span>
+                <span className="text-xs tabular-nums text-text-subtle">{formatCount(peers.length, t)}</span>
               )}
             </button>
           );

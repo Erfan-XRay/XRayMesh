@@ -3,47 +3,44 @@ import { AlertCircle, ChevronDown, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { MeshProtocol } from '../../types';
 import type { Translate, TranslationKey } from '../../i18n/translations';
 import { MESH_PROTOCOLS, toAsciiDigits } from '../../utils/meshInvite';
+import { hintClass, inputClass, labelClass } from '../ui';
 
-// Opacity modifiers do not compile for CSS-variable colors (e.g. bg-primary/10),
-// so tinted states use the palette's *-subtle / *-border tokens instead.
-const BTN = 'inline-flex items-center justify-center gap-2 min-h-10 px-4 rounded-xl text-sm font-semibold transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 cursor-pointer';
-export const btnPrimary = `${BTN} bg-primary text-on-primary hover:bg-primary-hover`;
-export const btnSecondary = `${BTN} bg-surface border border-card-border text-text-main hover:border-card-border-hover`;
-export const btnGhost = `${BTN} text-text-muted hover:text-text-main hover:bg-surface`;
-export const btnDanger = `${BTN} bg-accent-red text-white hover:opacity-90`;
-export const btnWarning = `${BTN} bg-amber-500 text-black hover:bg-amber-400`;
-// Compact variants for dense rows (tables, lists).
-const BTN_SM = 'inline-flex items-center justify-center gap-1.5 min-h-8 px-3 rounded-lg text-xs font-semibold transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap';
-export const btnPrimarySm = `${BTN_SM} bg-primary text-on-primary hover:bg-primary-hover`;
-export const btnSecondarySm = `${BTN_SM} bg-surface border border-card-border text-text-main hover:border-card-border-hover`;
-export const btnGhostSm = `${BTN_SM} text-text-muted hover:text-text-main hover:bg-surface`;
-export const btnDangerSoft = `${BTN} border border-rose-500/30 text-rose-400 hover:bg-rose-500/10`;
-export const iconBtn = 'inline-flex items-center justify-center w-10 h-10 rounded-xl text-text-muted hover:text-text-main hover:bg-surface transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer';
-export const cardClass = 'rounded-2xl bg-card border border-card-border backdrop-blur-xl shadow-lg';
-
-const inputClass = (invalid: boolean) =>
-  `w-full min-h-10 px-3 py-2 rounded-xl border bg-input text-sm text-text-main placeholder:text-text-subtle transition-colors focus:outline-none disabled:opacity-60 ${
-    invalid ? 'border-rose-500/70' : 'border-card-border hover:border-card-border-hover'
-  }`;
+// Button and card recipes moved to components/ui; re-exported so existing imports keep working.
+export {
+  btnDanger,
+  btnDangerSoft,
+  btnGhost,
+  btnGhostSm,
+  btnPrimary,
+  btnPrimarySm,
+  btnSecondary,
+  btnSecondarySm,
+  btnWarning,
+  cardClass,
+  iconBtn,
+} from '../ui';
 
 export const FieldError: React.FC<{ id?: string; message: React.ReactNode }> = ({ id, message }) => (
-  <p id={id} role="alert" className="flex items-start gap-1.5 text-xs text-rose-400 leading-relaxed">
-    <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />
+  <p id={id} role="alert" className="flex items-start gap-1.5 text-xs text-danger leading-relaxed">
+    <AlertCircle className="w-3.5 h-3.5 mt-[0.2em] shrink-0" aria-hidden="true" />
     <span>{message}</span>
   </p>
 );
 
 /** A failed server action: localized message first, raw server output tucked behind "Details". */
 export const ErrorPanel: React.FC<{ message: string; details?: string; t: Translate }> = ({ message, details, t }) => (
-  <div role="alert" className="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-sm animate-fade-in">
-    <p className="flex items-start gap-2 text-rose-400 leading-relaxed">
-      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+  <div role="alert" className="p-3.5 rounded-xl border border-danger-border bg-danger-subtle text-sm animate-fade-in">
+    <p className="flex items-start gap-2 text-danger leading-relaxed">
+      <AlertCircle className="w-4 h-4 mt-[0.2em] shrink-0" aria-hidden="true" />
       <span>{message}</span>
     </p>
     {details && (
-      <details className="mt-2 ms-6">
-        <summary className="text-xs text-text-muted cursor-pointer select-none">{t('join_err_details')}</summary>
-        <pre dir="ltr" className="mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-xs text-text-muted">
+      <details className="mt-2 ms-6 group">
+        <summary className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-text-primary cursor-pointer select-none">
+          <ChevronDown className="w-3.5 h-3.5 transition-transform group-open:rotate-180" aria-hidden="true" />
+          {t('join_err_details')}
+        </summary>
+        <pre dir="ltr" className="mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap break-words text-start font-mono text-xs text-text-muted">
           {details}
         </pre>
       </details>
@@ -54,7 +51,7 @@ export const ErrorPanel: React.FC<{ message: string; details?: string; t: Transl
 /** Hint and error share one slot below the input so the layout does not jump. */
 const FieldFootnote: React.FC<{ id: string; hint?: string; error?: string | null }> = ({ id, hint, error }) => {
   if (error) return <FieldError id={`${id}-error`} message={error} />;
-  if (hint) return <p id={`${id}-hint`} className="text-xs text-text-muted leading-relaxed">{hint}</p>;
+  if (hint) return <p id={`${id}-hint`} className={hintClass}>{hint}</p>;
   return null;
 };
 
@@ -76,6 +73,8 @@ interface TextFieldProps {
   disabled?: boolean;
   autoFocus?: boolean;
   maxLength?: number;
+  /** Extra control at the label's inline end, e.g. a status badge. */
+  labelAside?: React.ReactNode;
 }
 
 export const TextField: React.FC<TextFieldProps> = ({
@@ -91,13 +90,17 @@ export const TextField: React.FC<TextFieldProps> = ({
   disabled,
   autoFocus,
   maxLength,
+  labelAside,
 }) => {
   const id = useId();
   return (
     <div className="flex flex-col gap-1.5 min-w-0">
-      <label htmlFor={id} className="text-sm font-medium text-text-main">
-        {label}
-      </label>
+      <div className="flex items-center justify-between gap-2">
+        <label htmlFor={id} className={labelClass}>
+          {label}
+        </label>
+        {labelAside}
+      </div>
       <input
         id={id}
         type="text"
@@ -133,12 +136,15 @@ interface SecretFieldProps {
   t: Translate;
 }
 
+const fieldIconBtn =
+  'inline-flex items-center justify-center w-8 h-8 rounded-lg text-text-muted hover:text-text-primary hover:bg-hover transition-colors cursor-pointer disabled:opacity-50';
+
 export const SecretField: React.FC<SecretFieldProps> = ({ label, value, onChange, onBlur, onGenerate, hint, error, disabled, t }) => {
   const id = useId();
   const [visible, setVisible] = useState(false);
   return (
     <div className="flex flex-col gap-1.5 min-w-0">
-      <label htmlFor={id} className="text-sm font-medium text-text-main">
+      <label htmlFor={id} className={labelClass}>
         {label}
       </label>
       {/* LTR like the value itself, so the buttons land on the same side as the input's end padding. */}
@@ -155,9 +161,9 @@ export const SecretField: React.FC<SecretFieldProps> = ({ label, value, onChange
           spellCheck={false}
           aria-invalid={Boolean(error)}
           aria-describedby={describedBy(id, hint, error)}
-          className={`${inputClass(Boolean(error))} font-mono ${onGenerate ? 'pe-20' : 'pe-11'}`}
+          className={`${inputClass(Boolean(error))} font-mono ${onGenerate ? 'pe-[4.75rem]' : 'pe-11'}`}
         />
-        <div className="absolute inset-y-0 end-1 flex items-center">
+        <div className="absolute inset-y-0 end-1 flex items-center gap-0.5">
           {onGenerate && (
             <button
               type="button"
@@ -168,7 +174,7 @@ export const SecretField: React.FC<SecretFieldProps> = ({ label, value, onChange
               disabled={disabled}
               title={t('node_secret_generate')}
               aria-label={t('node_secret_generate')}
-              className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-text-muted hover:text-text-main hover:bg-surface transition-colors cursor-pointer"
+              className={fieldIconBtn}
             >
               <RefreshCw className="w-4 h-4" aria-hidden="true" />
             </button>
@@ -179,7 +185,7 @@ export const SecretField: React.FC<SecretFieldProps> = ({ label, value, onChange
             title={visible ? t('node_secret_hide') : t('node_secret_show')}
             aria-label={visible ? t('node_secret_hide') : t('node_secret_show')}
             aria-pressed={visible}
-            className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-text-muted hover:text-text-main hover:bg-surface transition-colors cursor-pointer"
+            className={fieldIconBtn}
           >
             {visible ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
           </button>
@@ -203,11 +209,11 @@ export const SwitchField: React.FC<SwitchFieldProps> = ({ label, hint, checked, 
   return (
     <div className="flex items-start justify-between gap-4">
       <div className="min-w-0">
-        <label htmlFor={id} className="text-sm font-medium text-text-main cursor-pointer">
+        <label htmlFor={id} className={`${labelClass} cursor-pointer`}>
           {label}
         </label>
         {hint && (
-          <p id={`${id}-hint`} className="text-xs text-text-muted leading-relaxed mt-0.5">
+          <p id={`${id}-hint`} className={`${hintClass} mt-0.5`}>
             {hint}
           </p>
         )}
@@ -220,14 +226,14 @@ export const SwitchField: React.FC<SwitchFieldProps> = ({ label, hint, checked, 
         aria-describedby={hint ? `${id}-hint` : undefined}
         disabled={disabled}
         onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-          checked ? 'bg-primary border-primary' : 'bg-surface border-card-border'
+        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+          checked ? 'bg-primary border-primary' : 'bg-surface border-border-strong'
         }`}
       >
         <span
           aria-hidden="true"
-          className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
-            checked ? 'translate-x-6 rtl:-translate-x-6' : 'translate-x-1 rtl:-translate-x-1'
+          className={`inline-block h-[18px] w-[18px] rounded-full shadow-sm transition-transform duration-200 ease-spring ${
+            checked ? 'bg-on-primary translate-x-[22px] rtl:-translate-x-[22px]' : 'bg-text-muted translate-x-[2px] rtl:-translate-x-[2px]'
           }`}
         />
       </button>
@@ -258,9 +264,9 @@ export const Disclosure: React.FC<DisclosureProps> = ({ label, open: openProp, o
         aria-expanded={open}
         aria-controls={id}
         onClick={toggle}
-        className="inline-flex items-center gap-1.5 min-h-10 text-sm font-medium text-text-muted hover:text-text-main transition-colors cursor-pointer"
+        className="inline-flex items-center gap-1.5 min-h-9 -ms-1 px-1 rounded-lg text-sm font-medium text-text-muted hover:text-text-primary transition-colors cursor-pointer"
       >
-        <ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
+        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
         <span>{label}</span>
       </button>
       {open && (
@@ -295,7 +301,7 @@ export const ProtocolPicker: React.FC<ProtocolPickerProps> = ({ value, onChange,
   const name = useId();
   return (
     <fieldset className="min-w-0" disabled={disabled}>
-      <legend className={hideLegend ? 'sr-only' : 'text-sm font-medium text-text-main mb-2'}>{t('node_field_protocol')}</legend>
+      <legend className={hideLegend ? 'sr-only' : `${labelClass} mb-2`}>{t('node_field_protocol')}</legend>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {MESH_PROTOCOLS.map((proto) => {
           const selected = value === proto;
@@ -303,8 +309,8 @@ export const ProtocolPicker: React.FC<ProtocolPickerProps> = ({ value, onChange,
           return (
             <label
               key={proto}
-              className={`flex items-start gap-3 p-3 rounded-xl border transition-colors cursor-pointer ${
-                selected ? 'border-primary-border bg-primary-subtle' : 'border-card-border hover:border-card-border-hover'
+              className={`relative flex items-start gap-3 p-3 rounded-xl border transition-colors duration-150 cursor-pointer has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary ${
+                selected ? 'border-primary bg-primary-subtle' : 'border-card-border hover:border-border-strong hover:bg-hover'
               }`}
             >
               <input
@@ -313,13 +319,21 @@ export const ProtocolPicker: React.FC<ProtocolPickerProps> = ({ value, onChange,
                 value={proto}
                 checked={selected}
                 onChange={() => onChange(proto)}
-                className="mt-0.5 w-4 h-4 shrink-0 accent-primary cursor-pointer"
+                className="sr-only"
               />
+              <span
+                aria-hidden="true"
+                className={`mt-[0.2em] flex items-center justify-center w-4 h-4 shrink-0 rounded-full border-2 transition-colors ${
+                  selected ? 'border-primary' : 'border-border-strong'
+                }`}
+              >
+                {selected && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
+              </span>
               <span className="min-w-0">
-                <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-text-main">
+                <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-text-primary">
                   {t(labelKey)}
                   {proto === 'dual' && (
-                    <span className="px-1.5 py-0.5 rounded-md text-xs font-medium bg-primary-subtle text-primary">
+                    <span className="px-1.5 py-px rounded-md text-2xs font-semibold bg-primary text-on-primary">
                       {t('node_protocol_recommended')}
                     </span>
                   )}
@@ -331,8 +345,8 @@ export const ProtocolPicker: React.FC<ProtocolPickerProps> = ({ value, onChange,
         })}
       </div>
       {value === 'udp' && (
-        <p className="mt-2 flex items-start gap-1.5 text-xs text-amber-400 leading-relaxed">
-          <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />
+        <p className="mt-2 flex items-start gap-1.5 text-xs text-warning leading-relaxed">
+          <AlertCircle className="w-3.5 h-3.5 mt-[0.2em] shrink-0" aria-hidden="true" />
           <span>{t('node_proto_udp_hint')}</span>
         </p>
       )}
