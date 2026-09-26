@@ -7,6 +7,7 @@ const JOIN_ERROR_TEXT: Record<string, TranslationKey> = {
   invalid_hostname: 'node_err_hostname_invalid',
   invalid_ipv4: 'node_err_ipv4_invalid',
   invalid_port: 'node_err_port_invalid',
+  invite_icmp_missing: 'join_err_icmp_missing',
 };
 
 /** Localized message for a failed join, plus the server's own text when it helps diagnose. */
@@ -16,6 +17,9 @@ export function describeJoinError(err: unknown, t: Translate, hadConfig: boolean
 
   if (err.code === 'invalid_invite') {
     return { message: formatText(t('invite_err_invalid'), { prefix: 'xrmesh://' }) };
+  }
+  if (err.code === 'icmp_link_failed') {
+    return { message: t('join_err_icmp_link_failed'), details: raw };
   }
   if (err.code === 'start_failed') {
     return { message: t(hadConfig ? 'join_err_start_failed' : 'join_err_start_failed_setup'), details: raw };

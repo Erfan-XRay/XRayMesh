@@ -2,6 +2,17 @@
 
 All notable XRayMesh changes are documented here.
 
+## [3.0.0-beta.6] - 2026-09-26
+
+### Added
+- Experimental ICMP transport for networks where only ping gets through. Each server pair gets its own [BackPack](https://github.com/AminMGMT/BackPack) (AGPL-3.0, used unmodified) direct layer-3 link with the xDi carrier, and EasyTier peers across it over UDP, so tunnels, SafeSync, ping and speed tests work unchanged.
+- ICMP invites carry one link each; the panel shows a refresh button for the next server's code. `xraymesh icmp-list` and `xraymesh icmp-delete` manage links from the terminal.
+- BackPack v1.8.4 is pinned with SHA-256 checksums; servers that cannot reach GitHub can install from a copied archive in `/root/`.
+
+### Changed
+- In ICMP mode EasyTier uses MTU 1280 and does not bind peer sockets to the physical interface, so traffic reaches the ICMP link.
+- SafeSync refuses to switch the whole mesh to or from ICMP, since each link has to be created per server.
+
 ## [3.0.0-beta.5] - 2026-09-26
 
 ### Changed

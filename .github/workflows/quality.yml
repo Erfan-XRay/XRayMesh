@@ -36,6 +36,9 @@ jobs:
       - name: Test GOST tunnel helpers
         run: bash tests/gost_tunnel_test.sh
 
+      - name: Test ICMP link helpers
+        run: bash tests/icmp_link_test.sh
+
       - name: Test Web UI helpers and backend
         run: |
           python3 tests/web_interfaces_test.py

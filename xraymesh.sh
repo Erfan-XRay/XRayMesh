@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="3.0.0-beta.5"
+readonly VERSION="3.0.0-beta.6"
 readonly DEFAULT_BRANCH="beta"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
@@ -30,6 +30,19 @@ readonly REALM_SERVICE_FILE="/etc/systemd/system/xraymesh-realm.service"
 readonly REALM_CONFIG_FILE="${REALM_CONFIG_FILE:-/etc/xraymesh/realm.json}"
 readonly REALM_TUNNEL_DIR="${REALM_TUNNEL_DIR:-/etc/xraymesh/realm-tunnels}"
 readonly FALLBACK_REALM_VERSION="v2.6.2"
+# ICMP transport: BackPack (https://github.com/AminMGMT/BackPack, AGPL-3.0) runs as a
+# separate, unmodified binary. Its direct layer-3 tunnel with the xDi carrier carries
+# packets inside ICMP echo, and EasyTier peers across the resulting point-to-point link.
+readonly BACKPACK_BIN="${BIN_DIR}/backpack"
+# Both ends of a link must run the same BackPack version, so it is pinned with its checksums.
+readonly BACKPACK_VERSION="v1.8.4"
+readonly ICMP_LINK_DIR="${ICMP_LINK_DIR:-/etc/xraymesh/icmp-links}"
+readonly ICMP_SERVICE_TEMPLATE="/etc/systemd/system/xraymesh-icmp@.service"
+# Each link takes one /30 from 10.214.0.0/16: index N maps to 10.214.(N/64).(N%64*4).
+readonly ICMP_LINK_PREFIX="10.214"
+readonly ICMP_LINK_MAX_INDEX=16383
+# EasyTier MTU across an ICMP link: BackPack's interface is 1400, minus ~72 bytes of EasyTier framing.
+readonly ICMP_MESH_MTU="1280"
 readonly WEB_DIR="${INSTALL_DIR}/web"
 readonly WEB_CONFIG_FILE="/etc/xraymesh/web.env"
 readonly WEB_SERVICE_FILE="/etc/systemd/system/xraymesh-web.service"
@@ -317,17 +330,24 @@ write_runner() {
 #!/usr/bin/env bash
 set -Eeuo pipefail
 source /etc/xraymesh/config.env
+proto_lower="$(echo "${PROTOCOL:-dual}" | tr '[:upper:]' '[:lower:]')"
+
+# An ICMP link adds ~66 bytes per packet, so a standard mesh MTU would fragment every full packet.
+mesh_mtu="${MTU:-1380}"
+if [[ "$proto_lower" == "icmp" && "$mesh_mtu" =~ ^[0-9]+$ ]] && (( mesh_mtu > 1300 )); then
+  mesh_mtu=1280
+fi
+
 args=(
   --hostname "$HOSTNAME"
   --network-name "$NETWORK_NAME"
   --network-secret "$NETWORK_SECRET"
   --ipv4 "$IPV4"
   --rpc-portal "127.0.0.1:15888"
-  --mtu "$MTU"
+  --mtu "$mesh_mtu"
 )
 
 # Normalize protocol (EasyTier --default-protocol only takes tcp or udp)
-proto_lower="$(echo "${PROTOCOL:-dual}" | tr '[:upper:]' '[:lower:]')"
 if [[ "$proto_lower" == "tcp" || "$proto_lower" == "ws" || "$proto_lower" == "wss" ]]; then
   args+=(--default-protocol "tcp")
 else
@@ -354,6 +374,12 @@ case "$proto_lower" in
     ;;
   faketcp)
     args+=(--listeners "faketcp://0.0.0.0:${PORT}")
+    ;;
+  icmp)
+    # ICMP peers arrive over BackPack xDi interfaces (xrmi*); the same UDP listener serves direct peers.
+    # EasyTier otherwise binds peer sockets to the physical NIC (it skips tun devices), which would
+    # send traffic for the link's 10.214.x.x address out of eth0 instead of into the ICMP link.
+    args+=(--listeners "udp://0.0.0.0:${PORT}" --bind-device false)
     ;;
   dual|*)
     args+=(--listeners "tcp://0.0.0.0:${PORT}" --listeners "udp://0.0.0.0:${PORT}")
@@ -434,7 +460,7 @@ if [[ -n "${PEERS:-}" ]]; then
         faketcp)
           peer_args+=("faketcp://${target}")
           ;;
-        udp)
+        udp|icmp)
           peer_args+=("udp://${target}")
           ;;
         dual|*)
@@ -558,6 +584,11 @@ apply_node_config() {
   # 5. Write service file, runner, iperf service, and reload systemd
   write_service
 
+  # 5b. Bring ICMP links up before EasyTier dials across them
+  if [[ "${PROTOCOL:-}" == "icmp" ]] || compgen -G "${ICMP_LINK_DIR}/*.env" >/dev/null; then
+    apply_icmp_links || warn "ICMP links need attention: journalctl -u 'xraymesh-icmp@*' -n 30"
+  fi
+
   # 6. Enable systemd units on boot
   systemctl enable xraymesh.service >/dev/null 2>&1 || true
   systemctl enable xraymesh-iperf.service >/dev/null 2>&1 || true
@@ -665,8 +696,12 @@ setup_node() {
     valid_ip "$ipv4" && break
     warn "Enter a valid address from the 10.x.x.x range."
   done
-  protocol="$(prompt_default "Preferred protocol (dual/udp/tcp/ws/wss/quic/faketcp)" "$default_protocol")"
-  [[ "$protocol" =~ ^(dual|udp|tcp|ws|wss|quic|faketcp)$ ]] || protocol="dual"
+  protocol="$(prompt_default "Preferred protocol (dual/udp/tcp/ws/wss/quic/faketcp/icmp)" "$default_protocol")"
+  [[ "$protocol" =~ ^(dual|udp|tcp|ws|wss|quic|faketcp|icmp)$ ]] || protocol="dual"
+  if [[ "$protocol" == "icmp" ]]; then
+    info "ICMP links are created per server: run 'xraymesh invite' here and join from the other server."
+    [[ "$default_mtu" == "1380" ]] && default_mtu="$ICMP_MESH_MTU"
+  fi
 
   while :; do
     port="$(prompt_default "Mesh port" "$default_port")"
@@ -697,6 +732,9 @@ setup_node() {
         ;;
       faketcp)
         info "FakeTCP listener: faketcp://0.0.0.0:${port}"
+        ;;
+      icmp)
+        info "ICMP mode: EasyTier listens on udp://0.0.0.0:${port} and peers over BackPack xDi links"
         ;;
       tcp)
         info "TCP-only listener: tcp://0.0.0.0:${port}"
@@ -774,6 +812,16 @@ show_mesh_invite() {
   fi
 
   local endpoint="${pub_ip}:${port}"
+  local icmp_link=""
+  if [[ "$proto" == "icmp" ]]; then
+    # Every invite carries one ICMP link; it is reused until a server has actually joined on it.
+    icmp_link="$(ensure_icmp_listen_link | tail -n1)"
+    if [[ "$icmp_link" != "{"* ]]; then
+      fail "Could not prepare an ICMP link for this invite."
+      pause
+      return 1
+    fi
+  fi
   invite_code="$(python3 -c "import sys, json, base64
 d = {
     'v': 1,
@@ -782,9 +830,11 @@ d = {
     'endpoint': sys.argv[3],
     'proto': sys.argv[4]
 }
+if sys.argv[5]:
+    d['icmp'] = json.loads(sys.argv[5])
 token = base64.b64encode(json.dumps(d).encode('utf-8')).decode('utf-8')
 print(f'xrmesh://{token}')
-" "$net" "$secret" "$endpoint" "$proto" 2>/dev/null || true)"
+" "$net" "$secret" "$endpoint" "$proto" "$icmp_link" 2>/dev/null || true)"
 
   ok "Generated mesh invite code for this server."
   printf '\n'
@@ -797,6 +847,8 @@ print(f'xrmesh://{token}')
   say "  └─────────────────────────────────────────────────────────────" "$DIM$BLUE"
   printf '\n'
   info "On another server, run 'xraymesh join' and paste this code to connect instantly."
+  [[ "$proto" == "icmp" ]] &&
+    warn "This ICMP invite is for ONE server. Show the invite again after it joins to get a code for the next one."
   pause
 }
 
@@ -892,15 +944,46 @@ except Exception:
     warn "The port must be between 1 and 65535."
   done
 
-  local peers_val=""
+  local peers_val="" mtu_val="1380"
   if [[ -n "$endpoint" ]]; then
     peers_val="$endpoint"
   fi
 
+  if [[ "$proto" == "icmp" ]]; then
+    local icmp_fields icmp_host mesh_peer_port icmp_token icmp_port icmp_idx link_json peer_ip
+    icmp_fields="$(python3 -c '
+import sys, json, re
+d = json.loads(sys.argv[1])
+link = d.get("icmp")
+m = re.match(r"^\[?([^\]]+?)\]?:(\d+)$", str(d.get("endpoint", "")).strip())
+if not isinstance(link, dict) or not m:
+    sys.exit(1)
+print("\t".join([m.group(1), m.group(2), str(link.get("t", "")), str(link.get("p", "")), str(link.get("i", ""))]))
+' "$decoded_json" 2>/dev/null || true)"
+    if [[ -z "$icmp_fields" ]]; then
+      fail "This ICMP invite has no link details. Generate a new invite on the other server."
+      pause
+      return 1
+    fi
+    IFS=$'\t' read -r icmp_host mesh_peer_port icmp_token icmp_port icmp_idx <<< "$icmp_fields"
+    info "Creating the ICMP link to ${icmp_host}..."
+    link_json="$(create_icmp_dial_link "$icmp_host" "$icmp_port" "$icmp_token" "$icmp_idx" | tail -n1)"
+    peer_ip="$(python3 -c 'import sys, json; print(json.loads(sys.argv[1])["peer_ip"])' "$link_json" 2>/dev/null || true)"
+    if [[ -z "$peer_ip" ]]; then
+      fail "The ICMP link could not be created."
+      pause
+      return 1
+    fi
+    # EasyTier reaches the other server through the ICMP link, not its public address.
+    peers_val="udp://${peer_ip}:${mesh_peer_port}"
+    mtu_val="$ICMP_MESH_MTU"
+  fi
+
   info "Applying configuration and connecting to mesh network '${net}'..."
-  write_config "$net" "$secret" "$hostname" "$ipv4" "$proto" "$port" "$peers_val" "yes" "no" "1380" "no"
+  write_config "$net" "$secret" "$hostname" "$ipv4" "$proto" "$port" "$peers_val" "yes" "no" "$mtu_val" "no"
 
   if apply_node_config; then
+    prune_icmp_links
     systemctl restart xraymesh-web.service >/dev/null 2>&1 || true
     ok "Successfully joined mesh '${net}' as ${hostname} (${ipv4})!"
     info "Run 'xraymesh peers' anytime to see connected nodes and live latency."
@@ -920,6 +1003,8 @@ delete_mesh_noninteractive() {
   if [[ -x "$IPTABLES_APPLY_SCRIPT" ]]; then
     "$IPTABLES_APPLY_SCRIPT" remove >/dev/null 2>&1 || true
   fi
+  # ICMP links pair this node with specific servers, so they go with the mesh configuration.
+  remove_all_icmp_links
   rm -f "$SERVICE_FILE" "$CONFIG_FILE" "${INSTALL_DIR}/xraymesh-runner"
   systemctl daemon-reload
   systemctl reset-failed xraymesh.service 2>/dev/null || true
@@ -1001,6 +1086,9 @@ render_network_overview() {
         ;;
       faketcp)
         printf '  %-16s %b%s%b\n' "Transport" "$RED" "FakeTCP" "$RESET"
+        ;;
+      icmp)
+        printf '  %-16s %b%s%b\n' "Transport" "$PINK" "ICMP (BackPack xDi)" "$RESET"
         ;;
       tcp)
         printf '  %-16s %b%s only%b\n' "Transport" "$BLUE" "TCP" "$RESET"
@@ -1204,6 +1292,10 @@ diagnostics() {
       printf '  Transport:     FakeTCP\n'
       printf '  Listen port:   %s/FakeTCP\n' "$PORT"
       ;;
+    icmp)
+      printf '  Transport:     ICMP (EasyTier over BackPack xDi links)\n'
+      printf '  Listen port:   %s/UDP (reached through the ICMP links)\n' "$PORT"
+      ;;
     tcp)
       printf '  Transport:     TCP only\n'
       printf '  Listen port:   %s/TCP\n' "$PORT"
@@ -1240,6 +1332,9 @@ diagnostics() {
     warn "Open TCP port ${PORT} in UFW and the VPS provider firewall for WSS."
   elif [[ "$PROTOCOL" == "quic" ]]; then
     warn "Open UDP port ${PORT} in UFW and the VPS provider firewall for QUIC."
+  elif [[ "$PROTOCOL" == "icmp" ]]; then
+    list_icmp_links
+    warn "ICMP echo (ping) must reach the listening server. Link logs: journalctl -u 'xraymesh-icmp@*' -n 30"
   else
     warn "Open TCP and UDP port ${PORT} in UFW and the VPS provider firewall."
   fi
@@ -2589,6 +2684,423 @@ edit_realm_tunnel_noninteractive() {
   fi
 }
 
+# ==============================================================================
+# ICMP links (BackPack xDi)
+# ==============================================================================
+# A link is one BackPack layer-3 tunnel between two servers, carried inside ICMP echo.
+# The server that issues the invite listens ("in-N"); the joining server dials ("out-N").
+# Both derive the same /30 from the link index N, and EasyTier peers across it over UDP.
+
+backpack_arch_asset() {
+  case "$(uname -m)" in
+    x86_64|amd64) echo "backpack_linux_amd64.tar.gz" ;;
+    aarch64|arm64) echo "backpack_linux_arm64.tar.gz" ;;
+    armv7*|armhf) echo "backpack_linux_armv7.tar.gz" ;;
+    i686|i386) echo "backpack_linux_386.tar.gz" ;;
+    *) fail "Unsupported architecture for the ICMP transport: $(uname -m)"; return 1 ;;
+  esac
+}
+
+backpack_asset_sha256() {
+  # From the SHA256SUMS published with BackPack ${BACKPACK_VERSION}.
+  case "$1" in
+    backpack_linux_amd64.tar.gz) echo "8d579a13ac2863cec45131e01dbae90a79305b18c134eaf803b68237e719aafc" ;;
+    backpack_linux_arm64.tar.gz) echo "e085e0ad031e4a77d3bc3acb96a802d590ae402077ebaa22f6b2ff6cee0bc2aa" ;;
+    backpack_linux_armv7.tar.gz) echo "72c8d5e76bcdfa7d4fa0b95aaa081f32ee2a83250adb993d56eb85f11a13b0b8" ;;
+    backpack_linux_386.tar.gz) echo "63b45484b8c14ea9ed229b18d217a4cc3259d94ca96be5c3a40159be37e4865e" ;;
+    *) return 1 ;;
+  esac
+}
+
+install_backpack_runtime() {
+  if [[ -x "$BACKPACK_BIN" && "$(cat "${INSTALL_DIR}/backpack.version" 2>/dev/null)" == "$BACKPACK_VERSION" ]]; then
+    return 0
+  fi
+  require_root
+  local asset expected actual tmp archive="" candidate bin
+  asset="$(backpack_arch_asset)" || return 1
+  expected="$(backpack_asset_sha256 "$asset")" || { fail "No pinned checksum for ${asset}."; return 1; }
+  tmp="$(mktemp -d)"
+
+  # Servers inside Iran often cannot reach GitHub, so a copied archive is accepted too.
+  for candidate in "${XRAYMESH_BACKPACK_ARCHIVE:-}" "/root/${asset}" "${INSTALL_DIR}/${asset}"; do
+    if [[ -n "$candidate" && -f "$candidate" ]]; then
+      info "Using local BackPack archive: ${candidate}"
+      cp -f "$candidate" "${tmp}/${asset}"
+      archive="${tmp}/${asset}"
+      break
+    fi
+  done
+  if [[ -z "$archive" ]]; then
+    local url="https://github.com/AminMGMT/BackPack/releases/download/${BACKPACK_VERSION}/${asset}"
+    local curl_opts=(-fL --retry 3 --connect-timeout 10)
+    if [[ -t 1 ]]; then
+      curl_opts+=(--progress-bar)
+    else
+      curl_opts+=(-sS)
+    fi
+    info "Downloading BackPack ${BACKPACK_VERSION} for $(uname -m)..."
+    if ! curl "${curl_opts[@]}" "$url" -o "${tmp}/${asset}"; then
+      fail "Download failed: ${url}"
+      warn "Offline install: copy ${asset} from the ${BACKPACK_VERSION} release to /root/ and retry."
+      rm -rf -- "$tmp"
+      return 1
+    fi
+    archive="${tmp}/${asset}"
+  fi
+
+  actual="$(sha256sum "$archive" | awk '{print $1}')"
+  if [[ "${actual,,}" != "$expected" ]]; then
+    fail "BackPack archive checksum verification failed. Nothing was installed."
+    rm -rf -- "$tmp"
+    return 1
+  fi
+  ok "BackPack archive SHA-256 verified."
+
+  tar -xzf "$archive" -C "$tmp"
+  bin="$(find "$tmp" -type f -name backpack | head -n1)"
+  if [[ -z "$bin" ]]; then
+    fail "BackPack binary not found in archive."
+    rm -rf -- "$tmp"
+    return 1
+  fi
+  mkdir -p "$BIN_DIR"
+  install -m 0755 "$bin" "$BACKPACK_BIN"
+  printf '%s\n' "$BACKPACK_VERSION" > "${INSTALL_DIR}/backpack.version"
+  rm -rf -- "$tmp"
+  ok "BackPack ${BACKPACK_VERSION} installed for the ICMP transport."
+}
+
+write_icmp_service_template() {
+  cat > "$ICMP_SERVICE_TEMPLATE" <<EOF_ICMP_SVC
+[Unit]
+Description=XRayMesh ICMP link %i (BackPack xDi)
+Documentation=https://github.com/AminMGMT/BackPack
+Wants=network-online.target
+After=network-online.target
+Before=xraymesh.service
+StartLimitIntervalSec=60
+StartLimitBurst=10
+
+[Service]
+Type=simple
+ExecStart=${BACKPACK_BIN} -c ${ICMP_LINK_DIR}/%i.toml
+Restart=always
+RestartSec=3
+TimeoutStopSec=5
+KillMode=mixed
+SyslogIdentifier=xraymesh-icmp-%i
+
+[Install]
+WantedBy=multi-user.target
+EOF_ICMP_SVC
+}
+
+# Print "<dialer address>\t<listener address>" for a link index.
+icmp_link_addrs() {
+  local idx="$1" third fourth
+  third=$(( idx / 64 ))
+  fourth=$(( (idx % 64) * 4 ))
+  printf '%s\t%s\n' "${ICMP_LINK_PREFIX}.${third}.$(( fourth + 1 ))" "${ICMP_LINK_PREFIX}.${third}.$(( fourth + 2 ))"
+}
+
+valid_icmp_link_name() { [[ "$1" =~ ^(in|out)-[0-9]{1,5}$ ]]; }
+valid_icmp_token() { [[ "$1" =~ ^[A-Za-z0-9]{16,128}$ ]]; }
+valid_icmp_index() { [[ "$1" =~ ^[0-9]{1,5}$ ]] && (( 10#$1 <= ICMP_LINK_MAX_INDEX )); }
+valid_icmp_host() { [[ "$1" =~ ^[A-Za-z0-9.-]{1,253}$ || "$1" =~ ^[0-9A-Fa-f:]{2,39}$ ]]; }
+
+# Print the link index already used by another link file, if any.
+icmp_index_owner() {
+  local idx="$1" env
+  for env in "$ICMP_LINK_DIR"/*.env; do
+    [[ -f "$env" ]] || continue
+    if grep -qx "LINK_INDEX=$(( 10#$idx ))" "$env"; then
+      basename "$env" .env
+      return 0
+    fi
+  done
+  return 1
+}
+
+icmp_free_index() {
+  local idx _
+  for _ in {1..64}; do
+    idx=$(( ((RANDOM << 15) | RANDOM) % (ICMP_LINK_MAX_INDEX + 1) ))
+    if ! icmp_index_owner "$idx" >/dev/null; then
+      echo "$idx"
+      return 0
+    fi
+  done
+  fail "No free ICMP link address was found."
+  return 1
+}
+
+save_icmp_link() {
+  local name="$1" role="$2" host="$3" link_port="$4" token="$5" idx="$6"
+  local dial_ip listen_ip local_ip peer_ip
+  idx=$(( 10#$idx ))
+  IFS=$'\t' read -r dial_ip listen_ip < <(icmp_link_addrs "$idx")
+  if [[ "$role" == "listen" ]]; then
+    local_ip="$listen_ip"
+    peer_ip="$dial_ip"
+  else
+    local_ip="$dial_ip"
+    peer_ip="$listen_ip"
+  fi
+  mkdir -p "$ICMP_LINK_DIR"
+  chmod 0700 "$ICMP_LINK_DIR" 2>/dev/null || true
+  (
+    umask 077
+    {
+      printf 'LINK_NAME=%q\n' "$name"
+      printf 'ROLE=%q\n' "$role"
+      printf 'PEER_HOST=%q\n' "$host"
+      printf 'LINK_PORT=%q\n' "$link_port"
+      printf 'TOKEN=%q\n' "$token"
+      printf 'LINK_INDEX=%q\n' "$idx"
+      printf 'LOCAL_IP=%q\n' "$local_ip"
+      printf 'PEER_IP=%q\n' "$peer_ip"
+      printf 'IFACE=%q\n' "xrmi${idx}"
+      printf 'CLAIMED=%q\n' "no"
+    } > "${ICMP_LINK_DIR}/${name}.env"
+  )
+}
+
+# The upper-case names come from the sourced link file.
+# shellcheck disable=SC2153
+generate_icmp_link_toml() {
+  local env="$1" addr
+  unset LINK_NAME ROLE PEER_HOST LINK_PORT TOKEN LINK_INDEX LOCAL_IP PEER_IP IFACE CLAIMED
+  # shellcheck disable=SC1090
+  source "$env"
+  if [[ "$ROLE" == "listen" ]]; then
+    addr="0.0.0.0:${LINK_PORT}"
+  elif [[ "$PEER_HOST" == *:* ]]; then
+    addr="[${PEER_HOST}]:${LINK_PORT}"
+  else
+    addr="${PEER_HOST}:${LINK_PORT}"
+  fi
+  (
+    umask 077
+    cat > "${ICMP_LINK_DIR}/${LINK_NAME}.toml" <<EOF_ICMP_TOML
+# Generated by XRayMesh from ${LINK_NAME}.env; edits here are overwritten.
+[l3]
+mode     = "${ROLE}"
+addr     = "${addr}"
+token    = "${TOKEN}"
+carrier  = "xdi"
+iface    = "${IFACE}"
+local_ip = "${LOCAL_IP}/30"
+peer_ip  = "${PEER_IP}"
+EOF_ICMP_TOML
+  )
+}
+
+icmp_link_units() {
+  systemctl list-units --all --plain --no-legend 'xraymesh-icmp@*' 2>/dev/null | awk '{print $1}'
+}
+
+apply_icmp_links() {
+  require_root
+  local env name unit old_sum new_sum
+  local -a names=()
+  for env in "$ICMP_LINK_DIR"/*.env; do
+    [[ -f "$env" ]] && names+=("$(basename "$env" .env)")
+  done
+
+  # Stop links whose definition was removed.
+  while read -r unit; do
+    [[ -n "$unit" ]] || continue
+    name="${unit#xraymesh-icmp@}"
+    name="${name%.service}"
+    [[ -f "${ICMP_LINK_DIR}/${name}.env" ]] || systemctl disable --now "$unit" >/dev/null 2>&1 || true
+  done < <(icmp_link_units)
+
+  ((${#names[@]})) || return 0
+  install_backpack_runtime || return 1
+  write_icmp_service_template
+  systemctl daemon-reload
+
+  local failed=0
+  for name in "${names[@]}"; do
+    old_sum="$(sha256sum "${ICMP_LINK_DIR}/${name}.toml" 2>/dev/null | awk '{print $1}')"
+    generate_icmp_link_toml "${ICMP_LINK_DIR}/${name}.env"
+    new_sum="$(sha256sum "${ICMP_LINK_DIR}/${name}.toml" | awk '{print $1}')"
+    unit="xraymesh-icmp@${name}.service"
+    systemctl enable "$unit" >/dev/null 2>&1 || true
+    # A running link is only restarted when its definition changed, so node restarts do not drop it.
+    if [[ "$old_sum" != "$new_sum" ]] && systemctl is-active --quiet "$unit"; then
+      systemctl restart "$unit" || failed=1
+    else
+      systemctl start "$unit" || failed=1
+    fi
+  done
+  return "$failed"
+}
+
+# A listen link is claimed once a server has sent packets across it; the claim is kept.
+icmp_link_claimed() {
+  local env="$1" rx
+  unset ROLE IFACE CLAIMED
+  # shellcheck disable=SC1090
+  source "$env"
+  [[ "${CLAIMED:-no}" == "yes" ]] && return 0
+  rx="$(cat "/sys/class/net/${IFACE}/statistics/rx_packets" 2>/dev/null || echo 0)"
+  if [[ "$rx" =~ ^[0-9]+$ ]] && (( rx > 0 )); then
+    sed -i 's/^CLAIMED=.*/CLAIMED=yes/' "$env"
+    return 0
+  fi
+  return 1
+}
+
+# Print the invite details of an unclaimed listen link, creating one when none is left.
+ensure_icmp_listen_link() {
+  require_root
+  local env pending="" idx token
+  for env in "$ICMP_LINK_DIR"/*.env; do
+    [[ -f "$env" ]] || continue
+    grep -qx 'ROLE=listen' "$env" || continue
+    if ! icmp_link_claimed "$env"; then
+      pending="$env"
+      break
+    fi
+  done
+
+  if [[ -z "$pending" ]]; then
+    idx="$(icmp_free_index)" || return 1
+    token="$(openssl rand -hex 24)"
+    save_icmp_link "in-${idx}" "listen" "" "$(( 20000 + idx ))" "$token" "$idx"
+    pending="${ICMP_LINK_DIR}/in-${idx}.env"
+    if ! apply_icmp_links; then
+      fail "The ICMP link service failed to start."
+      rm -f "$pending" "${pending%.env}.toml"
+      apply_icmp_links >/dev/null 2>&1 || true
+      return 1
+    fi
+  fi
+
+  unset TOKEN LINK_PORT LINK_INDEX
+  # shellcheck disable=SC1090
+  source "$pending"
+  printf '{"t":"%s","p":%d,"i":%d}\n' "$TOKEN" "$LINK_PORT" "$LINK_INDEX"
+}
+
+# Create (or reuse) the dialling end of a link from invite details and print its peer address.
+create_icmp_dial_link() {
+  require_root
+  local host="$1" link_port="$2" token="$3" idx="$4" name owner
+  if ! valid_icmp_host "$host" || ! valid_port "$link_port" || ! valid_icmp_token "$token" || ! valid_icmp_index "$idx"; then
+    fail "The ICMP link details in the invite are invalid."
+    return 1
+  fi
+  idx=$(( 10#$idx ))
+  name="out-${idx}"
+  owner="$(icmp_index_owner "$idx" || true)"
+  if [[ -n "$owner" && "$owner" != "$name" ]]; then
+    fail "This invite's link address is already used by ICMP link '${owner}'. Generate a new invite on the other server."
+    return 1
+  fi
+
+  local previous=""
+  [[ -f "${ICMP_LINK_DIR}/${name}.env" ]] && previous="$(cat "${ICMP_LINK_DIR}/${name}.env")"
+  save_icmp_link "$name" "dial" "$host" "$link_port" "$token" "$idx"
+  if ! apply_icmp_links; then
+    fail "The ICMP link service failed to start."
+    if [[ -n "$previous" ]]; then
+      printf '%s\n' "$previous" > "${ICMP_LINK_DIR}/${name}.env"
+    else
+      rm -f "${ICMP_LINK_DIR}/${name}.env" "${ICMP_LINK_DIR}/${name}.toml"
+    fi
+    apply_icmp_links >/dev/null 2>&1 || true
+    return 1
+  fi
+
+  unset PEER_IP
+  # shellcheck disable=SC1090
+  source "${ICMP_LINK_DIR}/${name}.env"
+  printf '{"name":"%s","peer_ip":"%s"}\n' "$name" "$PEER_IP"
+}
+
+delete_icmp_link() {
+  require_root
+  local name="$1"
+  if ! valid_icmp_link_name "$name" || [[ ! -f "${ICMP_LINK_DIR}/${name}.env" ]]; then
+    fail "ICMP link '${name}' does not exist."
+    return 1
+  fi
+  unset ROLE PEER_IP
+  # shellcheck disable=SC1090
+  source "${ICMP_LINK_DIR}/${name}.env"
+  systemctl disable --now "xraymesh-icmp@${name}.service" >/dev/null 2>&1 || true
+  rm -f "${ICMP_LINK_DIR}/${name}".*
+
+  # The mesh peer that pointed across this link has nowhere to go any more.
+  if [[ "$ROLE" == "dial" && -f "$CONFIG_FILE" ]]; then
+    local peers kept="" p tmp
+    local -a peer_list=()
+    peers="$(bash -c 'source "$1" >/dev/null 2>&1; printf "%s" "${PEERS:-}"' _ "$CONFIG_FILE")"
+    IFS=',' read -ra peer_list <<< "$peers"
+    for p in "${peer_list[@]}"; do
+      [[ -z "$p" || "$p" == *"//${PEER_IP}:"* ]] && continue
+      kept+="${kept:+,}${p}"
+    done
+    if [[ "$kept" != "$peers" ]]; then
+      tmp="$(mktemp)"
+      grep -v '^PEERS=' "$CONFIG_FILE" > "$tmp" || true
+      printf 'PEERS=%q\n' "$kept" >> "$tmp"
+      chmod 600 "$tmp"
+      mv -f "$tmp" "$CONFIG_FILE"
+      info "Removed the mesh peer ${PEER_IP}; restart the node to apply it."
+    fi
+  fi
+  ok "ICMP link '${name}' deleted."
+}
+
+# Remove dialling links that no configured peer uses any more (e.g. after joining another mesh).
+prune_icmp_links() {
+  [[ -d "$ICMP_LINK_DIR" ]] || return 0
+  local env peers
+  peers="$( (grep -E '^PEERS=' "$CONFIG_FILE" 2>/dev/null || true) | head -n1)"
+  for env in "$ICMP_LINK_DIR"/out-*.env; do
+    [[ -f "$env" ]] || continue
+    unset LINK_NAME PEER_IP
+    # shellcheck disable=SC1090
+    source "$env"
+    [[ "$peers" == *"//${PEER_IP}:"* ]] || delete_icmp_link "$LINK_NAME" >/dev/null
+  done
+}
+
+remove_all_icmp_links() {
+  local unit
+  while read -r unit; do
+    [[ -n "$unit" ]] && systemctl disable --now "$unit" >/dev/null 2>&1 || true
+  done < <(icmp_link_units)
+  rm -rf -- "$ICMP_LINK_DIR"
+  rm -f "$ICMP_SERVICE_TEMPLATE"
+}
+
+list_icmp_links() {
+  local env state rx tx
+  if ! compgen -G "${ICMP_LINK_DIR}/*.env" >/dev/null; then
+    info "No ICMP links on this server."
+    return 0
+  fi
+  printf '  %-10s %-7s %-22s %-16s %-10s %s\n' "LINK" "ROLE" "REMOTE" "PEER (TUNNEL)" "STATE" "RX/TX PACKETS"
+  for env in "$ICMP_LINK_DIR"/*.env; do
+    [[ -f "$env" ]] || continue
+    unset LINK_NAME ROLE PEER_HOST PEER_IP IFACE CLAIMED
+    # shellcheck disable=SC1090
+    source "$env"
+    state="$(systemctl is-active "xraymesh-icmp@${LINK_NAME}.service" 2>/dev/null || echo inactive)"
+    rx="$(cat "/sys/class/net/${IFACE}/statistics/rx_packets" 2>/dev/null || echo -)"
+    tx="$(cat "/sys/class/net/${IFACE}/statistics/tx_packets" 2>/dev/null || echo -)"
+    if [[ "$ROLE" == "listen" && "$CLAIMED" != "yes" ]]; then
+      PEER_HOST="(waiting for invite)"
+    fi
+    printf '  %-10s %-7s %-22s %-16s %-10s %s/%s\n' "$LINK_NAME" "$ROLE" "${PEER_HOST:-any}" "$PEER_IP" "$state" "$rx" "$tx"
+  done
+}
+
 ensure_xraymesh_cli() {
   local target="${INSTALL_DIR}/xraymesh.sh"
   mkdir -p "$INSTALL_DIR"
@@ -3782,6 +4294,7 @@ uninstall_app() {
   if [[ -x "$IPTABLES_APPLY_SCRIPT" ]]; then
     "$IPTABLES_APPLY_SCRIPT" remove >/dev/null 2>&1 || true
   fi
+  remove_all_icmp_links
   rm -f "$SERVICE_FILE" "$HAPROXY_SERVICE_FILE" "$IPTABLES_SERVICE_FILE" "$IPTABLES_SYSCTL_FILE" "$GOST_SERVICE_FILE" "$GOST_CONFIG_FILE" "$REALM_SERVICE_FILE" "$REALM_CONFIG_FILE" "$WEB_SERVICE_FILE" "$IPERF_SERVICE_FILE" /usr/local/bin/xraymesh
   rm -rf -- "$INSTALL_DIR" /etc/xraymesh
   systemctl daemon-reload
@@ -4191,6 +4704,12 @@ main() {
   gost-start) require_root; require_linux; systemctl start xraymesh-gost.service ;;
   gost-stop) require_root; require_linux; systemctl stop xraymesh-gost.service ;;
   gost-restart) require_root; require_linux; systemctl restart xraymesh-gost.service ;;
+  icmp-invite) require_root; require_linux; ensure_icmp_listen_link ;;
+  icmp-join) shift; require_root; require_linux; create_icmp_dial_link "$@" ;;
+  icmp-list|icmp-links) require_linux; list_icmp_links ;;
+  icmp-delete) shift; require_root; require_linux; delete_icmp_link "$@" ;;
+  icmp-prune) require_root; require_linux; prune_icmp_links ;;
+  icmp-apply) require_root; require_linux; apply_icmp_links ;;
   web|link|token|login-link) require_root; require_linux; generate_web_token ;;
   password|reset-password) require_root; require_linux; set_web_password ;;
   port|change-port) require_root; require_linux; configure_web_port ;;
@@ -4228,6 +4747,7 @@ main() {
   stop)
     require_root; require_linux
     systemctl stop xraymesh.service xraymesh-web.service xraymesh-haproxy.service xraymesh-iptables.service xraymesh-gost.service xraymesh-realm.service xraymesh-iperf.service 2>/dev/null || true
+    systemctl stop 'xraymesh-icmp@*' 2>/dev/null || true
     warn "All services stopped."
     ;;
   version|-v|--version) echo "${APP} ${VERSION} (${DEFAULT_BRANCH}) - © ${OWNER}" ;;
@@ -4245,6 +4765,8 @@ main() {
     printf '  %-20s %s\n' "xraymesh status" "Show node, mesh, and Web UI status summary"
     printf '  %-20s %s\n' "xraymesh peers" "Show connected peers and live latency"
     printf '  %-20s %s\n' "xraymesh routes" "Show mesh routing table"
+    printf '  %-20s %s\n' "xraymesh icmp-list" "Show ICMP links (BackPack xDi) and their packet counters"
+    printf '  %-20s %s\n' "xraymesh icmp-delete" "Delete one ICMP link by name (e.g. out-1234)"
     printf '  %-20s %s\n' "xraymesh logs" "Stream live systemd service logs"
     printf '  %-20s %s\n' "xraymesh self-test" "Run installation and service health self-tests"
     printf '  %-20s %s\n' "xraymesh start" "Start or apply node and start all services"

@@ -33,7 +33,7 @@ import ssl
 from pathlib import Path
 
 # Paths & Defaults
-CURRENT_VERSION = "3.0.0-beta.5"
+CURRENT_VERSION = "3.0.0-beta.6"
 CURRENT_BRANCH = "beta"
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/xraymesh")
 BIN_DIR = os.path.join(INSTALL_DIR, "bin")
@@ -1219,7 +1219,11 @@ def sanitize_peer_endpoint(raw_peer, default_port="11010"):
     return hostport
 
 
-MESH_PROTOCOLS = ("dual", "udp", "tcp", "ws", "wss", "quic", "faketcp")
+MESH_PROTOCOLS = ("dual", "udp", "tcp", "ws", "wss", "quic", "faketcp", "icmp")
+# EasyTier MTU across a BackPack xDi (ICMP) link; mirrors ICMP_MESH_MTU in xraymesh.sh.
+ICMP_MESH_MTU = 1280
+ICMP_LINK_MAX_INDEX = 16383
+ICMP_LINK_DIR = "/etc/xraymesh/icmp-links"
 
 # Zero-width and bidi control characters that chat apps and RTL pages slip into copied text.
 _INVISIBLE_CHARS_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]")
@@ -1292,7 +1296,49 @@ def decode_invite_token(raw):
     mtu = data.get("mtu")
     if isinstance(mtu, int) and not isinstance(mtu, bool) and 576 <= mtu <= 9000:
         invite["mtu"] = mtu
+    if invite["proto"] == "icmp":
+        invite["icmp"] = parse_icmp_link(data.get("icmp"), invite["endpoint"])
     return invite
+
+
+def split_endpoint(endpoint):
+    """Split 'host:port' or '[v6]:port' into (host, port), or return None."""
+    m = re.fullmatch(r"\[?([^\[\]]+?)\]?:(\d{1,5})", str(endpoint or "").strip())
+    if not m or parse_port(m.group(2)) is None:
+        return None
+    return m.group(1), int(m.group(2))
+
+
+def parse_icmp_link(link, endpoint):
+    """Validate the ICMP link an invite carries: which server to ping, and the link's token and slot."""
+    if not isinstance(link, dict) or not split_endpoint(endpoint):
+        raise InviteTokenError(
+            "invite_icmp_missing",
+            "This ICMP invite has no link details. Generate a new invite on the other server.",
+        )
+    token, port, idx = link.get("t"), link.get("p"), link.get("i")
+    host = split_endpoint(endpoint)[0]
+    valid = (
+        isinstance(token, str) and re.fullmatch(r"[A-Za-z0-9]{16,128}", token)
+        and isinstance(port, int) and not isinstance(port, bool) and parse_port(port) is not None
+        and isinstance(idx, int) and not isinstance(idx, bool) and 0 <= idx <= ICMP_LINK_MAX_INDEX
+        and re.fullmatch(r"[A-Za-z0-9.-]{1,253}|[0-9A-Fa-f:]{2,39}", host)
+    )
+    if not valid:
+        raise InviteTokenError("invite_icmp_missing", "The ICMP link details in this invite are invalid.")
+    return {"t": token, "p": port, "i": idx}
+
+
+def last_json_line(output):
+    """Return the last JSON object printed by an xraymesh.sh command, ignoring its progress messages."""
+    for line in reversed(str(output or "").splitlines()):
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                return json.loads(line)
+            except ValueError:
+                return None
+    return None
 
 
 def valid_mesh_hostname(name):
@@ -1386,6 +1432,19 @@ ALLOWED_CLUSTER_KEYS = (
     "NETWORK_SECRET",
     "NETWORK_NAME",
 )
+
+
+ICMP_SAFESYNC_ERROR = (
+    "ICMP links are created per server through invite codes, so SafeSync cannot switch "
+    "the whole mesh to or from ICMP. Change the protocol on this server and invite the others instead."
+)
+
+
+def icmp_protocol_switch(current, new):
+    """True when a synced protocol change would move a node onto or off ICMP, which needs per-link setup."""
+    current = str(current or "dual").strip().lower()
+    new = str(new or "").strip().lower()
+    return bool(new) and new != current and "icmp" in (current, new)
 
 
 def cleanup_nonce_cache():
@@ -2423,6 +2482,18 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 "ipv6": config.get("IPV6", "no") == "yes",
                 "mtu": mtu
             }
+            if proto == "icmp":
+                if not pub_ip:
+                    self.send_json({"ok": False, "error": "This server's public IP is unknown, so no ICMP link can be offered."}, status=500)
+                    return
+                # Each ICMP invite carries one link; it is reused until a server actually joins on it.
+                ok, out = run_xraymesh_cmd(["icmp-invite"], timeout=120)
+                link = last_json_line(out) if ok else None
+                if not link:
+                    self.send_json({"ok": False, "error": out or "Could not prepare an ICMP link for this invite."}, status=500)
+                    return
+                invite_obj["icmp"] = link
+                invite_obj["mtu"] = min(mtu, ICMP_MESH_MTU)
             token_str = base64.b64encode(json.dumps(invite_obj).encode("utf-8")).decode("utf-8")
             self.send_json({
                 "ok": True,
@@ -2518,6 +2589,9 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 return
 
             if path == "/api/cluster/prepare":
+                if icmp_protocol_switch(load_env_file(CONFIG_FILE).get("PROTOCOL", "dual"), data.get("PROTOCOL", "")):
+                    self.send_json({"ok": False, "error": ICMP_SAFESYNC_ERROR}, status=400)
+                    return
                 try:
                     shutil.copy2(CONFIG_FILE, CONFIG_BACKUP_FILE)
                 except Exception as e:
@@ -3252,6 +3326,28 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                     self.send_json({"ok": False, "code": "backup_failed", "error": f"Could not back up the current configuration: {e}"}, status=500)
                     return
 
+            peer = invite["endpoint"]
+            mtu = invite.get("mtu", 1380)
+            icmp_link_name = None
+            if invite["proto"] == "icmp":
+                # EasyTier reaches the inviting server through the ICMP link, not its public address.
+                host, mesh_port = split_endpoint(invite["endpoint"])
+                link = invite["icmp"]
+                ok, out = run_xraymesh_cmd(
+                    ["icmp-join", host, str(link["p"]), link["t"], str(link["i"])], timeout=120
+                )
+                created = last_json_line(out) if ok else None
+                if not created or not valid_ipv4(str(created.get("peer_ip", ""))):
+                    self.send_json({
+                        "ok": False,
+                        "code": "icmp_link_failed",
+                        "error": out or "The ICMP link could not be created."
+                    }, status=500)
+                    return
+                icmp_link_name = created.get("name")
+                peer = f"udp://{created['peer_ip']}:{mesh_port}"
+                mtu = min(mtu, ICMP_MESH_MTU)
+
             # A pending SafeSync watchdog would otherwise roll this server back to the old mesh.
             disarm_rollback_watchdog()
             save_node_config_env({
@@ -3261,15 +3357,17 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 "IPV4": ipv4,
                 "PROTOCOL": invite["proto"],
                 "PORT": str(port),
-                "PEERS": invite["endpoint"],
+                "PEERS": peer,
                 "ENCRYPTION": "yes" if invite.get("enc", True) else "no",
                 "IPV6": "yes" if invite.get("ipv6", False) else "no",
-                "MTU": str(invite.get("mtu", 1380)),
+                "MTU": str(mtu),
                 "ENABLE_KCP": "yes" if invite.get("kcp", False) else "no",
             })
 
             ok, msg = run_xraymesh_cmd(["node-restart"])
             if not ok:
+                if icmp_link_name:
+                    run_xraymesh_cmd(["icmp-delete", icmp_link_name])
                 if previous_raw is not None:
                     write_config_bytes(previous_raw)
                     run_xraymesh_cmd(["node-restart"])
@@ -3282,6 +3380,10 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                     "error": msg or "The mesh service failed to start with the new configuration."
                 }, status=500)
                 return
+
+            # ICMP links that only served the previous mesh's peers are no longer needed.
+            if os.path.isdir(ICMP_LINK_DIR):
+                run_xraymesh_cmd(["icmp-prune"])
 
             # SafeSync backup/staged files and rollback notices belong to the previous mesh.
             for stale in (CONFIG_BACKUP_FILE, CONFIG_STAGED_FILE):
@@ -3312,6 +3414,9 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 return
 
             new_protocol = data.get("protocol", cfg.get("PROTOCOL", "dual")).strip().lower()
+            if icmp_protocol_switch(cfg.get("PROTOCOL", "dual"), new_protocol):
+                self.send_json({"ok": False, "error": ICMP_SAFESYNC_ERROR}, status=400)
+                return
             new_kcp = "yes" if data.get("enable_kcp", cfg.get("ENABLE_KCP") == "yes") else "no"
             new_encryption = "yes" if data.get("encryption", cfg.get("ENCRYPTION") != "no") else "no"
             new_ipv6 = "yes" if data.get("ipv6", cfg.get("IPV6") == "yes") else "no"

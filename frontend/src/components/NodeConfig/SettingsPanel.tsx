@@ -76,7 +76,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const changed = changedFields(form, baseline);
   const dirty = changed.length > 0;
   // SafeSync only broadcasts shared settings, so it is offered only when nothing else changed.
-  const sharedOnly = dirty && changed.every((field) => SHARED_FIELDS.includes(field));
+  // ICMP needs a link per server pair, so switching onto or off it cannot be synced mesh-wide.
+  const icmpSwitch = form.protocol !== baseline.protocol && (form.protocol === 'icmp' || baseline.protocol === 'icmp');
+  const sharedOnly = dirty && !icmpSwitch && changed.every((field) => SHARED_FIELDS.includes(field));
 
   const update = <K extends keyof NodeForm>(key: K, value: NodeForm[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));

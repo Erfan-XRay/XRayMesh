@@ -286,6 +286,7 @@ export const PROTOCOL_TEXT: Record<MeshProtocol, [TranslationKey, TranslationKey
   wss: ['proto_wss', 'proto_wss_desc'],
   quic: ['proto_quic', 'proto_quic_desc'],
   faketcp: ['proto_faketcp', 'proto_faketcp_desc'],
+  icmp: ['proto_icmp', 'proto_icmp_desc'],
 };
 
 interface ProtocolPickerProps {
@@ -348,6 +349,12 @@ export const ProtocolPicker: React.FC<ProtocolPickerProps> = ({ value, onChange,
         <p className="mt-2 flex items-start gap-1.5 text-xs text-warning leading-relaxed">
           <AlertCircle className="w-3.5 h-3.5 mt-[0.2em] shrink-0" aria-hidden="true" />
           <span>{t('node_proto_udp_hint')}</span>
+        </p>
+      )}
+      {value === 'icmp' && (
+        <p className="mt-2 flex items-start gap-1.5 text-xs text-warning leading-relaxed">
+          <AlertCircle className="w-3.5 h-3.5 mt-[0.2em] shrink-0" aria-hidden="true" />
+          <span>{t('node_proto_icmp_hint')}</span>
         </p>
       )}
     </fieldset>

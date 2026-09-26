@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Erfan-XRay/XRayMesh/releases/tree/beta"><img src="https://img.shields.io/badge/version-3.0.0--beta.5-orange.svg?style=flat-square" alt="Version 2.2.5" /></a>
+  <a href="https://github.com/Erfan-XRay/XRayMesh/releases/tree/beta"><img src="https://img.shields.io/badge/version-3.0.0--beta.6-orange.svg?style=flat-square" alt="Version 2.2.5" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Source--Available-red.svg?style=flat-square" alt="Source-Available License" /></a>
   <img src="https://img.shields.io/badge/EasyTier-v2.6.4-cyan.svg?style=flat-square" alt="EasyTier core" />
   <img src="https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-orange.svg?style=flat-square" alt="Supported OS" />
@@ -36,6 +36,7 @@ Developed with passion by **ErfanXRay**.
 ### 🌐 Zero-Config Mesh Networking
 - Connects distributed VPS and dedicated servers into an encrypted private mesh network (`10.144.144.0/24`).
 - **Multiple Transports:** Dual TCP/UDP fallback, strict WSS (WebSocket over TLS), and QUIC.
+- **ICMP Transport (experimental):** For networks where only ping gets through, the mesh can run over ICMP links provided by [BackPack](https://github.com/AminMGMT/BackPack) by Amin Mohammadi (AminMGMT), used as an unmodified AGPL-3.0 binary. Each server joins with its own invite code.
 - **Mesh Accel:** Automatic multi-path peer routing and optional KCP transport acceleration for high-loss links.
 - **Service Resilience:** Managed systemd services with auto-recovery and health watchdogs.
 

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Check, Copy, Link2, Loader2, Pencil, Plus, Server, Share2, Trash2, Users } from 'lucide-react';
+import { AlertTriangle, Check, Copy, Link2, Loader2, Pencil, Plus, RefreshCw, Server, Share2, Trash2, Users } from 'lucide-react';
 import { MeshInviteData } from '../../types';
 import type { Translate } from '../../i18n/translations';
 import { formatText } from '../../i18n/fillTemplate';
@@ -183,6 +183,19 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
                 </button>
               </div>
             </div>
+
+            {invite.details.proto === 'icmp' && (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border border-warning-border bg-warning/5">
+                <p className="flex items-start gap-1.5 text-xs text-text-muted leading-relaxed">
+                  <AlertTriangle className="w-3.5 h-3.5 mt-[0.2em] shrink-0 text-warning" aria-hidden="true" />
+                  <span>{t('node_invite_icmp_single')}</span>
+                </p>
+                <button type="button" onClick={loadInvite} className={`${btnGhostSm} shrink-0`}>
+                  <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>{t('node_invite_icmp_refresh')}</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </section>

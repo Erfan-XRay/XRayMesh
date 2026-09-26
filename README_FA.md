@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Erfan-XRay/XRayMesh/releases/tree/beta"><img src="https://img.shields.io/badge/version-3.0.0--beta.5-orange.svg?style=flat-square" alt="Version 2.2.5" /></a>
+  <a href="https://github.com/Erfan-XRay/XRayMesh/releases/tree/beta"><img src="https://img.shields.io/badge/version-3.0.0--beta.6-orange.svg?style=flat-square" alt="Version 2.2.5" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Source--Available-red.svg?style=flat-square" alt="Source-Available License" /></a>
   <img src="https://img.shields.io/badge/EasyTier-v2.6.4-cyan.svg?style=flat-square" alt="EasyTier core" />
   <img src="https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-orange.svg?style=flat-square" alt="Supported OS" />
@@ -35,6 +35,7 @@
 ### 🌐 شبکه مش بدون پیچیدگی (Zero-Config Mesh)
 - اتصال چندین سرور به یک شبکه خصوصی امن با رنج آی‌پی اختصاصی (`10.144.144.0/24`).
 - **پروتکل‌های ارتباطی متنوع:** حالت دوگانه TCP/UDP، حالت WSS (WebSocket بر بستر TLS) و پروتکل مدرن QUIC.
+- **انتقال ICMP (آزمایشی):** برای شبکه‌هایی که فقط پینگ از آن‌ها رد می‌شود، مش می‌تواند روی لینک‌های ICMP ساخته‌شده با [BackPack](https://github.com/AminMGMT/BackPack) اثر Amin Mohammadi (AminMGMT) کار کند؛ BackPack به‌صورت باینری دست‌نخورده با مجوز AGPL-3.0 استفاده می‌شود. هر سرور با کد دعوت جداگانهٔ خودش وصل می‌شود.
 - **بهینه‌ساز KCP:** قابلیت فعال‌سازی شتاب‌دهنده KCP برای لینک‌های با پکت‌لاس بالا.
 - **پایداری سرویس:** راه‌اندازی به عنوان سرویس سیستمی systemd با ریکاوری و ریستارت خودکار در صورت قطعی.
 

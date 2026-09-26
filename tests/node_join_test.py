@@ -90,6 +90,31 @@ class InviteDecodingTests(unittest.TestCase):
                     server.decode_invite_token(raw)
                 self.assertEqual(ctx.exception.code, code)
 
+    def test_icmp_invite_requires_valid_link_details(self):
+        link = {"t": "a" * 48, "p": 20042, "i": 42}
+        invite = server.decode_invite_token(make_invite(proto="icmp", icmp=link))
+        self.assertEqual((invite["proto"], invite["icmp"]), ("icmp", link))
+
+        bad_links = {
+            "missing": None,
+            "short token": {**link, "t": "abc"},
+            "token with quotes": {**link, "t": 'a"b' * 8},
+            "port out of range": {**link, "p": 70000},
+            "index out of range": {**link, "i": 16384},
+            "boolean index": {**link, "i": True},
+        }
+        for name, bad in bad_links.items():
+            with self.subTest(name):
+                overrides = {"proto": "icmp"}
+                if bad is not None:
+                    overrides["icmp"] = bad
+                with self.assertRaises(server.InviteTokenError) as ctx:
+                    server.decode_invite_token(make_invite(**overrides))
+                self.assertEqual(ctx.exception.code, "invite_icmp_missing")
+
+        with self.assertRaises(server.InviteTokenError):
+            server.decode_invite_token(make_invite(proto="icmp", icmp=link, endpoint="evil;host:11010"))
+
     def test_unknown_protocol_falls_back_to_dual_and_keeps_transport_settings(self):
         invite = server.decode_invite_token(make_invite(proto="carrier-pigeon", enc=False, kcp=True, mtu=1300, ipv6=True))
         self.assertEqual(invite["proto"], "dual")
@@ -228,6 +253,94 @@ class NodeJoinEndpointTests(unittest.TestCase):
         invite = server.decode_invite_token(payload["data"]["invite"])
         self.assertEqual(invite["endpoint"], "185.100.200.30:12000")
         self.assertEqual((invite["proto"], invite["enc"], invite["kcp"], invite["mtu"]), ("tcp", True, True, 1380))
+
+    def test_icmp_invite_embeds_a_link(self):
+        self.write_existing_config()
+        cfg = server.load_env_file(server.CONFIG_FILE)
+        cfg["PROTOCOL"] = "icmp"
+        server.save_node_config_env(cfg)
+        link_out = '  > Downloading BackPack...\n  [OK] verified\n{"t":"' + "b" * 48 + '","p":20042,"i":42}'
+        with mock.patch.object(server, "get_server_public_ip", return_value="185.100.200.30"), \
+                mock.patch.object(server, "run_xraymesh_cmd", return_value=(True, link_out)) as run_cmd:
+            raw = call_handler("GET", "/api/node/invite")
+
+        status, payload = parse_single_response(self, raw)
+        self.assertEqual(status, 200)
+        run_cmd.assert_called_once_with(["icmp-invite"], timeout=120)
+        invite = server.decode_invite_token(payload["data"]["invite"])
+        self.assertEqual(invite["icmp"], {"t": "b" * 48, "p": 20042, "i": 42})
+        self.assertEqual(invite["mtu"], server.ICMP_MESH_MTU)
+
+    def test_icmp_join_peers_across_the_link(self):
+        self.write_existing_config()
+        link = {"t": "c" * 48, "p": 20042, "i": 42}
+        calls = []
+
+        def fake_run(args, timeout=45):
+            calls.append(args)
+            if args[0] == "icmp-join":
+                return True, '{"name":"out-42","peer_ip":"10.214.0.170"}'
+            return True, "online"
+
+        with mock.patch.object(server, "run_xraymesh_cmd", side_effect=fake_run):
+            raw = call_handler("POST", "/api/node/join", {
+                "invite": make_invite(proto="icmp", icmp=link, mtu=1380),
+                "hostname": "tehran-edge",
+                "ipv4": "10.144.144.23",
+            })
+
+        status, payload = parse_single_response(self, raw)
+        self.assertEqual((status, payload["ok"]), (200, True))
+        self.assertEqual(calls[0], ["icmp-join", "185.100.200.30", "20042", "c" * 48, "42"])
+        self.assertEqual(calls[1], ["node-restart"])
+        cfg = server.load_env_file(server.CONFIG_FILE)
+        # EasyTier dials the other server's tunnel address on its mesh port, not its public IP.
+        self.assertEqual(cfg["PEERS"], "udp://10.214.0.170:11010")
+        self.assertEqual((cfg["PROTOCOL"], cfg["MTU"]), ("icmp", str(server.ICMP_MESH_MTU)))
+
+    def test_icmp_join_failure_leaves_config_untouched(self):
+        original = self.write_existing_config()
+        with mock.patch.object(server, "run_xraymesh_cmd", return_value=(False, "BackPack download failed")) as run_cmd:
+            raw = call_handler("POST", "/api/node/join", {
+                "invite": make_invite(proto="icmp", icmp={"t": "d" * 48, "p": 20001, "i": 1}),
+                "hostname": "tehran-edge",
+            })
+
+        status, payload = parse_single_response(self, raw)
+        self.assertEqual((status, payload["code"]), (500, "icmp_link_failed"))
+        self.assertIn("BackPack download failed", payload["error"])
+        run_cmd.assert_called_once()
+        with open(server.CONFIG_FILE, "rb") as f:
+            self.assertEqual(f.read(), original)
+
+    def test_icmp_start_failure_removes_new_link_and_restores(self):
+        original = self.write_existing_config()
+        responses = [
+            (True, '{"name":"out-1","peer_ip":"10.214.0.6"}'),
+            (False, "easytier exited"),
+            (True, ""),
+            (True, ""),
+        ]
+        with mock.patch.object(server, "run_xraymesh_cmd", side_effect=responses) as run_cmd:
+            raw = call_handler("POST", "/api/node/join", {
+                "invite": make_invite(proto="icmp", icmp={"t": "e" * 48, "p": 20001, "i": 1}),
+                "hostname": "tehran-edge",
+            })
+
+        status, payload = parse_single_response(self, raw)
+        self.assertEqual((status, payload["code"]), (500, "start_failed"))
+        self.assertIn(mock.call(["icmp-delete", "out-1"]), run_cmd.call_args_list)
+        with open(server.CONFIG_FILE, "rb") as f:
+            self.assertEqual(f.read(), original)
+
+
+class IcmpSafeSyncTests(unittest.TestCase):
+    def test_switching_onto_or_off_icmp_is_refused(self):
+        self.assertTrue(server.icmp_protocol_switch("dual", "icmp"))
+        self.assertTrue(server.icmp_protocol_switch("icmp", "udp"))
+        self.assertFalse(server.icmp_protocol_switch("icmp", "icmp"))
+        self.assertFalse(server.icmp_protocol_switch("icmp", ""))
+        self.assertFalse(server.icmp_protocol_switch("tcp", "udp"))
 
 
 if __name__ == "__main__":

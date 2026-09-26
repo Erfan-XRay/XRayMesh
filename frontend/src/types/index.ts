@@ -211,7 +211,7 @@ export type ThemeMode = 'auto' | 'light' | 'dark';
 
 export type TabId = 'peers' | 'node' | 'speedtest' | 'ping' | 'tunnels';
 
-export type MeshProtocol = 'dual' | 'udp' | 'tcp' | 'ws' | 'wss' | 'quic' | 'faketcp';
+export type MeshProtocol = 'dual' | 'udp' | 'tcp' | 'ws' | 'wss' | 'quic' | 'faketcp' | 'icmp';
 
 export interface RollbackInfo {
   occurred: boolean;
@@ -252,6 +252,8 @@ export interface MeshInviteData {
     kcp?: boolean;
     ipv6?: boolean;
     mtu?: number;
+    /** ICMP invites carry one BackPack link: its token, port and address slot. */
+    icmp?: { t: string; p: number; i: number };
   };
   public_ip: string;
   port: string | number;

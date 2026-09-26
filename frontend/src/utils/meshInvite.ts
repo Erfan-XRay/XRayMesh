@@ -1,6 +1,6 @@
 import { MeshProtocol } from '../types';
 
-export const MESH_PROTOCOLS: MeshProtocol[] = ['dual', 'udp', 'tcp', 'ws', 'wss', 'quic', 'faketcp'];
+export const MESH_PROTOCOLS: MeshProtocol[] = ['dual', 'udp', 'tcp', 'ws', 'wss', 'quic', 'faketcp', 'icmp'];
 
 export interface MeshInvite {
   net: string;
