@@ -2,6 +2,15 @@
 
 All notable XRayMesh changes are documented here.
 
+## [3.0.0-beta.5] - 2026-09-26
+
+### Changed
+- Redesigned web panel ("Firouzeh Console"): flat layered surfaces, a sticky header with the section tabs built in, one overview strip for address, peers, latency and host load, and dialogs that open as bottom sheets on phones.
+- Six color palettes (Firouzeh, Ocean, Iris, Saffron, Graphite, Midnight) in light and dark. A palette saved in an earlier version is mapped to its closest new palette.
+- Theme, palette and language apply before the page draws, so it no longer flashes on load. Light mode no longer relies on color overrides.
+- Persian: right-to-left layout throughout, the Estedad font (bundled, OFL) with a larger type scale, Persian digits for counts and measurements, and Latin digits kept for IPs, ports, versions and host names.
+- Text that was still hardcoded in English (tunnel dialog, cluster sync, speed test, notifications) is now translated, and the Persian wording is consistent across the panel.
+
 ## [3.0.0-beta.4] - 2026-09-26
 
 Test release for one-click updates from the panel. No functional changes since 3.0.0-beta.3.

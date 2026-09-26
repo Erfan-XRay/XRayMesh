@@ -1,8 +1,8 @@
 {
-  "version": "3.0.0-beta.4",
+  "version": "3.0.0-beta.5",
   "branch": "beta",
-  "release_name": "XRayMesh v3.0.0-beta.4 (Update Test)",
+  "release_name": "XRayMesh v3.0.0-beta.5 (New Panel Design)",
   "release_date": "2026-09-26",
-  "changelog": "Test release for one-click updates from the panel. No functional changes since 3.0.0-beta.3.",
+  "changelog": "Redesigned web panel (Firouzeh Console): new look with six color palettes, a sticky header with the tabs built in, and phone-friendly dialogs. Persian is fully right-to-left with the Estedad font and Persian digits for measurements, while IPs, ports and versions stay in Latin digits. Light mode, palette choice and language apply before the page draws, with no flash.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update"
 }

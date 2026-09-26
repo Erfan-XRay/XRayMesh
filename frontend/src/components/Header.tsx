@@ -108,7 +108,7 @@ export const Header: React.FC<HeaderProps> = ({
   t,
   ...prefs
 }) => {
-  const version = node.xraymesh_version || '3.0.0-beta.4';
+  const version = node.xraymesh_version || '3.0.0-beta.5';
   const isBeta = node.branch === 'beta';
 
   const onTabKeyDown = (e: React.KeyboardEvent) => {
