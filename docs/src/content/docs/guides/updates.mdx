@@ -1,0 +1,76 @@
+---
+title: Updates
+description: Update any server in the mesh from the panel, choose stable or beta releases, and update from the terminal.
+---
+
+import { LinkCard, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Each server checks GitHub for new releases on its own. You can update any server in the mesh from
+any panel, and a failed update restores the previous version automatically.
+
+## Update from the panel
+
+<Steps>
+
+1. Open the **Servers** tab. A server with a new release shows **Update available**.
+
+2. Press **Update to** *version* on that server. The dialog shows its current version and channel.
+
+3. Press **Update now**. The server:
+   - downloads the new files and verifies them before replacing anything,
+   - restarts its services for about 20 seconds, so mesh traffic through it pauses briefly,
+   - restores the previous version on its own if it doesn't come back healthy.
+
+4. The progress appears in the server's row: downloading, verifying, installing, restarting. When you
+   update the server whose panel you're in, the panel reloads by itself when it's done. You may need
+   to sign in again.
+
+</Steps>
+
+:::note[If an update doesn't finish]
+If there's no confirmation after 4 minutes, open that server's own panel, or check the updater log
+on the server:
+
+```bash
+journalctl -u xraymesh-updater-temp
+```
+:::
+
+## Stable or beta
+
+Each server has its own **update channel**, shown next to its version. Click it to switch.
+
+| Channel | What you get |
+| :--- | :--- |
+| **Stable** | Tested releases. The default, and the right choice for servers you rely on. |
+| **Beta** | New features first, but they can be unstable or incomplete. Use it for testing. |
+
+Changing the channel installs nothing by itself. You still press **Update**. Switching from beta
+back to stable never downgrades: the server keeps its version until a newer stable release comes
+out.
+
+## Update from the terminal
+
+Use this for a server that's offline in the panel, or one running an old version that can't be
+updated remotely (the panel shows **Needs update**).
+
+<Tabs>
+<TabItem label="xraymesh installed">
+
+```bash
+sudo xraymesh update
+```
+
+</TabItem>
+<TabItem label="xraymesh command missing">
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh) update
+```
+
+</TabItem>
+</Tabs>
+
+This updates the script, the web panel and the EasyTier core.
+
+<LinkCard title="Next: Security" href="../security/" description="HTTPS, sign-in options and keeping the panel private." />

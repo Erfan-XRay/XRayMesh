@@ -1,0 +1,89 @@
+---
+title: Port forwarding
+description: Forward ports from one server to another over the mesh with Realm, HAProxy, GOST or iptables.
+---
+
+import { LinkCard, Steps } from '@astrojs/starlight/components';
+import TunnelFlow from '../../../components/TunnelFlow.astro';
+
+A **tunnel** listens on ports on one server and forwards whatever arrives there, over the mesh, to
+a server of your choice. The usual setup: your users connect to a server in Iran, and a tunnel
+carries their traffic to the server abroad where your service actually runs.
+
+<TunnelFlow />
+
+## Pick an engine
+
+XRayMesh has four forwarding engines. They all do the same job, but in different ways.
+
+| Engine | Protocols | Best for |
+| :--- | :--- | :--- |
+| **Realm** | TCP, UDP or both | A light, fast default for most services. Written in Rust and uses little memory. |
+| **HAProxy** | TCP | Web and HTTPS traffic, and services with many simultaneous connections. |
+| **GOST** | TCP, UDP or both | A flexible user-space forwarder when you need UDP as well as TCP. |
+| **iptables** | TCP, UDP or both | The lowest latency. Runs in the Linux kernel, which suits UDP services such as Hysteria2, WireGuard or QUIC. |
+
+:::tip[Not sure?]
+Start with **Realm**. Switch to **iptables** if a UDP service needs the lowest latency.
+:::
+
+## Create a tunnel
+
+<Steps>
+
+1. Open the **Tunnels** tab, choose the engine and press **New tunnel**.
+
+2. **Tunnel name**: letters, numbers, `_` and `-`, up to 32 characters. You can't change it later.
+
+3. **Runs on**: the server that listens on the ports, usually the one your users connect to. It
+   defaults to this server.
+
+   iptables tunnels always run on the server whose panel you're in, because their rules live in
+   that server's kernel. To forward from another server, create the tunnel from that server's
+   panel.
+
+4. **Destination**: pick a server from the list, or type its virtual IP, such as `10.144.144.2`.
+
+5. **Ports**: one port, a list, a range or a mapping. See [Port formats](#port-formats) below, or
+   press one of the **Presets**.
+
+6. **Protocol** (Realm, GOST and iptables): TCP, UDP or both. HAProxy forwards TCP only.
+
+7. **iptables only**: optionally limit the **Inbound interface** and the **Allowed sources (CIDR)**.
+   The defaults, all interfaces and `0.0.0.0/0`, accept traffic from anywhere.
+
+8. Press **Create tunnel**.
+
+</Steps>
+
+:::caution[Open the ports]
+Open the listening ports in your hosting provider's firewall, and in UFW if you use it. Otherwise
+users can't reach the tunnel.
+:::
+
+## Port formats
+
+Separate several entries with commas. A range maps to the same ports on the destination, unless
+you give a target after `:`.
+
+| You write | Listens on | Forwards to |
+| :--- | :--- | :--- |
+| `443` | 443 | 443 |
+| `80,443` | 80 and 443 | 80 and 443 |
+| `8000-8010` | 8000 to 8010 | 8000 to 8010 |
+| `1234:443` | 1234 | 443 |
+| `1000-1002:2000-2002` | 1000, 1001, 1002 | 2000, 2001, 2002, in pairs |
+
+For example, `1234:443` gives this flow:
+
+<TunnelFlow listen="1234" destPort="443" />
+
+## Tunnels on every server
+
+The tunnel list can show more than this server. Use **Show tunnels from** to switch between
+**This server**, **All servers** or one specific server, and search by name, destination or port.
+
+If a server doesn't respond, its last known tunnels are still shown, marked as cached, and you
+can't edit them until the server is back.
+
+<LinkCard title="Next: Mesh transports" href="../transports/" description="Choose how the mesh itself travels between servers." />

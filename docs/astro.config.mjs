@@ -81,6 +81,17 @@ export default defineConfig({
 					],
 				},
 				{
+					label: 'Guides',
+					translations: { fa: 'راهنماها' },
+					items: [
+						{ slug: 'guides/tunnels' },
+						{ slug: 'guides/transports' },
+						{ slug: 'guides/safesync' },
+						{ slug: 'guides/updates' },
+						{ slug: 'guides/security' },
+					],
+				},
+				{
 					label: 'Reference',
 					translations: { fa: 'مرجع' },
 					items: [{ slug: 'reference/cli' }],

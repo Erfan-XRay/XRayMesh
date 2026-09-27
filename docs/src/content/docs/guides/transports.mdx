@@ -1,0 +1,84 @@
+---
+title: Mesh transports
+description: The nine ways mesh traffic can travel between servers, and which one to pick.
+---
+
+import { LinkCard, Steps } from '@astrojs/starlight/components';
+import UiPath from '../../../components/UiPath.astro';
+
+The transport decides how mesh traffic travels between servers. Every server in a mesh uses the
+same transport, and the invite code carries it to new servers. You choose it when you
+[create the mesh](../../start/create-mesh/), and can change it later under
+<UiPath items={['Node', 'Settings']} />.
+
+## Which one to pick
+
+| If… | Use |
+| :--- | :--- |
+| You're not sure | `dual` (the default) |
+| UDP works well between your servers | `udp` |
+| UDP is blocked or throttled | `tcp`, or `faketcp` to keep UDP's speed |
+| Plain connections get cut by deep packet inspection (DPI) | `ws`, or `wss` if you have a domain |
+| The link is lossy or slow to recover | `quic`, or turn on **KCP loss resistance** |
+| Almost nothing gets through, but ping does | `icmp` |
+| TCP connects, then stalls, resets or gets throttled | `pck` |
+
+## All transports
+
+| Transport | How it works |
+| :--- | :--- |
+| `dual` | Listens on TCP and UDP and picks the faster path automatically. |
+| `udp` | Lowest latency. Needs UDP open on every server. If your ISP blocks UDP, the safety watchdog switches back to `dual` on its own. |
+| `tcp` | For networks where UDP is blocked or throttled. |
+| `ws` | Wraps traffic in WebSocket frames to get past DPI. No certificate needed. |
+| `wss` | WebSocket over TLS. Needs a domain with a valid certificate. |
+| `quic` | QUIC with BBR congestion control, and automatic fallback to TCP. |
+| `faketcp` | Makes UDP look like TCP to avoid ISP throttling of UDP. Links are made only to the peers you add, and other servers can reach each other through them. IPv4 only. |
+| `icmp` | Carries the mesh inside ping packets, using BackPack. Slower than UDP and subject to ICMP rate limits. IPv4 only. |
+| `pck` | Carries the mesh inside TCP segments built without the kernel's TCP stack, using BackPack. IPv4 only. |
+
+## ICMP and PCK
+
+These two come from [BackPack](https://github.com/AminMGMT/BackPack) by Amin Mohammadi. XRayMesh
+downloads its official release, checks it against its published checksums, and runs it unmodified.
+BackPack builds an encrypted link between two servers, and the mesh runs over that link. They
+work a little differently from the other transports:
+
+- **One main server.** Choose `icmp` or `pck` on the main server, usually the one abroad. Every
+  other server joins with a code from it.
+- **One code per server.** Each invite code connects one server. After it joins, press **New code**
+  for the next one. See [Add servers](../../start/add-servers/#servers-over-icmp-or-pck).
+- **PCK needs a TCP port.** Each PCK link listens on its own TCP port, between `20000` and `32767`,
+  on the main server. Open it in the provider's firewall.
+- **MTU.** ICMP uses an MTU of `1280` by default instead of `1360`.
+- **Encryption.** BackPack encrypts each link, but servers that joined over links also reach each
+  other directly over plain UDP. Turn off mesh encryption to save CPU only if the mesh has just two
+  servers.
+
+Check the links from the terminal:
+
+```bash
+xraymesh link-list             # links and their packet counters
+xraymesh link-delete out-1234  # remove one link
+```
+
+:::note[Experimental]
+ICMP and PCK are experimental. Use them when the other transports don't get through.
+:::
+
+## Change the transport
+
+<Steps>
+
+1. On any server, open <UiPath items={['Node', 'Settings']} /> and pick the new protocol under
+   **Transport**.
+2. Press **Apply to all servers** so every server switches together. If a server can't reconnect
+   with the new transport within 90 seconds, it switches back on its own. See
+   [SafeSync](../safesync/).
+
+</Steps>
+
+Switching **to or from ICMP or PCK** is different, because those links are made one server at a
+time. Change it on the main server, then join the other servers again, each with its own code.
+
+<LinkCard title="Next: SafeSync" href="../safesync/" description="Change shared settings on every server at once." />

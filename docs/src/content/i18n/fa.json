@@ -14,5 +14,11 @@
 	"xr.diagram.link": "مش رمزنگاری‌شده",
 	"xr.diagram.linkSub": "EasyTier روی پروتکلی که انتخاب می‌کنید",
 	"xr.diagram.you": "شما، در مرورگر",
-	"xr.uipath.label": "در پنل"
+	"xr.uipath.label": "در پنل",
+	"xr.tunnel.label": "کاربر به پورت 443 سرور الف وصل می‌شود و تونل ترافیک را از راه مش به پورت 443 سرور ب می‌فرستد",
+	"xr.tunnel.client": "کاربر",
+	"xr.tunnel.clientSub": "کاربران شما، از هر جا",
+	"xr.tunnel.origin": "اجرا روی",
+	"xr.tunnel.dest": "مقصد",
+	"xr.tunnel.mesh": "مش"
 }

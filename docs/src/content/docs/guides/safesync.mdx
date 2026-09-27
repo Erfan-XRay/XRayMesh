@@ -1,0 +1,55 @@
+---
+title: SafeSync
+description: Apply shared settings to every server in the mesh at once, with automatic rollback.
+---
+
+import { LinkCard, Steps } from '@astrojs/starlight/components';
+import UiPath from '../../../components/UiPath.astro';
+
+Some settings must match on every server, or the servers can't talk to each other. **SafeSync**
+changes them everywhere in one step, from any server's panel. It also makes sure a bad change can't
+leave a server cut off.
+
+## What it changes
+
+| Shared by every server | Stays unique to each server |
+| :--- | :--- |
+| Transport protocol | Server name |
+| Network secret | Virtual IP |
+| Encryption | Listen port |
+| KCP loss resistance | Multi-thread mode |
+| IPv6 | Tunnels |
+| MTU | |
+
+## Apply a change to all servers
+
+<Steps>
+
+1. Open <UiPath items={['Node', 'Settings']} /> and change one or more shared settings.
+
+2. In the **Unsaved changes** bar, press **Apply to all servers**. The button appears only when every
+   change you made is a shared setting. If you also changed something unique to this server, save with
+   **Save on this server** instead.
+
+3. Check the summary: the settings that will change, and the servers that will receive them. Press
+   **Apply to all servers** to confirm.
+
+4. When every server has applied the change and reconnected, you see **Mesh synchronized**.
+
+</Steps>
+
+## How it stays safe
+
+- **Signed.** Each server checks that the change is signed with the network secret (HMAC-SHA256)
+  before applying it. Other servers can't push settings to your mesh.
+- **Backed up.** Each server saves its current settings before applying the new ones.
+- **90-second safety net.** If a server has no connected peers within 90 seconds of the change, it
+  restores its previous settings and reconnects on its own.
+
+:::note
+Only servers that are connected at the moment receive the change. Check that all your servers
+show up under **Servers** first. A server that was offline keeps its old settings. Update it from
+its own panel.
+:::
+
+<LinkCard title="Next: Updates" href="../updates/" description="Update any server in the mesh from the panel." />

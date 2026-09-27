@@ -11,5 +11,11 @@
 	"xr.diagram.link": "Encrypted mesh",
 	"xr.diagram.linkSub": "EasyTier over your chosen transport",
 	"xr.diagram.you": "You, in the browser",
-	"xr.uipath.label": "In the panel"
+	"xr.uipath.label": "In the panel",
+	"xr.tunnel.label": "A client connects to port 443 on server A, and the tunnel forwards the traffic over the mesh to port 443 on server B",
+	"xr.tunnel.client": "Client",
+	"xr.tunnel.clientSub": "Your users, from anywhere",
+	"xr.tunnel.origin": "Runs on",
+	"xr.tunnel.dest": "Destination",
+	"xr.tunnel.mesh": "Mesh"
 }

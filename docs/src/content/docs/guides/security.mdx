@@ -1,0 +1,63 @@
+---
+title: Security
+description: Keep the panel and the mesh private with HTTPS, password-free sign-in and a private network secret.
+---
+
+import { LinkCard } from '@astrojs/starlight/components';
+
+XRayMesh is private by default. This page explains what protects the panel and the mesh, and what's
+left for you to decide.
+
+## Sign-in
+
+You choose one of two modes when you install. Change it any time with `sudo xraymesh password`.
+
+| Mode | How you sign in | Why pick it |
+| :--- | :--- | :--- |
+| **Login links only** (the default) | Run `sudo xraymesh token` for a link that works once, within 60 minutes. | There is no password, so there's nothing to guess or brute-force. |
+| **Password + login links** | Sign in with the admin password, or with a login link. | Easier if you open the panel often from different devices. |
+
+Either way, the panel also:
+
+- removes the login token from the address bar as soon as you sign in, so it doesn't stay in your
+  browser history,
+- blocks an IP address for the rest of the minute after 5 failed sign-ins,
+- keeps you signed in for 7 days on that browser.
+
+## HTTPS
+
+Without HTTPS, the panel runs over plain HTTP and your session cookie can be read on the network.
+If you have a domain, turn HTTPS on:
+
+```bash
+sudo xraymesh ssl
+```
+
+Point the domain at the server first. XRayMesh checks the DNS record, gets a free Let's Encrypt
+certificate and renews it automatically. Port `80` must be reachable while it gets the
+certificate. If another service is using port 80, XRayMesh offers to pause it for a few seconds.
+With HTTPS on, the session cookie is sent over HTTPS only.
+
+To go back to HTTP, run `sudo xraymesh remove-ssl`.
+
+## The mesh
+
+- **Private mesh.** A server accepts only servers that share its network secret, so nobody else can
+  use it as a free EasyTier relay.
+- **Encryption.** Mesh traffic is encrypted with AES-GCM by default. Turn it off only for a
+  two-server mesh over ICMP or PCK, which BackPack already encrypts.
+- **Signed changes.** Settings pushed with [SafeSync](../safesync/) and updates started from another
+  server's panel are signed with the network secret. Servers reject anything else.
+
+:::caution[Treat the invite code like a password]
+The invite code contains your network secret. Anyone who has it can join your mesh. Share it only
+over a private channel. If it leaks, change the **Network secret** and press **Apply to all servers**.
+:::
+
+## Firewall
+
+If UFW is active, the installer opens the web panel port and the mesh port. For tunnels, open only
+the ports your users need. To make the panel harder to find, move it off the default port with
+`sudo xraymesh port`.
+
+<LinkCard title="Terminal commands" href="../../reference/cli/" description="Every xraymesh terminal command." />

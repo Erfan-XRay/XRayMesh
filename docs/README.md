@@ -25,6 +25,7 @@ npm run check-links  # after build: every internal link and #anchor must resolve
 | `<InstallCommand />` | The one-line installer with a copy button. |
 | `<UiPath items={['Node', 'Peers & invite']} />` | Where to click in the panel. Use the panel's own EN/FA labels from `frontend/src/i18n/translations.ts`. |
 | `<MeshDiagram />` | Two servers joined by the mesh, used on the introduction page. |
+| `<TunnelFlow listen="1234" destPort="443" />` | Client → tunnel server → mesh → destination, used on the port-forwarding guide. |
 | Starlight's `Steps`, `Tabs`, `Card`, `LinkCard`, asides (`:::note`) | See the [Starlight docs](https://starlight.astro.build/components/using-components/). |
 
 Strings used inside these components live in `src/content/i18n/{en,fa}.json`.
