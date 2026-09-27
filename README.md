@@ -1,12 +1,8 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="XRayMesh logo" width="128" height="128" />
-</p>
-
-<h1 align="center">XRayMesh</h1>
-
-<p align="center">
-  <strong>Next-Generation Mesh Network Manager & Web Dashboard for Linux Servers</strong><br>
-  Built on <a href="https://github.com/EasyTier/EasyTier">EasyTier</a>, Multi-Backend Port Forwarding Tunnels, and SafeSync Cluster Automation.
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/readme/banner-en-dark.webp" />
+    <img src="assets/readme/banner-en-light.webp" alt="XRayMesh: one private network for all your Linux servers" width="100%" />
+  </picture>
 </p>
 
 <p align="center">
@@ -18,52 +14,123 @@
 </p>
 
 <p align="center">
-  <strong>English</strong> | <a href="README_FA.md">فارسی (Persian)</a>
+  <a href="https://erfan-xray.github.io/XRayMesh/"><strong>📖 Documentation</strong></a>
+  &nbsp;&nbsp;•&nbsp;&nbsp;
+  <a href="#-quick-install"><strong>🚀 Install</strong></a>
+  &nbsp;&nbsp;•&nbsp;&nbsp;
+  <a href="#-features"><strong>✨ Features</strong></a>
+  &nbsp;&nbsp;•&nbsp;&nbsp;
+  <a href="#-support-the-project"><strong>💚 Support</strong></a>
+  &nbsp;&nbsp;•&nbsp;&nbsp;
+  <a href="README_FA.md"><strong>🇮🇷 فارسی</strong></a>
 </p>
 
----
+<br />
 
-XRayMesh joins your Linux servers into one encrypted private network with [EasyTier](https://github.com/EasyTier/EasyTier), forwards ports between them, and gives you a web panel to run it all, in English or Persian.
+XRayMesh joins your Linux servers into **one encrypted private network** with [EasyTier](https://github.com/EasyTier/EasyTier), forwards ports between them, and gives you **a web panel to run it all**, in English or Persian. Install it with one command, create a mesh on the first server, and add the others with an invite code.
 
 <p align="center">
-  <a href="https://erfan-xray.github.io/XRayMesh/"><strong>📖 Read the documentation</strong></a>
-  &nbsp;·&nbsp;
-  <a href="https://erfan-xray.github.io/XRayMesh/fa/">مستندات فارسی</a>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/readme/panel-servers-dark.webp" />
+    <img src="assets/readme/panel-servers-light.webp" alt="The XRayMesh web panel: servers in the mesh with live latency, traffic and versions" width="100%" />
+  </picture>
 </p>
 
-## Features
+## ✨ Features
 
-- **Private mesh:** every server gets a private address like `10.144.144.2` and reaches the others directly, encrypted.
-- **Nine transports:** TCP, UDP, WebSocket (with or without TLS), QUIC, FakeTCP, and ICMP or PCK links powered by [BackPack](https://github.com/AminMGMT/BackPack) for networks where little else gets through.
-- **Web panel:** live peers, latency and traffic, ping and speed tests between any two servers, light and dark themes, installable on your phone.
-- **Port forwarding:** Realm, HAProxy, GOST or kernel iptables, from single ports to whole ranges.
-- **SafeSync:** change shared settings on every server at once, with an automatic rollback if a server loses its peers.
-- **Secure by default:** one-time login links, optional password-free sign-in, rate limiting and free HTTPS with Let's Encrypt.
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <h3>🌐 Private mesh</h3>
+      Every server gets a private address like <code>10.144.144.2</code> and reaches the others directly, encrypted.
+    </td>
+    <td width="33%" valign="top">
+      <h3>🛰️ Nine transports</h3>
+      TCP, UDP, WebSocket, QUIC, FakeTCP, and ICMP or PCK links by <a href="https://github.com/AminMGMT/BackPack">BackPack</a> for networks where little gets through.
+    </td>
+    <td width="33%" valign="top">
+      <h3>🖥️ Web panel</h3>
+      Live peers, latency and traffic, ping and speed tests between any two servers. Light and dark, English and Persian.
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" valign="top">
+      <h3>🔀 Port forwarding</h3>
+      Realm, HAProxy, GOST or kernel iptables, from a single port to whole ranges and port maps.
+    </td>
+    <td width="33%" valign="top">
+      <h3>⚡ SafeSync</h3>
+      Change shared settings on every server at once. A server that loses its peers rolls back on its own.
+    </td>
+    <td width="33%" valign="top">
+      <h3>🔐 Secure by default</h3>
+      One-time login links, optional password-free sign-in, rate limiting and free HTTPS with Let's Encrypt.
+    </td>
+  </tr>
+</table>
 
-## Quick install
+## 🚀 Quick install
 
-On each Debian or Ubuntu server, as `root`:
+Run this on each **Debian or Ubuntu** server, as `root`:
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh)
 ```
 
-Open the login link it prints, create a mesh on the first server, and join the others with its invite code. The [getting started guide](https://erfan-xray.github.io/XRayMesh/start/introduction/) walks through every step.
+1. **Open the login link** the installer prints. It works once, within 60 minutes.
+2. **Create a mesh** on the first server and copy its invite code.
+3. **Join the other servers** with that code. They show up under **Servers** within seconds.
 
-## Documentation
+Need details? Follow the [getting started guide](https://erfan-xray.github.io/XRayMesh/start/introduction/). New login link any time: `sudo xraymesh token`.
 
-| Section | What's inside |
-| :--- | :--- |
-| [Getting started](https://erfan-xray.github.io/XRayMesh/start/introduction/) | Requirements, installation, first sign-in, creating a mesh and adding servers |
-| [Guides](https://erfan-xray.github.io/XRayMesh/guides/tunnels/) | Port forwarding, transports, SafeSync, updates, security, ping and speed test |
-| [Terminal commands](https://erfan-xray.github.io/XRayMesh/reference/cli/) | Every `xraymesh` command |
-| [Troubleshooting](https://erfan-xray.github.io/XRayMesh/troubleshooting/) | Fixes for the most common problems |
+## 📚 Documentation
 
-Looking for the terminal-only **v1.x**? It stays available at [v1.7.0](https://github.com/Erfan-XRay/XRayMesh/tree/v1.7.0).
+The full documentation, in English and Persian, lives at **[erfan-xray.github.io/XRayMesh](https://erfan-xray.github.io/XRayMesh/)**.
 
-## Support the project
+| | Guide | What's inside |
+| :---: | :--- | :--- |
+| 🧭 | [Getting started](https://erfan-xray.github.io/XRayMesh/start/introduction/) | Requirements, installation, first sign-in, creating a mesh, adding servers |
+| 🔀 | [Port forwarding](https://erfan-xray.github.io/XRayMesh/guides/tunnels/) | The four tunnel engines and port formats |
+| 🛰️ | [Mesh transports](https://erfan-xray.github.io/XRayMesh/guides/transports/) | Which of the nine transports to pick, including ICMP and PCK |
+| 🛠️ | [Troubleshooting](https://erfan-xray.github.io/XRayMesh/troubleshooting/) | Fixes for the most common problems |
+| ⌨️ | [Terminal commands](https://erfan-xray.github.io/XRayMesh/reference/cli/) | Every `xraymesh` command |
 
-XRayMesh is free for personal use. If it helps you, you can support its development. Send each coin **only on the network shown**; coins sent on another network are lost.
+<details>
+<summary><strong>🖼️ More screenshots</strong></summary>
+<br />
+
+**Port-forwarding tunnels across the mesh**
+
+<img src="assets/readme/panel-tunnels-dark.webp" alt="Tunnels tab listing Realm, HAProxy, iptables and GOST tunnels" width="100%" />
+
+**Node settings**
+
+<img src="assets/readme/panel-node-dark.webp" alt="Node tab with the mesh service, this server's settings and the transport picker" width="100%" />
+
+**The panel in Persian**
+
+<img src="assets/readme/panel-servers-fa-dark.webp" alt="The Servers tab in Persian, right to left" width="100%" />
+
+</details>
+
+<details>
+<summary><strong>📦 Looking for the terminal-only v1.x?</strong></summary>
+<br />
+
+The legacy CLI-only release stays available at [v1.7.0](https://github.com/Erfan-XRay/XRayMesh/tree/v1.7.0):
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/v1.7.0/xraymesh.sh)
+```
+
+</details>
+
+## 💚 Support the project
+
+XRayMesh is free for personal use and built by one developer. If it keeps your servers connected, a donation helps keep it going. A ⭐ on GitHub helps too.
+
+> [!WARNING]
+> Send each coin **only on the network shown**. Coins sent on another network are lost.
 
 **USDT** on **TRC20 (Tron)**
 
@@ -83,7 +150,7 @@ UQDfjT-h4ENIrt_Sq5-zBy9TvhckniwSLCkS7zIVX4fVSaFw
 bc1qc4cgy5etuwj2375c5zqma7xmjtk59s5s49rfp5
 ```
 
-QR codes are on the [support page](https://erfan-xray.github.io/XRayMesh/support/). A ⭐ on GitHub helps too.
+QR codes for every address are on the [support page](https://erfan-xray.github.io/XRayMesh/support/).
 
 ---
 
