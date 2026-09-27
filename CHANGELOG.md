@@ -47,7 +47,7 @@ All notable XRayMesh changes are documented here.
 The first stable release of the 3.0 line, published on the `main` branch. It includes everything from 3.0.0-beta.1 to 3.0.0-beta.16 below, plus the changes in this section. Servers on 2.2.x get it through the normal update (`xraymesh update` or the panel).
 
 ### Highlights of 3.0
-- New mesh transports: **ICMP** (inside ping packets) and **PCK** (inside TCP segments built without the kernel's TCP stack), both provided by [BackPack](https://github.com/AminMGMT/BackPack) by Amin Mohammadi (AminMGMT).
+- New mesh transports: **ICMP** (inside ping packets) and **PCK** (inside TCP segments built without the kernel's TCP stack), both provided by [BackPack](https://github.com/AminMGMT/BackPack).
 - Mesh nodes accept only servers that share the network secret (EasyTier private mode), and a multi-thread mode runs EasyTier on more than one CPU core.
 - Redesigned Firouzeh web panel with full Persian RTL support, a live speed test and ping, an installable web app, and animated backgrounds.
 - Update channels (stable and beta) and per-server updates from the panel with verification and automatic rollback.
