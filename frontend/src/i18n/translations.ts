@@ -654,7 +654,7 @@ export const translations = {
     toast_token_accepted: "با توکن دسترسی وارد شدید.",
     toast_speedtest_done: "تست سرعت تمام شد: {mbps} مگابیت بر ثانیه",
     toast_speedtest_failed: "تست سرعت انجام نشد.",
-    toast_ping_done: "پینگ تمام شد: میانگین {avg} میلی‌ثانیه",
+    toast_ping_done: "پینگ تمام شد: میانگین {avg} ms",
     toast_ping_failed: "پینگ انجام نشد.",
     toast_saved: "ذخیره شد.",
     toast_save_failed: "ذخیره انجام نشد.",
@@ -692,7 +692,7 @@ export const translations = {
     uptime_minutes: "{n} دقیقه",
     uptime_join: " و ",
     percent: "{n}٪",
-    unit_ms: "میلی‌ثانیه",
+    unit_ms: "ms",
     detail_sep: "، ",
 
     // Tabs

@@ -66,6 +66,14 @@ export default {
         xs: ["var(--fs-xs)", { lineHeight: "var(--lh-xs)" }],
         sm: ["var(--fs-sm)", { lineHeight: "var(--lh-sm)" }],
         base: ["var(--fs-base)", { lineHeight: "var(--lh-base)" }],
+        lg: ["1.125rem", { lineHeight: "var(--lh-lg)" }],
+        xl: ["1.25rem", { lineHeight: "var(--lh-xl)" }],
+        "2xl": ["1.5rem", { lineHeight: "var(--lh-2xl)" }],
+      },
+      // Tailwind's values, raised for Persian under [dir="rtl"].
+      lineHeight: {
+        tight: "var(--leading-tight)",
+        snug: "var(--leading-snug)",
       },
       boxShadow: {
         card: "var(--shadow-card)",

@@ -9,24 +9,25 @@
  */
 
 /*
- * Estedad (OFL, github.com/aminabedi68/Estedad): one variable file for every weight.
- * Limited to Arabic script, which includes the Persian digits ۰–۹ and ٫ ٪, so Latin text
- * (IPs, versions, hostnames) falls through to Inter and keeps its Latin digits.
+ * Vazirmatn (OFL, github.com/rastikerdar/vazirmatn): one variable file for every weight.
+ * The regular build, not the FD one: Latin digits stay Latin. Limited to Arabic script, which
+ * includes the Persian digits ۰–۹ and ٫ ٪, so Latin text (IPs, versions, hostnames) falls
+ * through to Inter.
  */
 @font-face {
-  font-family: "Estedad";
+  font-family: "Vazirmatn";
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
-  src: url("./assets/fonts/Estedad-wght.woff2") format("woff2");
+  src: url("./assets/fonts/Vazirmatn-wght.woff2") format("woff2");
   unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0898-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
 }
 
 @layer base {
   :root {
     --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    --font-fa: "Estedad", "Inter", ui-sans-serif, system-ui, Tahoma, sans-serif;
-    --font-mono: "JetBrains Mono", "Estedad", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --font-fa: "Vazirmatn", "Inter", ui-sans-serif, system-ui, Tahoma, sans-serif;
+    --font-mono: "JetBrains Mono", "Vazirmatn", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
     --fs-2xs: 0.6875rem;
     --lh-2xs: 1rem;
@@ -36,6 +37,12 @@
     --lh-sm: 1.375rem;
     --fs-base: 1rem;
     --lh-base: 1.5rem;
+    --lh-lg: 1.75rem;
+    --lh-xl: 1.75rem;
+    --lh-2xl: 2rem;
+    --leading-tight: 1.25;
+    --leading-snug: 1.375;
+    --leading-body: 1.5;
 
     /* Dark neutrals (default) */
     color-scheme: dark;
@@ -165,15 +172,25 @@
     --on-primary: #ffffff;
   }
 
-  /* Persian: larger small sizes and taller lines keep the script legible. */
+  /*
+   * Persian: larger small sizes and taller lines keep the script legible. Persian letters reach
+   * far above and below the baseline (گ، ک، ی، ج), so body text needs about 1.8x its size and
+   * headings about 1.6x, where Latin is fine with 1.5x and 1.3x.
+   */
   [dir="rtl"] {
     --fs-2xs: 0.75rem;
-    --lh-2xs: 1.125rem;
+    --lh-2xs: 1.25rem;
     --fs-xs: 0.8125rem;
-    --lh-xs: 1.375rem;
+    --lh-xs: 1.4375rem;
     --fs-sm: 0.90625rem;
     --lh-sm: 1.625rem;
-    --lh-base: 1.75rem;
+    --lh-base: 1.875rem;
+    --lh-lg: 2rem;
+    --lh-xl: 2.125rem;
+    --lh-2xl: 2.5rem;
+    --leading-tight: 1.5;
+    --leading-snug: 1.6;
+    --leading-body: 1.8;
   }
 
   html {
@@ -202,7 +219,7 @@
     color: var(--text-primary);
     font-family: var(--font-sans);
     font-feature-settings: "cv11", "ss01";
-    line-height: 1.5;
+    line-height: var(--leading-body);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }

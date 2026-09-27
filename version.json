@@ -1,8 +1,8 @@
 {
-  "version": "3.0.5",
+  "version": "3.0.6",
   "branch": "main",
-  "release_name": "XRayMesh v3.0.5 (Tunnels in the terminal menu)",
+  "release_name": "XRayMesh v3.0.6 (Vazirmatn font for the Persian panel)",
   "release_date": "2026-09-27",
-  "changelog": "The terminal menu gets a Tunnels section: an overview of every saved tunnel with a warning when one takes the panel's port, a way to start them again, and an emergency stop for when a tunnel blocks the panel.",
+  "changelog": "The Persian panel uses the Vazirmatn font, with taller lines so the text no longer looks cramped, and shows latency in \"ms\" again.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh) update"
 }

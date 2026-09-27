@@ -2,6 +2,12 @@
 
 All notable XRayMesh changes are documented here.
 
+## [3.0.6] - 2026-09-27
+
+### Changed
+- Panel in Persian: the Vazirmatn font (bundled, OFL) replaces Estedad and reads more clearly at small sizes. Persian text also gets taller lines, including headings and body text, so the letters no longer look cramped.
+- Panel in Persian: latency is shown in "ms" again instead of «میلی‌ثانیه».
+
 ## [3.0.5] - 2026-09-27
 
 ### Added

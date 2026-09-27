@@ -24,7 +24,7 @@ export function formatNumber(value: number, t: Translate, decimals = 0): string 
   }).format(value);
 }
 
-/** A duration in milliseconds, e.g. "42.3 ms" / "۴۲٫۳ میلی‌ثانیه". */
+/** A duration in milliseconds, e.g. "42.3 ms" / "۴۲٫۳ ms". */
 export function formatMs(value: number | string, t: Translate, decimals = 0): string {
   const n = typeof value === 'number' ? formatNumber(value, t, decimals) : localizeDigits(value, t);
   return `${n} ${t('unit_ms')}`;
