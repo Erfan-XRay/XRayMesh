@@ -1,0 +1,72 @@
+---
+title: XRayMesh
+description: سرورهای لینوکسی را در یک مش رمزنگاری‌شده به هم وصل کنید، بین آن‌ها پورت فوروارد کنید و همه‌چیز را از یک پنل وب مدیریت کنید.
+template: splash
+hero:
+  title: یک شبکهٔ خصوصی برای همهٔ سرورهایتان
+  tagline: XRayMesh سرورهای لینوکسی را در یک مش رمزنگاری‌شده به هم وصل می‌کند، بین آن‌ها پورت فوروارد می‌کند و برای مدیریت همهٔ این‌ها یک پنل وب در اختیارتان می‌گذارد.
+  actions:
+    - text: شروع کنید
+      link: start/introduction/
+      icon: left-arrow
+      variant: primary
+    - text: مشاهده در GitHub
+      link: https://github.com/Erfan-XRay/XRayMesh
+      icon: external
+      variant: secondary
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+## چه چیزهایی در اختیارتان می‌گذارد
+
+<CardGrid>
+	<Card title="مش خصوصی" icon="random">
+		هر سرور یک نشانی خصوصی مثل `10.144.144.2` می‌گیرد و با کمک
+		[EasyTier](https://github.com/EasyTier/EasyTier) مستقیم و رمزنگاری‌شده به سرورهای دیگر
+		دسترسی دارد.
+	</Card>
+	<Card title="نُه پروتکل انتقال" icon="rocket">
+		TCP، UDP، WebSocket، QUIC و FakeTCP، به‌علاوهٔ لینک‌های ICMP و PCK برای شبکه‌هایی که تقریباً
+		هیچ چیز دیگری از آن‌ها رد نمی‌شود.
+	</Card>
+	<Card title="پنل وب" icon="laptop">
+		همتاها، تأخیر و ترافیک به‌صورت زنده، به‌همراه تست سرعت و پینگ بین سرورها. فارسی و انگلیسی،
+		تیره و روشن، و قابل نصب روی گوشی.
+	</Card>
+	<Card title="فوروارد پورت" icon="setting">
+		با HAProxy، Realm، GOST یا iptables هسته، پورت‌ها را روی مش فوروارد کنید؛ از یک پورت تا یک
+		بازهٔ کامل.
+	</Card>
+	<Card title="SafeSync" icon="approve-check-circle">
+		یک تغییر تنظیمات را هم‌زمان روی همهٔ سرورها اعمال کنید. اگر سروری ارتباطش با همتاها را از
+		دست بدهد، خودش به تنظیمات قبلی برمی‌گردد.
+	</Card>
+	<Card title="امن از همان ابتدا" icon="padlock">
+		لینک‌های ورود یک‌بارمصرف، حالت ورود بدون رمز، محدودیت تلاش برای ورود و HTTPS رایگان با
+		Let's Encrypt.
+	</Card>
+</CardGrid>
+
+## راه‌اندازی در سه قدم
+
+<CardGrid>
+	<LinkCard title="۱. نصب" description="یک دستور روی هر سرور Debian یا Ubuntu." href="start/installation/" />
+	<LinkCard
+		title="۲. ساخت مش"
+		description="اولین سرور را مش کنید و کد دعوت بگیرید."
+		href="start/create-mesh/"
+	/>
+	<LinkCard
+		title="۳. افزودن سرورها"
+		description="کد دعوت را روی سرورهای دیگر وارد کنید."
+		href="start/add-servers/"
+	/>
+	<LinkCard title="دستورهای ترمینال" description="همهٔ کارهایی که دستور xraymesh انجام می‌دهد." href="reference/cli/" />
+</CardGrid>
+
+## ساخته‌شده بر پایهٔ
+
+مش روی [EasyTier](https://github.com/EasyTier/EasyTier) اجرا می‌شود. پروتکل‌های ICMP و PCK از
+پروژهٔ [BackPack](https://github.com/AminMGMT/BackPack) ساختهٔ امین محمدی می‌آیند. هر دو از
+نسخه‌های رسمی و با بررسی checksum دانلود می‌شوند و بدون تغییر اجرا می‌شوند.

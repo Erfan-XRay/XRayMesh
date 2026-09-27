@@ -1,0 +1,79 @@
+---
+title: XRayMesh
+description: Join Linux servers into one encrypted mesh, forward ports between them and manage it all from a web panel.
+template: splash
+hero:
+  title: One private network for all your servers
+  tagline: XRayMesh joins Linux servers into an encrypted mesh, forwards ports between them, and gives you one web panel to run it all.
+  actions:
+    - text: Get started
+      link: start/introduction/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/Erfan-XRay/XRayMesh
+      icon: external
+      variant: secondary
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+## What you get
+
+<CardGrid>
+	<Card title="Private mesh" icon="random">
+		Every server gets a private address like `10.144.144.2` and reaches the others directly,
+		encrypted, through [EasyTier](https://github.com/EasyTier/EasyTier).
+	</Card>
+	<Card title="Nine transports" icon="rocket">
+		TCP, UDP, WebSocket, QUIC, FakeTCP, and ICMP or PCK links for networks where almost
+		nothing else gets through.
+	</Card>
+	<Card title="Web panel" icon="laptop">
+		Live peers, latency and traffic, speed tests and ping between servers. English and Persian,
+		light and dark, installable on your phone.
+	</Card>
+	<Card title="Port forwarding" icon="setting">
+		Forward ports across the mesh with HAProxy, Realm, GOST or kernel iptables, from single
+		ports to whole ranges.
+	</Card>
+	<Card title="SafeSync" icon="approve-check-circle">
+		Push a config change to every server at once. If a server loses its peers, it rolls back
+		on its own.
+	</Card>
+	<Card title="Secure by default" icon="padlock">
+		One-time login links, optional password-free mode, login rate limiting and free HTTPS
+		with Let's Encrypt.
+	</Card>
+</CardGrid>
+
+## Up and running in three steps
+
+<CardGrid>
+	<LinkCard
+		title="1. Install"
+		description="One command on each Debian or Ubuntu server."
+		href="start/installation/"
+	/>
+	<LinkCard
+		title="2. Create a mesh"
+		description="Make your first server the mesh and get an invite code."
+		href="start/create-mesh/"
+	/>
+	<LinkCard
+		title="3. Add servers"
+		description="Paste the invite code on every other server."
+		href="start/add-servers/"
+	/>
+	<LinkCard
+		title="Terminal commands"
+		description="Everything the xraymesh command can do."
+		href="reference/cli/"
+	/>
+</CardGrid>
+
+## Built on
+
+The mesh runs on [EasyTier](https://github.com/EasyTier/EasyTier). The ICMP and PCK transports come
+from [BackPack](https://github.com/AminMGMT/BackPack) by Amin Mohammadi. Both are downloaded as
+official, checksum-verified releases and run unmodified.

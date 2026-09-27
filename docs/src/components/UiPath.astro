@@ -1,0 +1,57 @@
+---
+/**
+ * Where to click in the web panel, e.g. <UiPath items={['Node', 'Peers & invite']} />.
+ * Labels must match the panel's own EN/FA strings (frontend/src/i18n/translations.ts).
+ */
+interface Props {
+	items: string[];
+}
+
+const { items } = Astro.props;
+---
+
+<span class="xr-uipath" aria-label={`${Astro.locals.t('xr.uipath.label')}: ${items.join(' / ')}`} role="note">
+	{
+		items.map((item, i) => (
+			<>
+				{i > 0 && (
+					<svg class="xr-uipath-sep" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+						<path d="m6 3.5 4.5 4.5L6 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+					</svg>
+				)}
+				<span class="xr-uipath-item" aria-hidden="true">{item}</span>
+			</>
+		))
+	}
+</span>
+
+<style>
+	.xr-uipath {
+		display: inline-flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.25rem;
+		vertical-align: baseline;
+		line-height: 1.4;
+	}
+
+	.xr-uipath-item {
+		padding: 0.05em 0.5em;
+		border: 1px solid var(--xr-border-strong);
+		border-radius: 0.4rem;
+		background: var(--xr-surface);
+		color: var(--sl-color-white);
+		font-size: 0.9em;
+		font-weight: 600;
+		white-space: nowrap;
+	}
+
+	.xr-uipath-sep {
+		color: var(--sl-color-gray-4);
+		flex-shrink: 0;
+	}
+
+	:global([dir='rtl']) .xr-uipath-sep {
+		transform: scaleX(-1);
+	}
+</style>

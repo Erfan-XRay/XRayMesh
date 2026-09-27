@@ -1,0 +1,18 @@
+{
+	"page.draft": "این صفحه پیش‌نویس است و در نسخهٔ نهایی سایت منتشر نمی‌شود.",
+	"heading.anchorLabel": "پیوند به بخش «{{title}}»",
+	"builtWithStarlight.label": "ساخته‌شده با Starlight",
+	"xr.hero.badge": "نسخهٔ پایدار",
+	"xr.hero.install": "نصب روی Debian یا Ubuntu",
+	"xr.hero.installHint": "با کاربر root اجرا کنید. نصب‌کننده هستهٔ مش و پنل وب را راه‌اندازی می‌کند.",
+	"xr.copy": "کپی",
+	"xr.copied": "کپی شد",
+	"xr.diagram.label": "دو سرور که با مش XRayMesh به هم وصل شده‌اند و هر کدام پنل وب خودش را دارد",
+	"xr.diagram.serverA": "سرور الف",
+	"xr.diagram.serverB": "سرور ب",
+	"xr.diagram.panel": "پنل وب",
+	"xr.diagram.link": "مش رمزنگاری‌شده",
+	"xr.diagram.linkSub": "EasyTier روی پروتکلی که انتخاب می‌کنید",
+	"xr.diagram.you": "شما، در مرورگر",
+	"xr.uipath.label": "در پنل"
+}

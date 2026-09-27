@@ -1,0 +1,60 @@
+---
+title: Terminal commands
+description: Every xraymesh command, grouped by what you use it for.
+---
+
+Run `xraymesh` with no arguments to open the interactive terminal menu. Every command below also
+works on its own, which is handy for scripts. Most of them change the system, so run them as `root`
+or with `sudo`.
+
+:::tip
+The web panel is where you manage the mesh day to day. The terminal is for setup, and for getting
+back into the panel when something goes wrong.
+:::
+
+## Panel access
+
+| Command | What it does |
+| :--- | :--- |
+| `xraymesh token` | Print a new one-time login link, valid for 60 minutes. |
+| `xraymesh password` | Set, change or remove the admin password. |
+| `xraymesh port` | Change the web panel port. |
+| `xraymesh ssl` | Get a free Let's Encrypt certificate and switch the panel to HTTPS. |
+| `xraymesh remove-ssl` | Switch the panel back to plain HTTP. |
+
+## Mesh
+
+| Command | What it does |
+| :--- | :--- |
+| `xraymesh join` | Join a mesh with an invite code (`xrmesh://…`). |
+| `xraymesh invite` | Show this server's invite code. |
+| `xraymesh status` | Show node, mesh and panel status. |
+| `xraymesh peers` | List connected peers with live latency. |
+| `xraymesh routes` | Show the mesh routing table. |
+| `xraymesh link-list` | List ICMP and PCK links with their packet counters. |
+| `xraymesh link-delete <name>` | Delete one ICMP or PCK link, e.g. `out-1234`. |
+
+## Services
+
+| Command | What it does |
+| :--- | :--- |
+| `xraymesh start` | Apply the node config and start every service. |
+| `xraymesh restart` | Restart every XRayMesh service. |
+| `xraymesh stop` | Stop every XRayMesh service. |
+| `xraymesh logs` | Follow the mesh and panel logs live. Press <kbd>Ctrl</kbd>+<kbd>C</kbd> to stop. |
+| `xraymesh self-test` | Check the install, services and connectivity, and report problems. |
+
+## Maintenance
+
+| Command | What it does |
+| :--- | :--- |
+| `xraymesh update` | Update the script, the web panel and the EasyTier core. |
+| `xraymesh delete` | Delete this node's mesh config. Installed programs stay. |
+| `xraymesh uninstall` | Remove XRayMesh completely: services, config and programs. |
+| `xraymesh version` | Print the installed version. |
+| `xraymesh help` | Print the command list. |
+
+:::danger[delete and uninstall can't be undone]
+`delete` removes this server from the mesh. `uninstall` also removes the panel, tunnels and every
+setting. You confirm by typing `DELETE` or `REMOVE`.
+:::

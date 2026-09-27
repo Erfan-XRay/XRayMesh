@@ -1,0 +1,48 @@
+---
+title: Sign in to the panel
+description: Open the web panel with a login link or password, and what to do if you're locked out.
+---
+
+import { LinkCard } from '@astrojs/starlight/components';
+
+## Open the panel
+
+Open the one-time login link that the installer printed. The panel signs you in and removes the
+token from the address bar, so it doesn't stay in your browser history.
+
+The panel lives at the server's address and the port you chose, for example
+`http://203.0.113.10:11080`, or `https://panel.example.com:11080` with HTTPS.
+You stay signed in on that browser for **7 days**.
+
+## Get a new login link
+
+Login links expire after 60 minutes and work only once. To get another one, run this on the server:
+
+```bash
+sudo xraymesh token
+```
+
+If you set a password during install, you can also sign in with it on the login page. To set,
+change or remove the password, run `sudo xraymesh password`.
+
+:::caution[Too many wrong passwords]
+After 5 failed attempts in one minute, the panel blocks sign-in from that IP address until the
+minute is up. If you've forgotten the password, get a new login link instead.
+:::
+
+## First screen: set up this server
+
+A new server opens on **Set up this server**. Until you finish it, the other tabs (servers,
+tunnels, ping and speed test) stay locked. You have two choices:
+
+| Choice | Pick it when |
+| :--- | :--- |
+| **Create a new mesh** | This is your first server. It becomes the mesh, and you get an invite code for the others. |
+| **Join an existing mesh** | You already have a mesh and have its invite code. |
+
+:::tip[Install the panel as an app]
+On a phone, add the panel to your home screen (Safari: Share → Add to Home Screen; Chrome:
+Install app). It opens full screen with its own icon.
+:::
+
+<LinkCard title="Next: Create a mesh" href="../create-mesh/" description="Set up your first server as the mesh." />

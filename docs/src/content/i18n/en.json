@@ -1,0 +1,15 @@
+{
+	"xr.hero.badge": "Stable release",
+	"xr.hero.install": "Install on Debian or Ubuntu",
+	"xr.hero.installHint": "Run as root. The installer sets up the mesh core and the web panel.",
+	"xr.copy": "Copy",
+	"xr.copied": "Copied",
+	"xr.diagram.label": "Two servers joined by an XRayMesh mesh, each with its own web panel",
+	"xr.diagram.serverA": "Server A",
+	"xr.diagram.serverB": "Server B",
+	"xr.diagram.panel": "Web panel",
+	"xr.diagram.link": "Encrypted mesh",
+	"xr.diagram.linkSub": "EasyTier over your chosen transport",
+	"xr.diagram.you": "You, in the browser",
+	"xr.uipath.label": "In the panel"
+}

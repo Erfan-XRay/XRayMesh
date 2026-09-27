@@ -1,0 +1,67 @@
+---
+title: Installation
+description: Install XRayMesh on a Debian or Ubuntu server with one command.
+---
+
+import { LinkCard, Steps } from '@astrojs/starlight/components';
+import InstallCommand from '../../../components/InstallCommand.astro';
+
+Do this on **every** server you want in the mesh. Each install takes a minute or two.
+
+<InstallCommand />
+
+<Steps>
+
+1. **Connect to the server and run the installer.**
+
+   Log in over SSH as `root` (or run `sudo -i` first) and paste the command above. The installer
+   updates the package list, installs anything missing, and downloads the EasyTier core for your
+   CPU after checking its checksum.
+
+2. **Choose the web panel port.**
+
+   Press <kbd>Enter</kbd> to keep the default, `11080`, or type another free port.
+
+3. **Turn on HTTPS, if you have a domain.**
+
+   Answer `y` if a domain already points to this server. The installer checks the DNS record and
+   gets a free Let's Encrypt certificate. Answer `n` to use plain HTTP on the server's IP. You can
+   add HTTPS later with `xraymesh ssl`.
+
+4. **Pick how you sign in.**
+
+   - **No** (the default): the panel accepts only one-time login links. There is no password to
+     guess, and you create a new link with `xraymesh token` whenever you need one.
+   - **Yes**: you set a fixed admin password. Press <kbd>Enter</kbd> at the prompt to have one
+     generated for you. Login links still work alongside it.
+
+5. **Open the login link.**
+
+   When setup finishes, the installer prints a box titled **SETUP COMPLETE** with a one-click
+   login link:
+
+   ```text
+   http://203.0.113.10:11080/?token=3f9c…
+   ```
+
+   Open it in your browser. It works **once**, within **60 minutes**.
+
+</Steps>
+
+:::tip[Stopped halfway?]
+You can press <kbd>Ctrl</kbd>+<kbd>C</kbd> at any point. Run the same command again and the
+installer continues where it left off.
+:::
+
+## After installing
+
+Run `xraymesh` any time to open the terminal menu. You'll mostly use it to get back into the panel:
+
+```bash
+xraymesh token      # print a new one-time login link
+xraymesh status     # node, mesh and panel status
+```
+
+See the [command reference](../../reference/cli/) for everything else.
+
+<LinkCard title="Next: Sign in to the panel" href="../first-login/" description="Open the panel and find your way around." />

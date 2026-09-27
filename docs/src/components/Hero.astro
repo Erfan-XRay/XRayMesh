@@ -1,0 +1,241 @@
+---
+/**
+ * Splash-page hero (overrides Starlight's Hero): title, tagline, the installer and the actions,
+ * next to the mesh artwork. Title, tagline and actions come from the page frontmatter.
+ */
+import { LinkButton } from '@astrojs/starlight/components';
+import InstallCommand from './InstallCommand.astro';
+import MeshArt from './MeshArt.astro';
+import versionInfo from '../../../version.json';
+
+const { data } = Astro.locals.starlightRoute.entry;
+const { title = data.title, tagline, actions = [] } = data.hero || {};
+const t = Astro.locals.t;
+
+// Splash pages have no sidebar, so phones get no language menu; offer the other language here.
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+const isFa = Astro.locals.starlightRoute.locale === 'fa';
+const otherLang = isFa
+	? { href: base, label: 'English', lang: 'en', dir: 'ltr' }
+	: { href: `${base}fa/`, label: 'فارسی', lang: 'fa', dir: 'rtl' };
+---
+
+<section class="xr-hero">
+	<div class="xr-hero-grid" aria-hidden="true"></div>
+	<div class="xr-hero-copy">
+		<div class="xr-hero-top">
+			<a class="xr-badge" href={`https://github.com/Erfan-XRay/XRayMesh/releases/tag/v${versionInfo.version}`}>
+				<span class="xr-badge-dot" aria-hidden="true"></span>
+				<span>{t('xr.hero.badge')}</span>
+				<span class="xr-badge-sep" aria-hidden="true"></span>
+				<bdi dir="ltr" class="xr-badge-version">v{versionInfo.version}</bdi>
+			</a>
+			<a class="xr-lang" href={otherLang.href} lang={otherLang.lang} dir={otherLang.dir} hreflang={otherLang.lang}>
+				<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+					<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"></circle>
+					<path d="M3 12h18M12 3c2.5 2.6 3.7 5.6 3.7 9s-1.2 6.4-3.7 9c-2.5-2.6-3.7-5.6-3.7-9S9.5 5.6 12 3Z" fill="none" stroke="currentColor" stroke-width="1.7"></path>
+				</svg>
+				{otherLang.label}
+			</a>
+		</div>
+		<h1 id="_top" data-page-title set:html={title} />
+		{tagline && <p class="xr-tagline" set:html={tagline} />}
+		<InstallCommand hint={t('xr.hero.installHint')} />
+		{
+			actions.length > 0 && (
+				<div class="xr-actions">
+					{actions.map(({ attrs: { class: className, ...attrs } = {}, icon, link: href, text, variant }) => (
+						<LinkButton {href} {variant} icon={icon?.name} class:list={[className]} {...attrs}>
+							{text}
+						</LinkButton>
+					))}
+				</div>
+			)
+		}
+	</div>
+	<div class="xr-hero-art">
+		<MeshArt />
+	</div>
+</section>
+
+<style>
+	.xr-hero {
+		position: relative;
+		isolation: isolate;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		align-items: center;
+		gap: 2rem;
+		padding-block: clamp(1.5rem, 4vw, 3.5rem) clamp(1rem, 3vw, 2.5rem);
+	}
+
+	/* Faint grid that fades out toward the edges. */
+	.xr-hero-grid {
+		position: absolute;
+		inset: -2rem -1rem 0;
+		z-index: -1;
+		background-image: linear-gradient(var(--xr-grid) 1px, transparent 1px),
+			linear-gradient(90deg, var(--xr-grid) 1px, transparent 1px);
+		background-size: 2.5rem 2.5rem;
+		mask-image: radial-gradient(ellipse 70% 65% at 50% 40%, #000 30%, transparent 75%);
+		-webkit-mask-image: radial-gradient(ellipse 70% 65% at 50% 40%, #000 30%, transparent 75%);
+		pointer-events: none;
+	}
+
+	.xr-hero-copy {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 1.25rem;
+		min-width: 0;
+		animation: xr-rise 600ms var(--xr-ease) both;
+	}
+
+	.xr-hero-copy > :global(.xr-install) {
+		align-self: stretch;
+	}
+
+	.xr-hero-top {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		align-self: stretch;
+	}
+
+	.xr-lang {
+		display: none;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.3rem 0.75rem;
+		border: 1px solid var(--xr-border-strong);
+		border-radius: 999px;
+		color: var(--sl-color-gray-2);
+		font-size: var(--sl-text-xs);
+		font-weight: 600;
+		text-decoration: none;
+	}
+
+	.xr-lang:hover {
+		color: var(--sl-color-white);
+		border-color: rgb(var(--xr-accent-rgb) / 0.6);
+	}
+
+	/* Same breakpoint where Starlight hides the header's language menu. */
+	@media (max-width: 49.99rem) {
+		.xr-lang {
+			display: inline-flex;
+		}
+	}
+
+	.xr-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.3rem 0.75rem;
+		border: 1px solid rgb(var(--xr-accent-rgb) / 0.35);
+		border-radius: 999px;
+		background: rgb(var(--xr-accent-rgb) / 0.08);
+		color: var(--sl-color-text-accent);
+		font-size: var(--sl-text-xs);
+		font-weight: 600;
+		text-decoration: none;
+		transition: border-color 160ms ease, background-color 160ms ease;
+	}
+
+	.xr-badge:hover {
+		border-color: rgb(var(--xr-accent-rgb) / 0.7);
+		background: rgb(var(--xr-accent-rgb) / 0.14);
+	}
+
+	.xr-badge-dot {
+		width: 0.45rem;
+		height: 0.45rem;
+		border-radius: 50%;
+		background: rgb(var(--xr-success-rgb));
+		box-shadow: 0 0 0 3px rgb(var(--xr-success-rgb) / 0.2);
+	}
+
+	.xr-badge-sep {
+		width: 1px;
+		height: 0.875rem;
+		background: rgb(var(--xr-accent-rgb) / 0.35);
+	}
+
+	.xr-badge-version {
+		font-family: var(--__sl-font-mono);
+		font-weight: 500;
+	}
+
+	h1 {
+		margin: 0;
+		font-size: clamp(2.25rem, 1.5rem + 3.2vw, 3.75rem);
+		line-height: 1.08;
+		font-weight: 750;
+		color: var(--sl-color-white);
+		background: linear-gradient(120deg, var(--sl-color-white) 30%, var(--sl-color-accent) 110%);
+		-webkit-background-clip: text;
+		background-clip: text;
+		-webkit-text-fill-color: transparent;
+	}
+
+	:global([dir='rtl']) h1 {
+		line-height: 1.35;
+		font-weight: 800;
+	}
+
+	.xr-tagline {
+		margin: 0;
+		max-width: 36rem;
+		font-size: clamp(var(--sl-text-base), 0.95rem + 0.4vw, var(--sl-text-xl));
+		color: var(--sl-color-gray-2);
+	}
+
+	.xr-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+	}
+
+	.xr-hero-art {
+		min-width: 0;
+		animation: xr-fade 900ms 120ms var(--xr-ease) both;
+	}
+
+	@keyframes xr-rise {
+		from {
+			opacity: 0;
+			transform: translateY(10px);
+		}
+	}
+
+	@keyframes xr-fade {
+		from {
+			opacity: 0;
+			transform: scale(0.97);
+		}
+	}
+
+	@media (min-width: 60rem) {
+		.xr-hero {
+			grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+			gap: 3rem;
+		}
+	}
+
+	/* Single column: artwork after the copy, so the title and installer lead. */
+	@media (max-width: 59.99rem) {
+		.xr-hero-art {
+			max-width: 20rem;
+			margin-inline: auto;
+			width: 100%;
+		}
+	}
+
+	/* Phones: the artwork is decoration only, so it steps aside. */
+	@media (max-width: 35.99rem) {
+		.xr-hero-art {
+			display: none;
+		}
+	}
+</style>

@@ -1,0 +1,55 @@
+---
+title: Create a mesh
+description: Turn your first server into a new mesh and get the invite code for the others.
+---
+
+import { LinkCard, Steps } from '@astrojs/starlight/components';
+import UiPath from '../../../components/UiPath.astro';
+
+Do this **once**, on the first server. Every other server joins the mesh this server creates.
+
+<Steps>
+
+1. On **Set up this server**, choose **Create a new mesh**.
+
+2. **Fill in the basics.** The defaults work, so you can usually keep them.
+
+   | Field | Default | What it means |
+   | :--- | :--- | :--- |
+   | Server name | this server's hostname | Shown to other servers in peer lists, ping and speed tests. |
+   | Network name | `xraymesh` | Must be the same on every server. The invite code carries it. |
+   | Virtual IP | `10.144.144.1` | This server's private address in the mesh. Must be unique. |
+
+3. **Check the advanced options (optional).** Open **Advanced options** to change the transport or
+   anything else. The defaults are a good start:
+
+   | Option | Default |
+   | :--- | :--- |
+   | Network secret | Generated for you. Keep it private. |
+   | Listen port | `11010` |
+   | Protocol | `dual` (TCP and UDP, the faster path is picked automatically) |
+   | Encryption | On (AES-GCM). Must match on every server. |
+   | Multi-thread mode | On. Uses more than one CPU core. |
+   | MTU | `1360` (`1280` for ICMP) |
+
+4. **Press Create mesh.** The mesh service starts, and you see **Mesh xraymesh is ready** with
+   the invite code.
+
+5. **Copy the invite code.** It starts with `xrmesh://`. You need it on every other server.
+
+</Steps>
+
+:::caution[Keep the invite code private]
+The code includes your network secret. Anyone who has it can join your mesh.
+:::
+
+## Find the invite code later
+
+You can always get the code again under <UiPath items={['Node', 'Peers & invite']} />. The
+**Invite a server** card shows the code and the address other servers will use to reach this one.
+
+If the panel says the public IP wasn't detected, press **Change** next to that address and enter
+this server's public IP or domain before copying the code. Otherwise the other servers won't know
+where to connect.
+
+<LinkCard title="Next: Add servers" href="../add-servers/" description="Join your other servers with the invite code." />

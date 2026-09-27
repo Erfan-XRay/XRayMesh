@@ -1,0 +1,193 @@
+---
+/** Decorative hero artwork: six servers joined into one mesh, with traffic flowing along the links. */
+const hub = { x: 220, y: 200 };
+const nodes = [
+	{ x: 220, y: 52, ip: '10.144.144.1' },
+	{ x: 350, y: 126, ip: '10.144.144.2' },
+	{ x: 350, y: 274, ip: '10.144.144.3' },
+	{ x: 220, y: 348, ip: '10.144.144.4' },
+	{ x: 90, y: 274, ip: '10.144.144.5' },
+	{ x: 90, y: 126, ip: '10.144.144.6' },
+];
+const ring = nodes.map((node, i) => [node, nodes[(i + 1) % nodes.length]] as const);
+const chords = [
+	[nodes[0], nodes[2]],
+	[nodes[3], nodes[5]],
+	[nodes[1], nodes[4]],
+] as const;
+---
+
+<svg class="xr-mesh" viewBox="0 0 440 400" direction="ltr" aria-hidden="true" focusable="false">
+	<defs>
+		<radialGradient id="xr-mesh-halo" cx="220" cy="200" r="190" gradientUnits="userSpaceOnUse">
+			<stop offset="0" class="xr-halo-in"></stop>
+			<stop offset="1" class="xr-halo-out"></stop>
+		</radialGradient>
+	</defs>
+
+	<circle cx={hub.x} cy={hub.y} r="190" fill="url(#xr-mesh-halo)"></circle>
+	<circle class="xr-orbit" cx={hub.x} cy={hub.y} r="150"></circle>
+
+	<g class="xr-links">
+		{ring.map(([a, b]) => <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} />)}
+		{chords.map(([a, b]) => <line class="xr-chord" x1={a.x} y1={a.y} x2={b.x} y2={b.y} />)}
+		{nodes.map((n) => <line x1={hub.x} y1={hub.y} x2={n.x} y2={n.y} />)}
+	</g>
+
+	<g class="xr-flows">
+		{nodes.map((n, i) => (
+			<line x1={hub.x} y1={hub.y} x2={n.x} y2={n.y} style={`--d:${1.4 + (i % 3) * 0.35}s;--delay:-${i * 0.4}s`} />
+		))}
+		{ring.map(([a, b], i) => (
+			<line class="xr-flow-ring" x1={a.x} y1={a.y} x2={b.x} y2={b.y} style={`--d:${2.2 + (i % 2) * 0.6}s;--delay:-${i * 0.3}s`} />
+		))}
+	</g>
+
+	{nodes.map((n, i) => (
+		<g class="xr-node" transform={`translate(${n.x} ${n.y})`}>
+			<rect x="-23" y="-23" width="46" height="46" rx="13"></rect>
+			<path class="xr-rack" d="M-10 -6h14M-10 1h20M-10 8h11"></path>
+			<circle class="xr-status" cx="12" cy="-12" r="3.5" style={`--delay:-${i * 0.35}s`}></circle>
+			<text class="xr-ip" x="0" y="42" text-anchor="middle">{n.ip}</text>
+		</g>
+	))}
+
+	<g class="xr-hub" transform={`translate(${hub.x} ${hub.y})`}>
+		<circle class="xr-hub-ring" r="40"></circle>
+		<rect x="-28" y="-28" width="56" height="56" rx="16"></rect>
+		<path class="xr-hub-x" d="M-10 -10 10 10M10 -10 -10 10"></path>
+		<circle class="xr-hub-dot" cx="-10" cy="-10" r="3.6"></circle>
+		<circle class="xr-hub-dot soft" cx="10" cy="-10" r="3.6"></circle>
+		<circle class="xr-hub-dot soft" cx="-10" cy="10" r="3.6"></circle>
+		<circle class="xr-hub-dot" cx="10" cy="10" r="3.6"></circle>
+		<circle class="xr-hub-core" r="4.8"></circle>
+	</g>
+</svg>
+
+<style>
+	.xr-mesh {
+		display: block;
+		width: 100%;
+		height: auto;
+		max-width: 30rem;
+		margin-inline: auto;
+		overflow: visible;
+	}
+
+	.xr-halo-in {
+		stop-color: rgb(var(--xr-accent-rgb));
+		stop-opacity: var(--xr-glow);
+	}
+	.xr-halo-out {
+		stop-color: rgb(var(--xr-accent-rgb));
+		stop-opacity: 0;
+	}
+
+	.xr-orbit {
+		fill: none;
+		stroke: var(--xr-border);
+		stroke-dasharray: 2 6;
+	}
+
+	.xr-links line {
+		stroke: var(--xr-border-strong);
+		stroke-width: 1.25;
+	}
+	.xr-links .xr-chord {
+		stroke: var(--xr-border);
+	}
+
+	.xr-flows line {
+		stroke: rgb(var(--xr-accent-rgb));
+		stroke-width: 2;
+		stroke-linecap: round;
+		stroke-dasharray: 2 22;
+		animation: xr-flow var(--d, 1.6s) linear infinite;
+		animation-delay: var(--delay, 0s);
+	}
+	.xr-flows .xr-flow-ring {
+		stroke-opacity: 0.55;
+		stroke-dasharray: 1.5 30;
+	}
+
+	@keyframes xr-flow {
+		to {
+			stroke-dashoffset: -48;
+		}
+	}
+
+	.xr-node rect {
+		fill: var(--xr-elevated);
+		stroke: var(--xr-border-strong);
+		stroke-width: 1.25;
+	}
+	.xr-rack {
+		stroke: var(--sl-color-gray-4);
+		stroke-width: 2.2;
+		stroke-linecap: round;
+		fill: none;
+	}
+	.xr-status {
+		fill: rgb(var(--xr-success-rgb));
+		animation: xr-pulse 2.4s ease-in-out infinite;
+		animation-delay: var(--delay, 0s);
+	}
+	@keyframes xr-pulse {
+		50% {
+			opacity: 0.4;
+		}
+	}
+	.xr-ip {
+		font-family: var(--__sl-font-mono);
+		font-size: 10.5px;
+		fill: var(--sl-color-gray-3);
+		/* A halo in the page colour keeps the label readable where it crosses a link. */
+		paint-order: stroke;
+		stroke: var(--sl-color-black);
+		stroke-width: 5px;
+		stroke-linejoin: round;
+	}
+
+	.xr-hub-ring {
+		fill: none;
+		stroke: rgb(var(--xr-accent-rgb) / 0.35);
+		stroke-width: 1.25;
+		animation: xr-breathe 3.2s ease-in-out infinite;
+		transform-origin: center;
+	}
+	@keyframes xr-breathe {
+		50% {
+			transform: scale(1.08);
+			opacity: 0.4;
+		}
+	}
+	.xr-hub rect {
+		fill: var(--xr-elevated);
+		stroke: rgb(var(--xr-accent-rgb) / 0.55);
+		stroke-width: 1.5;
+	}
+	.xr-hub-x {
+		stroke: rgb(var(--xr-accent-rgb));
+		stroke-width: 4;
+		stroke-linecap: round;
+	}
+	.xr-hub-dot {
+		fill: rgb(var(--xr-accent-rgb));
+	}
+	.xr-hub-dot.soft {
+		fill-opacity: 0.75;
+	}
+	.xr-hub-core {
+		fill: var(--xr-elevated);
+		stroke: rgb(var(--xr-accent-rgb));
+		stroke-width: 2.4;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.xr-flows line,
+		.xr-status,
+		.xr-hub-ring {
+			animation: none;
+		}
+	}
+</style>

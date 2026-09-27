@@ -1,0 +1,53 @@
+---
+title: Introduction
+description: What XRayMesh is, how its pieces fit together, and the few terms you'll see everywhere.
+---
+
+import { LinkCard } from '@astrojs/starlight/components';
+import MeshDiagram from '../../../components/MeshDiagram.astro';
+
+XRayMesh turns a group of Linux servers into one private network. Every server in the mesh gets a
+private address, and each one reaches the others directly over an encrypted link, wherever they are
+hosted. On top of the mesh you can forward ports between servers, test speed and latency, and
+change settings on every server at once. You do all of it from a web panel.
+
+<MeshDiagram />
+
+## Terms you'll see
+
+<dl class="xr-terms">
+	<div>
+		<dt>Node</dt>
+		<dd>One server running XRayMesh. Each node has its own web panel.</dd>
+	</div>
+	<div>
+		<dt>Mesh</dt>
+		<dd>All nodes that share the same network name and network secret. They find each other and route traffic between themselves.</dd>
+	</div>
+	<div>
+		<dt>Virtual IP</dt>
+		<dd>A node's private address inside the mesh, such as <code>10.144.144.1</code>. It must be unique in the mesh.</dd>
+	</div>
+	<div>
+		<dt>Invite code</dt>
+		<dd>A code that starts with <code>xrmesh://</code>. It carries everything a new server needs to join, so you only paste it.</dd>
+	</div>
+	<div>
+		<dt>Transport</dt>
+		<dd>How mesh traffic travels between servers: TCP, UDP, WebSocket, QUIC, FakeTCP, ICMP or PCK. Every node in a mesh uses the same one.</dd>
+	</div>
+</dl>
+
+## What runs on each server
+
+| Part | What it does |
+| :--- | :--- |
+| EasyTier core | Builds the encrypted mesh and routes traffic between nodes. |
+| Web panel | Where you set up the node, add servers, create tunnels and watch live traffic. Listens on port `11080` by default. |
+| Tunnels | HAProxy, Realm, GOST or iptables, set up from the panel to forward ports across the mesh. |
+| `xraymesh` command | A terminal menu for first setup and recovery, such as a new login link or restarting services. |
+
+The web panel is the main way to manage XRayMesh. You only need the terminal to install it and
+to get back into the panel if you're locked out.
+
+<LinkCard title="Next: Requirements" href="../requirements/" description="What your servers need before you install." />

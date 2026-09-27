@@ -1,0 +1,200 @@
+---
+/**
+ * The one-line installer in a copyable terminal box.
+ * The command itself always reads left-to-right, whatever the page direction.
+ */
+interface Props {
+	command?: string;
+	label?: string;
+	hint?: string;
+}
+
+const {
+	command = 'bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh)',
+	label = Astro.locals.t('xr.hero.install'),
+	hint,
+} = Astro.props;
+const t = Astro.locals.t;
+---
+
+<div class="xr-install not-content">
+	<div class="xr-install-head">
+		<span class="xr-install-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+		<span class="xr-install-label">{label}</span>
+	</div>
+	<div class="xr-install-body">
+		<code dir="ltr" class="xr-install-cmd"><span class="xr-prompt" aria-hidden="true">#</span>{command}</code>
+		<button
+			type="button"
+			class="xr-copy"
+			data-xr-copy={command}
+			data-label-copy={t('xr.copy')}
+			data-label-done={t('xr.copied')}
+		>
+			<svg class="xr-copy-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+				<rect x="9" y="9" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"></rect>
+				<path d="M5 15V6.5A2.5 2.5 0 0 1 7.5 4H15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+			</svg>
+			<svg class="xr-check-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+				<path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path>
+			</svg>
+			<span class="xr-copy-text" aria-live="polite">{t('xr.copy')}</span>
+		</button>
+	</div>
+	{hint && <p class="xr-install-hint">{hint}</p>}
+</div>
+
+<script>
+	// One listener for every install box on the page.
+	document.addEventListener('click', async (event) => {
+		const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>('[data-xr-copy]');
+		if (!button) return;
+		const text = button.dataset.xrCopy ?? '';
+		try {
+			await navigator.clipboard.writeText(text);
+		} catch {
+			const area = document.createElement('textarea');
+			area.value = text;
+			area.style.position = 'fixed';
+			area.style.opacity = '0';
+			document.body.append(area);
+			area.select();
+			document.execCommand('copy');
+			area.remove();
+		}
+		const label = button.querySelector('.xr-copy-text');
+		button.classList.add('is-done');
+		if (label) label.textContent = button.dataset.labelDone ?? '';
+		window.setTimeout(() => {
+			button.classList.remove('is-done');
+			if (label) label.textContent = button.dataset.labelCopy ?? '';
+		}, 1800);
+	});
+</script>
+
+<style>
+	.xr-install {
+		border: 1px solid var(--xr-border);
+		border-radius: var(--xr-radius-lg);
+		background: var(--xr-code-bg);
+		box-shadow: var(--xr-shadow);
+		overflow: hidden;
+		text-align: start;
+	}
+
+	.xr-install-head {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.5rem 0.875rem;
+		border-block-end: 1px solid var(--xr-border);
+		background: var(--xr-surface);
+		font-size: var(--sl-text-xs);
+		color: var(--sl-color-gray-3);
+	}
+
+	.xr-install-dots {
+		display: inline-flex;
+		gap: 0.3rem;
+	}
+
+	.xr-install-dots i {
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: 50%;
+		background: var(--xr-border-strong);
+	}
+
+	.xr-install-body {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding-block: 0.5rem;
+		padding-inline: 0.875rem 0.5rem;
+	}
+
+	.xr-install-cmd {
+		flex: 1;
+		min-width: 0;
+		overflow-x: auto;
+		white-space: nowrap;
+		padding-block: 0.5rem;
+		font-family: var(--__sl-font-mono);
+		font-size: 0.8125rem;
+		color: var(--sl-color-gray-1);
+		background: none;
+		border: 0;
+		scrollbar-width: none;
+		/* Fade the end of a long command instead of showing a scrollbar; it still scrolls. */
+		mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
+		-webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
+	}
+
+	.xr-install-cmd::-webkit-scrollbar {
+		display: none;
+	}
+
+	.xr-prompt {
+		color: var(--sl-color-accent);
+		margin-inline-end: 0.625rem;
+		user-select: none;
+	}
+
+	.xr-copy {
+		flex-shrink: 0;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		min-height: 2.25rem;
+		padding: 0 0.75rem;
+		border: 1px solid var(--xr-border-strong);
+		border-radius: 0.625rem;
+		background: var(--xr-elevated);
+		color: var(--sl-color-white);
+		font: inherit;
+		font-size: var(--sl-text-xs);
+		font-weight: 600;
+		cursor: pointer;
+		transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+	}
+
+	.xr-copy:hover {
+		border-color: rgb(var(--xr-accent-rgb) / 0.6);
+	}
+
+	.xr-copy .xr-check-icon,
+	.xr-copy.is-done .xr-copy-icon {
+		display: none;
+	}
+
+	.xr-copy.is-done .xr-check-icon {
+		display: block;
+	}
+
+	.xr-copy.is-done {
+		color: var(--sl-color-text-accent);
+		border-color: rgb(var(--xr-accent-rgb) / 0.6);
+		background: rgb(var(--xr-accent-rgb) / 0.1);
+	}
+
+	.xr-install-hint {
+		margin: 0;
+		padding: 0.625rem 0.875rem;
+		border-block-start: 1px solid var(--xr-border);
+		font-size: var(--sl-text-xs);
+		color: var(--sl-color-gray-3);
+	}
+
+	@media (max-width: 30rem) {
+		.xr-copy-text {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			overflow: hidden;
+			clip: rect(0 0 0 0);
+		}
+		.xr-copy {
+			padding: 0 0.625rem;
+		}
+	}
+</style>

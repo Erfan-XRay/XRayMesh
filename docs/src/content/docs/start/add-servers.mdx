@@ -1,0 +1,77 @@
+---
+title: Add servers
+description: Join more servers to your mesh with an invite code, from the panel or the terminal.
+---
+
+import { LinkCard, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+import UiPath from '../../../components/UiPath.astro';
+
+Install XRayMesh on the new server first ([Installation](../installation/)), then join it with the
+invite code from a server that's already in the mesh.
+
+<Tabs syncKey="join-method">
+<TabItem label="Web panel">
+
+<Steps>
+
+1. Sign in to the **new** server's panel and choose **Join an existing mesh**.
+
+2. Paste the invite code into **Invite code**. Press **Paste** to fill it from your clipboard.
+   The panel checks the code and shows which server it will connect to.
+
+3. Check the **Server name** and **Virtual IP**. The panel suggests a free virtual IP, such as
+   `10.144.144.2`. Every server needs a different one.
+
+4. Press **Join mesh**. The mesh service starts, and you see **Connected to xraymesh**.
+
+</Steps>
+
+</TabItem>
+<TabItem label="Terminal">
+
+Run this on the new server and paste the code when asked:
+
+```bash
+sudo xraymesh join
+```
+
+</TabItem>
+</Tabs>
+
+Within a few seconds, both servers show each other under **Servers**, with live latency and
+traffic.
+
+## Servers over ICMP or PCK
+
+With the `icmp` or `pck` transport, each invite code connects **one** server only:
+
+<Steps>
+
+1. On the main server, open <UiPath items={['Node', 'Peers & invite']} /> and copy the code.
+2. Paste it under **Join an existing mesh** on the next server.
+3. When that server shows up under **Servers**, press **New code** on the main server for the
+   next one.
+
+</Steps>
+
+:::note
+For PCK, create the code on the server abroad and join from the server in Iran. The joining server
+connects to a TCP port on the main server, which the panel shows next to the code. Open that port
+in the provider's firewall.
+:::
+
+## Move a server to another mesh
+
+A server that's already in a mesh can switch to another one. Open
+<UiPath items={['Node', 'Peers & invite']} />, find **Move this server to another mesh**, and press
+**Join with invite code**.
+
+Before anything changes, the panel shows you what will happen and asks you to confirm with
+**Delete and join**:
+
+- The network name, secret, protocol and peer list are **replaced**.
+- The server name, listen port and tunnels are **kept**.
+- If the mesh service doesn't start with the new settings, the previous ones are restored
+  automatically.
+
+<LinkCard title="Command reference" href="../../reference/cli/" description="Every xraymesh terminal command." />

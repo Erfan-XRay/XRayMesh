@@ -1,0 +1,44 @@
+---
+title: Requirements
+description: Operating systems, access and open ports XRayMesh needs on each server.
+---
+
+import { LinkCard } from '@astrojs/starlight/components';
+
+## Servers
+
+| Requirement | Supported |
+| :--- | :--- |
+| Operating system | Debian 11 or 12, Ubuntu 20.04, 22.04 or 24.04 |
+| CPU architecture | `x86_64`, `aarch64` (ARM64) or `armv7` |
+| Access | `root`, or a user with `sudo` |
+| Init system | systemd |
+
+You need at least two servers to build a mesh. The installer checks for `curl`, `python3`,
+`iproute2`, `jq`, `openssl`, `iperf3` and a few other packages, and installs any that are missing
+with `apt`.
+
+## Ports
+
+Open these in your hosting provider's firewall. If UFW is active on the server, the installer
+opens the web panel and mesh ports for you.
+
+| Port | Protocol | Used for |
+| :--- | :--- | :--- |
+| `11080` | TCP | Web panel. You can change it during install or later with `xraymesh port`. |
+| `11010` | TCP and UDP | Mesh traffic between servers. You can change the listen port when you create the mesh. |
+| `80` | TCP | Only while getting a free HTTPS certificate from Let's Encrypt. |
+
+:::note[ICMP and PCK transports]
+ICMP needs ping (ICMP) traffic allowed between the servers. Each PCK link listens on its own TCP
+port between `20000` and `32767` on the server that creates the invite code. The panel shows that
+port next to the code, so open it in the provider's firewall.
+:::
+
+## Optional: a domain
+
+To use the panel over HTTPS, point a domain (for example `panel.example.com`) at the server before
+you install. XRayMesh gets a free Let's Encrypt certificate for it and renews it automatically.
+Without a domain, the panel runs over plain HTTP on the server's IP address.
+
+<LinkCard title="Next: Installation" href="../installation/" description="Install XRayMesh with one command." />
