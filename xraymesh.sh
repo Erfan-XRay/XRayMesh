@@ -1564,7 +1564,7 @@ expand_port_spec() {
 
 discover_mesh_nodes() {
   [[ -x "${BIN_DIR}/easytier-cli" ]] || return 0
-  local local_ip="" output normalized line ip host json_rows
+  local local_ip="" output normalized ip host json_rows
   local -A seen=()
   if [[ -f "$CONFIG_FILE" ]]; then
     local_ip="$(sed -n 's/^IPV4=//p' "$CONFIG_FILE" | head -n1)"
@@ -1870,27 +1870,6 @@ valid_ipv4_cidr() {
 
 default_public_interface() {
   ip -4 route show default 2>/dev/null | awk '/^default / {print $5; exit}'
-}
-
-select_iptables_protocol() {
-  local current="${1:-udp}" choice default_choice=1
-  case "$current" in
-    tcp) default_choice=2 ;;
-    both) default_choice=3 ;;
-  esac
-  printf '\n'
-  say "  Forward protocol" "$BOLD$CYAN"
-  printf '  %b[1]%b  UDP  (recommended for Hysteria2 / QUIC)\n' "$CYAN" "$RESET"
-  printf '  %b[2]%b  TCP\n' "$PURPLE" "$RESET"
-  printf '  %b[3]%b  TCP + UDP\n\n' "$PINK" "$RESET"
-  read -r -p "  Select protocol [${default_choice}]: " choice
-  choice="${choice:-$default_choice}"
-  case "$choice" in
-    1) SELECTED_IPTABLES_PROTOCOL="udp" ;;
-    2) SELECTED_IPTABLES_PROTOCOL="tcp" ;;
-    3) SELECTED_IPTABLES_PROTOCOL="both" ;;
-    *) fail "Invalid protocol selection."; return 1 ;;
-  esac
 }
 
 iptables_protocols() {
@@ -3679,7 +3658,9 @@ install_staged_file() {
 # Regenerate the runner and units with the freshly installed script's code.
 refresh_generated_files() {
   bash "${INSTALL_DIR}/xraymesh.sh" write-runner >/dev/null 2>&1 || true
-  [[ -f "$WEB_SERVICE_FILE" ]] && write_web_services >/dev/null 2>&1 || true
+  if [[ -f "$WEB_SERVICE_FILE" ]]; then
+    write_web_services >/dev/null 2>&1 || true
+  fi
   systemctl daemon-reload 2>/dev/null || true
 }
 
@@ -3716,9 +3697,13 @@ update_services_healthy() {
 
 restart_updated_services() {
   local mesh_was_active="$1"
-  (( mesh_was_active )) && systemctl restart xraymesh.service >/dev/null 2>&1 || true
+  if (( mesh_was_active )); then
+    systemctl restart xraymesh.service >/dev/null 2>&1 || true
+  fi
   systemctl restart xraymesh-iperf.service >/dev/null 2>&1 || true
-  [[ -f "$WEB_SERVICE_FILE" ]] && systemctl restart xraymesh-web.service >/dev/null 2>&1 || true
+  if [[ -f "$WEB_SERVICE_FILE" ]]; then
+    systemctl restart xraymesh-web.service >/dev/null 2>&1 || true
+  fi
 }
 
 persist_update_branch() {
@@ -3811,7 +3796,9 @@ update_app_safe() {
   if inside_web_service; then
     # Restarting the web unit would kill this process, so hand the restart off
     # and finish without a health check (only on hosts without systemd-run).
-    (( mesh_was_active )) && systemctl restart xraymesh.service >/dev/null 2>&1 || true
+    if (( mesh_was_active )); then
+      systemctl restart xraymesh.service >/dev/null 2>&1 || true
+    fi
     update_status success complete
     ok "Updated to ${UPDATE_TARGET}. The web panel restarts in a few seconds."
     exec {lock_fd}>&-
@@ -4095,7 +4082,9 @@ ensure_certbot() {
   if ! command -v certbot >/dev/null 2>&1; then
     info "Installing Certbot for free Let's Encrypt SSL certificate generation..."
     if command -v apt-get >/dev/null 2>&1; then
-      apt-get update -qq && apt-get install -y -qq certbot >/dev/null 2>&1 || true
+      if apt-get update -qq; then
+        apt-get install -y -qq certbot >/dev/null 2>&1 || true
+      fi
     elif command -v dnf >/dev/null 2>&1; then
       dnf install -y -q certbot >/dev/null 2>&1 || true
     elif command -v yum >/dev/null 2>&1; then
@@ -4177,9 +4166,11 @@ EOF_RENEW
       sed -i '/^WEB_DOMAIN=/d' "$WEB_CONFIG_FILE"
       sed -i '/^WEB_SSL_CERT=/d' "$WEB_CONFIG_FILE"
       sed -i '/^WEB_SSL_KEY=/d' "$WEB_CONFIG_FILE"
-      printf 'WEB_DOMAIN=%q\n' "$domain" >> "$WEB_CONFIG_FILE"
-      printf 'WEB_SSL_CERT=%q\n' "$cert_file" >> "$WEB_CONFIG_FILE"
-      printf 'WEB_SSL_KEY=%q\n' "$key_file" >> "$WEB_CONFIG_FILE"
+      {
+        printf 'WEB_DOMAIN=%q\n' "$domain"
+        printf 'WEB_SSL_CERT=%q\n' "$cert_file"
+        printf 'WEB_SSL_KEY=%q\n' "$key_file"
+      } >> "$WEB_CONFIG_FILE"
 
       systemctl restart xraymesh-web.service 2>/dev/null || true
       ok "Web Dashboard SSL active: https://${domain}:$(get_web_port)"
@@ -4273,7 +4264,8 @@ print(f'sha256\${salt}\${h}')
   # Automatically permit Web & Mesh ports if UFW firewall is active
   if command -v ufw >/dev/null 2>&1; then
     if ufw status 2>/dev/null | grep -qi "Status: active"; then
-      local ufw_wport="$(get_web_port)"
+      local ufw_wport
+      ufw_wport="$(get_web_port)"
       ufw allow "${ufw_wport}/tcp" >/dev/null 2>&1 || true
       local ufw_mport="11010"
       if [[ -f "$CONFIG_FILE" ]]; then
@@ -4517,7 +4509,9 @@ update_core() {
     update_app_safe || warn "The XRayMesh update did not complete; see the messages above."
   fi
   ok "EasyTier: ${before} → ${after}"
-  [[ -t 0 ]] && pause || true
+  if [[ -t 0 ]]; then
+    pause || true
+  fi
 }
 
 control_service() {
