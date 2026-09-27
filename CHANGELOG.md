@@ -2,7 +2,7 @@
 
 All notable XRayMesh changes are documented here.
 
-## [Unreleased]
+## [3.1.0] - 2026-09-28
 
 ### Fixed
 - Tunnels: creating, editing or deleting a tunnel on another server failed with "NetworkError when attempting to fetch resource" (or a JSON parse error). The panel crashed while forwarding the request to that server, so the browser got no answer.

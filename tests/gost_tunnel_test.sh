@@ -74,9 +74,7 @@ validate_gost_ports "new_tunnel" "9000" "both" >/dev/null
 
 # Verify web integration strings
 grep -Fq 'GOST_TUNNEL_DIR' "${ROOT_DIR}/web/server.py"
-grep -Fq '/api/tunnels/gost/create' "${ROOT_DIR}/web/server.py"
-grep -Fq '/api/tunnels/gost/delete' "${ROOT_DIR}/web/server.py"
-grep -Fq '/api/tunnels/gost/edit' "${ROOT_DIR}/web/server.py"
+grep -Fq '^/api/tunnels/(haproxy|iptables|gost|realm)/(create|edit|delete)$' "${ROOT_DIR}/web/server.py"
 grep -Fq '/api/tunnels/gost/create' "${ROOT_DIR}/web/static/index.html"
 grep -Fq '/api/tunnels/gost/edit' "${ROOT_DIR}/web/static/index.html"
 grep -Fq '/api/tunnels/gost/delete' "${ROOT_DIR}/web/static/index.html"

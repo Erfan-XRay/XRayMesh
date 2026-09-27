@@ -1,8 +1,8 @@
 {
-  "version": "3.0.6",
+  "version": "3.1.0",
   "branch": "main",
-  "release_name": "XRayMesh v3.0.6 (Vazirmatn font for the Persian panel)",
-  "release_date": "2026-09-27",
-  "changelog": "The Persian panel uses the Vazirmatn font, with taller lines so the text no longer looks cramped, and shows latency in \"ms\" again.",
+  "release_name": "XRayMesh v3.1.0 (Tunnels between servers fixed)",
+  "release_date": "2026-09-28",
+  "changelog": "Creating, editing or deleting a tunnel on another server works again: no more \"NetworkError\" or JSON errors, remote changes wait long enough for the engine to install, and failures say exactly what went wrong.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh) update"
 }

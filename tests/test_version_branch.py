@@ -58,8 +58,8 @@ class VersionAndBranchTests(unittest.TestCase):
 
     def test_get_version_info_fetches_from_main_branch(self):
         fake_remote_payload = {
-            "version": "3.0.7",
-            "release_name": "XRayMesh v3.0.7",
+            "version": "3.1.1",
+            "release_name": "XRayMesh v3.1.1",
             "release_date": "2026-09-25",
             "changelog": "Stable changes",
             "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh) update"
@@ -82,8 +82,8 @@ class VersionAndBranchTests(unittest.TestCase):
         # Verify URL targeted the main branch
         call_url = mock_open.call_args[0][0].full_url
         self.assertIn("/main/version.json", call_url)
-        self.assertEqual(v_info["current_version"], "3.0.6")
-        self.assertEqual(v_info["latest_version"], "3.0.7")
+        self.assertEqual(v_info["current_version"], "3.1.0")
+        self.assertEqual(v_info["latest_version"], "3.1.1")
         self.assertEqual(v_info["branch"], "main")
         self.assertTrue(v_info["update_available"])
         self.assertIn("main/xraymesh.sh", v_info["update_command"])
