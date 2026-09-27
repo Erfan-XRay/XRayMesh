@@ -134,7 +134,7 @@ export const Header: React.FC<HeaderProps> = ({
   t,
   ...prefs
 }) => {
-  const version = node.xraymesh_version || '3.0.3';
+  const version = node.xraymesh_version || '3.0.4';
   const { listRef, box } = useTabIndicator(activeTab, [tabs.length, showTabs]);
 
   const onTabKeyDown = (e: React.KeyboardEvent) => {

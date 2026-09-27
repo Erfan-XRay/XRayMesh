@@ -1,8 +1,8 @@
 {
-  "version": "3.0.3",
+  "version": "3.0.4",
   "branch": "main",
-  "release_name": "XRayMesh v3.0.3 (Servers list & Persian layout fixes)",
+  "release_name": "XRayMesh v3.0.4 (Servers list traffic alignment)",
   "release_date": "2026-09-27",
-  "changelog": "The Servers list columns now line up with their titles, and in Persian the protocol, traffic, latency and RAM usage read in the right order. Persian shows latency in milliseconds (میلی‌ثانیه) instead of ms. The WSS description no longer says a domain and certificate are needed: EasyTier makes its own certificate.",
+  "changelog": "In the Servers list, traffic now sits under the Traffic title instead of in the middle of its column.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh) update"
 }

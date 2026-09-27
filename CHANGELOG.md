@@ -2,6 +2,11 @@
 
 All notable XRayMesh changes are documented here.
 
+## [3.0.4] - 2026-09-27
+
+### Fixed
+- Servers list: traffic sat in the middle of its column instead of under the Traffic title. The stacked layout for large screens kept the centered alignment of the phone layout.
+
 ## [3.0.3] - 2026-09-27
 
 ### Changed

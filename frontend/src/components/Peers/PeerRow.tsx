@@ -31,8 +31,11 @@ interface PeerRowProps {
   t: Translate;
 }
 
-const Traffic: React.FC<{ peer: Peer; t: Translate; className?: string }> = ({ peer, t, className = '' }) => (
-  <span className={`inline-flex items-center gap-3 font-mono text-xs text-text-muted tabular-nums ${className}`}>
+/** Down and up traffic, side by side on phones or stacked in the desktop column (aligned to its start). */
+const Traffic: React.FC<{ peer: Peer; t: Translate; stacked?: boolean }> = ({ peer, t, stacked = false }) => (
+  <span
+    className={`inline-flex font-mono text-xs text-text-muted tabular-nums ${stacked ? 'flex-col items-start gap-0.5' : 'items-center gap-3'}`}
+  >
     <span className="inline-flex items-center gap-1" title={t('peer_traffic_down')}>
       <ArrowDown className="w-3 h-3 text-success" aria-label={t('peer_traffic_down')} />
       <bdi dir="ltr">{localizeDigits(peer.rx_bytes || '0 B', t)}</bdi>
@@ -158,7 +161,7 @@ export const PeerRow: React.FC<PeerRowProps> = ({
           {latency.ms === null ? t('peer_latency_none') : formatMs(latency.ms, t, 1)}
         </span>
 
-        <Traffic peer={peer} t={t} className="flex-col items-start gap-0.5" />
+        <Traffic peer={peer} t={t} stacked />
 
         <div className="flex flex-col items-start gap-1.5 min-w-0">
           <div className="flex flex-wrap items-center gap-1.5">
