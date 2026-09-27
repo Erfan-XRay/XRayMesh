@@ -27,12 +27,16 @@ export function useAnimatedNumber(
       return;
     }
     let frame = 0;
-    let last = performance.now();
+    // Time only from frame timestamps: after a background tab resumes, the first frame can carry a
+    // timestamp older than performance.now() at the last poll, and a negative step makes the
+    // exponential blow the value up to huge negative numbers.
+    let last: number | null = null;
     const tick = (now: number) => {
-      const dt = Math.min(now - last, 100);
+      const dt = last === null ? 0 : Math.min(Math.max(now - last, 0), 100);
       last = now;
       const goal = targetRef.current;
       current.current += (goal - current.current) * (1 - Math.exp(-dt / tau));
+      if (!Number.isFinite(current.current)) current.current = goal;
       const settled = Math.abs(goal - current.current) < Math.max(0.005, Math.abs(goal) * 0.0005);
       if (settled) current.current = goal;
       const flutter = wobbleRef.current ? 1 + wobbleRef.current * (Math.sin(now / 90) * 0.6 + Math.sin(now / 37) * 0.4) : 1;
