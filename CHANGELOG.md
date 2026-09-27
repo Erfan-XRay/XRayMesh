@@ -2,6 +2,15 @@
 
 All notable XRayMesh changes are documented here.
 
+## [3.0.0-beta.15] - 2026-09-27
+
+### Changed
+- ICMP and PCK: servers reached across a BackPack link now show PCK or ICMP under Servers instead of plain UDP. Servers that joined over links and reach each other directly still show UDP, because that traffic really is plain UDP.
+- ICMP and PCK: a server that joined over a link no longer says it is the main server under Peers & invite, and no longer starts an extra link just by opening that section. It points to the server it joined through, with an option to create a code there anyway. `xraymesh invite` asks the same question.
+
+### Fixed
+- The advice to turn off mesh encryption on ICMP/PCK meshes was unsafe: servers that joined over links also connect to each other directly over plain UDP, outside BackPack. Encryption can now only be turned off safely in a two-server mesh, and the panel and CLI say so.
+
 ## [3.0.0-beta.14] - 2026-09-27
 
 ### Fixed

@@ -1,8 +1,8 @@
 {
-  "version": "3.0.0-beta.14",
+  "version": "3.0.0-beta.15",
   "branch": "beta",
-  "release_name": "XRayMesh v3.0.0-beta.14 (Overview Numbers Fix)",
+  "release_name": "XRayMesh v3.0.0-beta.15 (ICMP/PCK Link Clarity)",
   "release_date": "2026-09-27",
-  "changelog": "Average latency and Host resources no longer drop to huge negative numbers (and keep falling) after the panel sat in a background tab for a few minutes. The same fix covers the speed test gauge and the live ping readout.",
+  "changelog": "Servers reached across an ICMP or PCK link now show PCK or ICMP under Servers instead of plain UDP. A server that joined over a link no longer claims to be the main server under Peers & invite; it points to the server it joined through. The advice to turn off mesh encryption on ICMP/PCK meshes is corrected: joined servers also talk to each other directly over plain UDP, so keep encryption on unless the mesh has just two servers.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update"
 }
