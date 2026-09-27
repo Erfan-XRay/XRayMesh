@@ -1,8 +1,8 @@
 {
-  "version": "3.0.0-beta.12",
+  "version": "3.0.0-beta.13",
   "branch": "beta",
-  "release_name": "XRayMesh v3.0.0-beta.12 (Motion & Ambient Backdrop)",
+  "release_name": "XRayMesh v3.0.0-beta.13 (Installable Web App)",
   "release_date": "2026-09-27",
-  "changelog": "The panel comes alive: an animated ambient background with a faint mesh of peers and packets in transit, a new XRayMesh loading animation, gliding tab indicators, cascading section entrances, count-up overview numbers and animated toasts. A new Background setting (Animated / Static) turns the motion off on slower devices; the system reduced-motion setting is still honored.",
+  "changelog": "The panel can now be installed on phones as a web app: use Add to Home Screen (iOS Safari) or Install app (Android Chrome, over HTTPS) to open it full-screen with its own icon and no browser address bar. Tapping the sign-in field or any other input no longer zooms the page in on phones, and in the installed app the header, sign-in controls and side menu stay clear of the iPhone status bar.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update"
 }

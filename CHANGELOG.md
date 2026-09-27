@@ -2,7 +2,7 @@
 
 All notable XRayMesh changes are documented here.
 
-## [Unreleased]
+## [3.0.0-beta.13] - 2026-09-27
 
 ### Added
 - The dashboard can be installed as a web app: use "Add to Home Screen" (iOS Safari) or "Install app" (Android Chrome) and it opens full-screen with its own icon, without the browser's address bar. The server now serves a web app manifest and home-screen icons.
