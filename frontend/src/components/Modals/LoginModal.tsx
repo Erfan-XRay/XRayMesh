@@ -19,6 +19,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { XRayMeshLogo } from '../XRayMeshLogo';
+import { AppBackdrop } from '../AppBackdrop';
 import { Language, ThemeMode } from '../../types';
 import type { Translate, TranslationKey } from '../../i18n/translations';
 import { btnPrimary, Callout, iconBtn } from '../ui';
@@ -135,10 +136,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       aria-describedby="login-desc"
     >
       {/* Ambient backdrop */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden="true">
-        <div className="login-grid absolute inset-0" />
-        <div className="absolute -top-56 start-1/2 -translate-x-1/2 rtl:translate-x-1/2 w-[44rem] h-[30rem] rounded-full bg-primary/15 blur-3xl" />
-      </div>
+      <AppBackdrop variant="hero" className="fixed inset-0" />
 
       {/* Preferences */}
       <div className="fixed top-3 end-3 sm:top-4 sm:end-4 z-10 flex items-center gap-1 p-1 rounded-2xl bg-card border border-card-border shadow-card">

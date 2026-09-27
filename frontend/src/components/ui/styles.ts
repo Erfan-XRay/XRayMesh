@@ -5,9 +5,11 @@
 
 const BTN =
   'inline-flex items-center justify-center gap-2 min-h-10 px-4 rounded-xl text-sm font-semibold select-none cursor-pointer ' +
-  'transition-[background-color,border-color,color,transform] duration-150 active:scale-[0.98] ' +
+  'transition-[background-color,border-color,color,box-shadow,transform] duration-200 active:scale-[0.97] ' +
   'disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100';
-export const btnPrimary = `${BTN} bg-primary text-on-primary hover:bg-primary-hover`;
+// The accent buttons lift a soft glow of their own color on hover.
+const GLOW = 'hover:shadow-[0_6px_20px_-6px_rgb(var(--primary-rgb)/0.6)] disabled:shadow-none';
+export const btnPrimary = `${BTN} bg-primary text-on-primary hover:bg-primary-hover ${GLOW}`;
 export const btnSecondary = `${BTN} bg-card border border-card-border text-text-primary hover:bg-hover hover:border-border-strong`;
 export const btnGhost = `${BTN} text-text-muted hover:text-text-primary hover:bg-hover`;
 export const btnDanger = `${BTN} bg-danger text-on-danger hover:bg-danger/90`;
@@ -18,9 +20,9 @@ export const btnTonal = `${BTN} bg-primary-subtle text-primary hover:bg-primary/
 // Compact variants for dense rows (tables, lists, toolbars).
 const BTN_SM =
   'inline-flex items-center justify-center gap-1.5 min-h-8 px-3 rounded-lg text-xs font-semibold whitespace-nowrap select-none cursor-pointer ' +
-  'transition-[background-color,border-color,color,transform] duration-150 active:scale-[0.98] ' +
+  'transition-[background-color,border-color,color,box-shadow,transform] duration-200 active:scale-[0.97] ' +
   'disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100';
-export const btnPrimarySm = `${BTN_SM} bg-primary text-on-primary hover:bg-primary-hover`;
+export const btnPrimarySm = `${BTN_SM} bg-primary text-on-primary hover:bg-primary-hover ${GLOW}`;
 export const btnSecondarySm = `${BTN_SM} bg-card border border-card-border text-text-primary hover:bg-hover hover:border-border-strong`;
 export const btnGhostSm = `${BTN_SM} text-text-muted hover:text-text-primary hover:bg-hover`;
 export const btnTonalSm = `${BTN_SM} bg-primary-subtle text-primary hover:bg-primary/20`;

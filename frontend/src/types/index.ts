@@ -243,6 +243,7 @@ export type Language = 'en' | 'fa';
 
 export type PaletteId = 'firouzeh' | 'ocean' | 'iris' | 'saffron' | 'graphite' | 'midnight';
 export type ThemeMode = 'auto' | 'light' | 'dark';
+export type BackdropMode = 'animated' | 'static';
 
 export type TabId = 'peers' | 'node' | 'speedtest' | 'ping' | 'tunnels';
 
@@ -315,4 +316,6 @@ export interface ToastItem {
   id: string;
   message: string;
   type: 'success' | 'error' | 'info';
+  /** Set shortly before removal so the toast can animate out. */
+  leaving?: boolean;
 }

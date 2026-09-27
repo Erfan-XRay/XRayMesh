@@ -45,6 +45,9 @@ export const translations = {
     theme_light: "Light",
     theme_dark: "Dark",
     lang_selector: "Language",
+    backdrop_label: "Background",
+    backdrop_animated: "Animated",
+    backdrop_static: "Static",
 
     // Overview
     overview_label: "Node overview",
@@ -673,6 +676,9 @@ export const translations = {
     theme_light: "روشن",
     theme_dark: "تیره",
     lang_selector: "زبان",
+    backdrop_label: "پس‌زمینه",
+    backdrop_animated: "متحرک",
+    backdrop_static: "ثابت",
 
     // Overview
     overview_label: "نمای کلی نود",

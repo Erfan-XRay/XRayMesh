@@ -6,11 +6,15 @@ export const prefersReducedMotion = () =>
 /**
  * Eases a displayed number toward `target` on every animation frame, so values that arrive
  * once per poll glide instead of jumping. `wobble` adds a small live flutter (as a real
- * speedometer needle has) while a measurement is running.
+ * speedometer needle has) while a measurement is running. `from` sets where the first glide
+ * starts, e.g. 0 to count up on mount.
  */
-export function useAnimatedNumber(target: number, { tau = 320, wobble = 0 }: { tau?: number; wobble?: number } = {}): number {
-  const [value, setValue] = useState(target);
-  const current = useRef(target);
+export function useAnimatedNumber(
+  target: number,
+  { tau = 320, wobble = 0, from }: { tau?: number; wobble?: number; from?: number } = {}
+): number {
+  const [value, setValue] = useState(from ?? target);
+  const current = useRef(from ?? target);
   const targetRef = useRef(target);
   const wobbleRef = useRef(wobble);
   targetRef.current = target;

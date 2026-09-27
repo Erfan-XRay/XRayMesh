@@ -183,7 +183,7 @@ export const PeersTab: React.FC<PeersTabProps> = ({
               <span>{t('peers_col_version')}</span>
               <span />
             </div>
-            <ul className="divide-y divide-card-border border-t border-card-border lg:border-t-0">
+            <ul className="stagger divide-y divide-card-border border-t border-card-border lg:border-t-0">
               {visible.map((peer) => (
                 <PeerRow
                   key={peer.ipv4}

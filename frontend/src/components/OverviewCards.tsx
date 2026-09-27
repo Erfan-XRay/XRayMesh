@@ -5,6 +5,7 @@ import type { Translate } from '../i18n/translations';
 import { formatCount, formatNumber, formatUptime, localizeDigits } from '../i18n/format';
 import { formatText } from '../i18n/fillTemplate';
 import { CopyButton, Meter } from './ui';
+import { useAnimatedNumber } from '../hooks/useAnimatedNumber';
 import { LATENCY_TEXT, latencyTone } from './Peers/peerDisplay';
 
 interface OverviewCardsProps {
@@ -53,12 +54,17 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({ node, system, peer
   const relayed = others.filter((p) => p.connection === 'relay').length;
   const direct = others.length - relayed;
   const tone = latencyTone(avgLatency);
+  // Numbers count up on first paint and glide between polls.
+  const shownPeers = Math.round(useAnimatedNumber(others.length, { from: 0, tau: 260 }));
+  const shownLatency = useAnimatedNumber(avgLatency ?? 0, { from: 0, tau: 320 });
+  const shownCpu = Math.round(useAnimatedNumber(cpuPct, { from: 0, tau: 420 }));
+  const shownRam = Math.round(useAnimatedNumber(ramPct, { from: 0, tau: 420 }));
   const ipCopied = Boolean(node.ipv4) && copiedKey === node.ipv4;
 
   return (
     <section
       aria-label={t('overview_label')}
-      className="grid grid-cols-2 lg:grid-cols-4 gap-px mb-5 rounded-2xl overflow-hidden bg-card-border border border-card-border shadow-card"
+      className="stagger-nested grid grid-cols-2 lg:grid-cols-4 gap-px mb-5 rounded-2xl overflow-hidden bg-card-border border border-card-border shadow-card"
     >
       <Cell
         icon={<Network className="w-4 h-4" />}
@@ -88,12 +94,12 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({ node, system, peer
             : t('peers_desc')
         }
       >
-        <p className="text-lg sm:text-xl font-semibold text-text-primary tabular-nums">{formatCount(others.length, t)}</p>
+        <p className="text-lg sm:text-xl font-semibold text-text-primary tabular-nums">{formatCount(shownPeers, t)}</p>
       </Cell>
 
       <Cell icon={<Activity className="w-4 h-4" />} label={t('latency_title')} footer={t('latency_desc')}>
         <p className={`font-mono text-lg sm:text-xl font-semibold tabular-nums ${avgLatency === null ? 'text-text-subtle' : LATENCY_TEXT[tone]}`}>
-          {avgLatency === null ? '—' : `${formatNumber(avgLatency, t, 1)} ms`}
+          {avgLatency === null ? '—' : `${formatNumber(shownLatency, t, 1)} ms`}
         </p>
       </Cell>
 
@@ -115,8 +121,8 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({ node, system, peer
       >
         <div className="space-y-2">
           {[
-            { label: t('cpu_usage'), short: 'CPU', pct: cpuPct, warn: 60, detail: '' },
-            { label: t('ram_usage'), short: 'RAM', pct: ramPct, warn: 70, detail: ramDetail },
+            { label: t('cpu_usage'), short: 'CPU', pct: shownCpu, warn: 60, detail: '' },
+            { label: t('ram_usage'), short: 'RAM', pct: shownRam, warn: 70, detail: ramDetail },
           ].map((m) => (
             <div key={m.short}>
               <div className="flex items-baseline justify-between gap-2 mb-1 text-xs">

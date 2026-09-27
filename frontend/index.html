@@ -29,6 +29,7 @@
       var lang = read('xraymesh_dashboard_lang') === 'fa' ? 'fa' : 'en';
       root.setAttribute('data-palette', palette);
       root.setAttribute('data-theme', dark ? 'dark' : 'light');
+      root.setAttribute('data-backdrop', read('xraymesh_backdrop') === 'static' ? 'static' : 'animated');
       root.lang = lang;
       root.dir = lang === 'fa' ? 'rtl' : 'ltr';
     })();

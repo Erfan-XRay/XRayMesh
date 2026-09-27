@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { LogOut, Menu, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { NodeInfo, TabId } from '../types';
 import type { Translate } from '../i18n/translations';
@@ -94,6 +94,32 @@ const PreferencesPopover: React.FC<PreferencesProps> = (props) => {
   );
 };
 
+/**
+ * Underline that glides to the active tab. Measured in physical pixels (offsetLeft), so it
+ * follows the real layout in both directions and after font or language changes.
+ */
+function useTabIndicator(activeTab: TabId, deps: unknown[]) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState<{ x: number; w: number; animate: boolean } | null>(null);
+
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const measure = (animate: boolean) => {
+      const el = list.querySelector<HTMLElement>(`#tab-${activeTab}`);
+      if (!el) return setBox(null);
+      setBox({ x: el.offsetLeft + 8, w: el.offsetWidth - 16, animate });
+    };
+    measure(box !== null);
+    const observer = new ResizeObserver(() => measure(false));
+    Array.from(list.children).forEach((child) => observer.observe(child));
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, ...deps]);
+
+  return { listRef, box };
+}
+
 /** Sticky app bar: brand and node identity, actions, and (from md up) the section tabs. */
 export const Header: React.FC<HeaderProps> = ({
   node,
@@ -109,6 +135,7 @@ export const Header: React.FC<HeaderProps> = ({
   ...prefs
 }) => {
   const version = node.xraymesh_version || '3.0.0-beta.11';
+  const { listRef, box } = useTabIndicator(activeTab, [tabs.length, showTabs]);
   const isBeta = node.branch === 'beta';
 
   const onTabKeyDown = (e: React.KeyboardEvent) => {
@@ -146,7 +173,7 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="flex items-center gap-1.5 min-w-0 mt-0.5 text-xs text-text-muted">
                 {node.configured ? (
                   <>
-                    <StatusDot tone="success" />
+                    <StatusDot tone="success" pulse={node.service_active !== false} />
                     <span className="truncate font-mono" dir="ltr">
                       {node.network_name || 'xraymesh'}
                     </span>
@@ -206,7 +233,13 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Section tabs (tablet and desktop; phones use the bottom bar) */}
         {showTabs && (
           <nav aria-label={t('drawer_tabs')} className="hidden md:block -mb-px">
-            <div role="tablist" aria-label={t('drawer_tabs')} onKeyDown={onTabKeyDown} className="flex items-end gap-1 overflow-x-auto no-scrollbar">
+            <div
+              ref={listRef}
+              role="tablist"
+              aria-label={t('drawer_tabs')}
+              onKeyDown={onTabKeyDown}
+              className="relative flex items-end gap-1 overflow-x-auto no-scrollbar"
+            >
               {tabs.map((tab) => {
                 const active = tab.id === activeTab;
                 return (
@@ -236,13 +269,18 @@ export const Header: React.FC<HeaderProps> = ({
                         {tab.badge}
                       </span>
                     )}
-                    <span
-                      aria-hidden="true"
-                      className={`absolute inset-x-2 bottom-0 h-0.5 rounded-full transition-colors ${active ? 'bg-primary' : 'bg-transparent'}`}
-                    />
                   </button>
                 );
               })}
+              {box && (
+                <span
+                  aria-hidden="true"
+                  className={`absolute bottom-0 h-0.5 rounded-full bg-primary shadow-[0_0_10px_rgb(var(--primary-rgb)/0.7)] ${
+                    box.animate ? 'transition-[transform,width] duration-300 ease-spring' : ''
+                  }`}
+                  style={{ left: 0, width: box.w, transform: `translateX(${box.x}px)` }}
+                />
+              )}
             </div>
           </nav>
         )}

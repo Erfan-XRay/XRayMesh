@@ -83,6 +83,9 @@ export default {
         "spin-smooth": "spin 0.9s linear infinite",
         "pulse-dot": "pulseDot 2s ease-in-out infinite",
         shimmer: "shimmer 1.6s linear infinite",
+        "nav-pop": "navPop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both",
+        "toast-in": "toastIn 320ms cubic-bezier(0.16, 1, 0.3, 1) both",
+        "toast-out": "toastOut 240ms cubic-bezier(0.4, 0, 1, 1) both",
       },
       keyframes: {
         fadeIn: {
@@ -112,6 +115,19 @@ export default {
         shimmer: {
           "0%": { backgroundPosition: "-200% 0" },
           "100%": { backgroundPosition: "200% 0" },
+        },
+        navPop: {
+          "0%": { transform: "scale(0.8) translateY(2px)" },
+          "60%": { transform: "scale(1.12) translateY(-1px)" },
+          "100%": { transform: "none" },
+        },
+        toastIn: {
+          from: { opacity: "0", transform: "translateY(12px) scale(0.96)" },
+          to: { opacity: "1", transform: "none" },
+        },
+        toastOut: {
+          from: { opacity: "1", transform: "none" },
+          to: { opacity: "0", transform: "translateY(6px) scale(0.96)" },
         },
       },
     },

@@ -185,9 +185,6 @@
     min-height: 100dvh;
     overflow-x: hidden;
     background-color: var(--bg-base);
-    background-image: radial-gradient(1100px 380px at 50% -140px, rgb(var(--primary-rgb) / var(--glow-strength)), transparent 70%);
-    background-repeat: no-repeat;
-    background-attachment: fixed;
     color: var(--text-primary);
     font-family: var(--font-sans);
     font-feature-settings: "cv11", "ss01";
@@ -329,18 +326,385 @@
     display: none;
   }
 
-  /* Login backdrop: faint grid fading out from the center. */
-  .login-grid {
-    background-image:
-      linear-gradient(var(--border-subtle) 1px, transparent 1px),
-      linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
-    background-size: 44px 44px;
-    opacity: 0.55;
-    mask-image: radial-gradient(ellipse 60% 50% at 50% 35%, #000 20%, transparent 100%);
-    -webkit-mask-image: radial-gradient(ellipse 60% 50% at 50% 35%, #000 20%, transparent 100%);
-  }
   .login-shake {
     animation: loginShake 360ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  }
+}
+
+/* ─── Ambient backdrop ───────────────────────────────────────────────── */
+
+/* Soft accent light drifting behind the page. Gradients, not blur filters, so it stays cheap to animate. */
+.bd-aurora {
+  position: absolute;
+  border-radius: 9999px;
+  background: radial-gradient(closest-side, rgb(var(--primary-rgb) / calc(var(--glow-strength) * var(--bd-boost, 1))), transparent);
+  will-change: transform;
+}
+.bd-aurora--a {
+  width: 70vmax;
+  height: 46vmax;
+  top: -24vmax;
+  left: calc(50% - 35vmax);
+  animation: auroraA 26s ease-in-out infinite alternate;
+}
+.bd-aurora--b {
+  width: 52vmax;
+  height: 52vmax;
+  bottom: -30vmax;
+  left: -18vmax;
+  --bd-boost: 0.7;
+  animation: auroraB 34s ease-in-out infinite alternate;
+}
+.bd-aurora--c {
+  width: 46vmax;
+  height: 46vmax;
+  top: 18vh;
+  right: -22vmax;
+  --bd-boost: 0.55;
+  animation: auroraC 30s ease-in-out infinite alternate;
+}
+
+/* Dot lattice that fades out toward the edges. */
+.bd-dots {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(var(--border-strong) 1px, transparent 1.2px);
+  background-size: 26px 26px;
+  opacity: 0.5;
+  mask-image: radial-gradient(ellipse 75% 60% at 50% 0%, #000 10%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 75% 60% at 50% 0%, #000 10%, transparent 75%);
+}
+.bd-hero .bd-dots {
+  mask-image: radial-gradient(ellipse 60% 55% at 50% 40%, #000 15%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 60% 55% at 50% 40%, #000 15%, transparent 80%);
+}
+
+/* Faint mesh of peers with packets travelling between them. */
+.bd-mesh {
+  position: absolute;
+  top: 0;
+  width: 50%;
+  height: 100%;
+  color: rgb(var(--primary-rgb));
+  opacity: 0.55;
+}
+[data-theme="light"] .bd-mesh {
+  opacity: 0.4;
+}
+.bd-link {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+  fill: none;
+}
+.bd-packet {
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  fill: none;
+  stroke-dasharray: 5 105;
+  stroke-dashoffset: 6;
+  animation: bdPacket var(--dur, 6s) linear infinite;
+  animation-delay: var(--delay, 0s);
+}
+.bd-node {
+  fill: var(--bg-elevated);
+  stroke: var(--border-strong);
+  stroke-width: 1.25;
+}
+.bd-node--live {
+  fill: currentColor;
+  stroke: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bdTwinkle var(--dur, 5s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+/* "Static background" preference: keep the scene, drop the motion. */
+[data-backdrop="static"] .bd-aurora,
+[data-backdrop="static"] .bd-node--live {
+  animation: none;
+}
+[data-backdrop="static"] .bd-packet {
+  display: none;
+}
+
+@keyframes auroraA {
+  from {
+    transform: translate3d(-6vmax, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(6vmax, 3vmax, 0) scale(1.12);
+  }
+}
+@keyframes auroraB {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(10vmax, -8vmax, 0) scale(1.15);
+  }
+}
+@keyframes auroraC {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.05);
+  }
+  to {
+    transform: translate3d(-8vmax, 10vmax, 0) scale(0.92);
+  }
+}
+@keyframes bdPacket {
+  0% {
+    stroke-dashoffset: 6;
+  }
+  45%,
+  100% {
+    stroke-dashoffset: -101;
+  }
+}
+@keyframes bdTwinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.15);
+  }
+}
+
+/* ─── Mesh loader ────────────────────────────────────────────────────── */
+
+/* Four peers fire packets into the hub in turn; the hub answers with a ripple while the orbit keeps turning. */
+.ml-svg {
+  overflow: visible;
+  color: rgb(var(--primary-rgb));
+}
+.ml-orbit-track {
+  fill: none;
+  stroke: currentColor;
+  stroke-opacity: 0.14;
+  stroke-width: 1.5;
+}
+.ml-orbit {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 22 78;
+  transform-origin: 40px 40px;
+  animation: mlSpin 1.6s linear infinite;
+}
+.ml-orbit--slow {
+  stroke-width: 1.5;
+  stroke-opacity: 0.45;
+  stroke-dasharray: 8 92;
+  animation-duration: 3.2s;
+  animation-direction: reverse;
+}
+.ml-track {
+  fill: none;
+  stroke: currentColor;
+  stroke-opacity: 0.2;
+  stroke-width: 3.5;
+  stroke-linecap: round;
+}
+.ml-packet {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-dasharray: 26 130;
+  stroke-dashoffset: 27;
+  filter: drop-shadow(0 0 3px rgb(var(--primary-rgb) / 0.8));
+  animation: mlPacket 2.4s cubic-bezier(0.55, 0, 0.35, 1) infinite;
+}
+.ml-peer {
+  fill: currentColor;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mlPeer 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+.ml-hub {
+  fill: var(--bg-elevated);
+  stroke: currentColor;
+  stroke-width: 3;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mlHub 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+.ml-hub-core {
+  fill: currentColor;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mlHubCore 2.4s ease-in-out infinite;
+}
+.ml-ripple {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mlRipple 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+.ml-glow {
+  background: radial-gradient(closest-side, rgb(var(--primary-rgb) / 0.28), transparent);
+  animation: mlGlow 2.4s ease-in-out infinite;
+}
+
+@keyframes mlSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes mlPacket {
+  0% {
+    stroke-dashoffset: 27;
+  }
+  38%,
+  100% {
+    stroke-dashoffset: -101;
+  }
+}
+@keyframes mlPeer {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  8% {
+    transform: scale(1.35);
+    opacity: 1;
+  }
+  30% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+}
+@keyframes mlHub {
+  0%,
+  30%,
+  100% {
+    transform: scale(1);
+  }
+  40%,
+  52%,
+  64%,
+  76% {
+    transform: scale(1.12);
+  }
+  46%,
+  58%,
+  70% {
+    transform: scale(1.02);
+  }
+  88% {
+    transform: scale(1);
+  }
+}
+@keyframes mlHubCore {
+  0%,
+  30% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  78% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+}
+@keyframes mlRipple {
+  0%,
+  76% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  80% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(3.2);
+  }
+}
+@keyframes mlGlow {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.9);
+  }
+  78% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+/* ─── Entrances & micro-interactions ─────────────────────────────────── */
+
+/* Children rise in one after another. `.stagger-nested` reaches one level deeper (a tab's sections). */
+.stagger > *,
+.stagger-nested > * > * {
+  animation: rise 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.stagger > :nth-child(2),
+.stagger-nested > * > :nth-child(2) {
+  animation-delay: 50ms;
+}
+.stagger > :nth-child(3),
+.stagger-nested > * > :nth-child(3) {
+  animation-delay: 100ms;
+}
+.stagger > :nth-child(4),
+.stagger-nested > * > :nth-child(4) {
+  animation-delay: 150ms;
+}
+.stagger > :nth-child(5),
+.stagger-nested > * > :nth-child(5) {
+  animation-delay: 200ms;
+}
+.stagger > :nth-child(6),
+.stagger-nested > * > :nth-child(6) {
+  animation-delay: 250ms;
+}
+.stagger > :nth-child(7),
+.stagger-nested > * > :nth-child(7) {
+  animation-delay: 300ms;
+}
+.stagger > :nth-child(n + 8),
+.stagger-nested > * > :nth-child(n + 8) {
+  animation-delay: 340ms;
+}
+
+/* Toast countdown: a hairline that drains toward the inline start. */
+.toast-timer {
+  transform-origin: left;
+  animation: toastTimer var(--toast-life, 4s) linear both;
+}
+[dir="rtl"] .toast-timer {
+  transform-origin: right;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes toastTimer {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
   }
 }
 

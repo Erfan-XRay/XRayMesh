@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { PaletteId, ThemeMode } from '../types';
+import { BackdropMode, PaletteId, ThemeMode } from '../types';
 import { LEGACY_PALETTES, PALETTES } from './palettes';
 
 const THEME_STORAGE_KEY = 'xraymesh_theme_palette';
 const THEME_MODE_STORAGE_KEY = 'xraymesh_theme_mode';
+const BACKDROP_STORAGE_KEY = 'xraymesh_backdrop';
 
 const read = (key: string) => {
   try {
@@ -44,6 +45,8 @@ export function useTheme() {
     return () => query.removeEventListener('change', handleChange);
   }, []);
 
+  const [backdrop, setBackdropState] = useState<BackdropMode>(() => (read(BACKDROP_STORAGE_KEY) === 'static' ? 'static' : 'animated'));
+
   const resolvedTheme = themeMode === 'auto' ? systemTheme : themeMode;
 
   const setThemeMode = (mode: ThemeMode) => {
@@ -55,6 +58,15 @@ export function useTheme() {
     setPaletteIdState(id);
     write(THEME_STORAGE_KEY, id);
   };
+
+  const setBackdrop = (mode: BackdropMode) => {
+    setBackdropState(mode);
+    write(BACKDROP_STORAGE_KEY, mode);
+  };
+
+  useEffect(() => {
+    document.documentElement.dataset.backdrop = backdrop;
+  }, [backdrop]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -71,6 +83,8 @@ export function useTheme() {
     themeMode,
     setThemeMode,
     resolvedTheme,
+    backdrop,
+    setBackdrop,
     currentPalette: PALETTES[paletteId],
     availablePalettes: Object.values(PALETTES),
   };

@@ -25,7 +25,7 @@ import { Header, NavTab } from './components/Header';
 import { OverviewCards } from './components/OverviewCards';
 import { MobileDrawer } from './components/MobileDrawer';
 import { MobileBottomNav } from './components/MobileBottomNav';
-import { ToastContainer } from './components/Toast';
+import { ToastContainer, TOAST_EXIT_MS, TOAST_LIFE_MS } from './components/Toast';
 import { LoginModal } from './components/Modals/LoginModal';
 import { TunnelModal, TunnelModalType } from './components/Modals/TunnelModal';
 import { DeleteConfirmModal } from './components/Modals/DeleteConfirmModal';
@@ -39,6 +39,7 @@ import { TunnelsTab } from './components/Tabs/TunnelsTab';
 import { Users, Zap, Activity, Network, Settings, ArrowUpCircle, Sparkles } from 'lucide-react';
 import { copyToClipboard } from './utils/clipboard';
 import { LoadingSpinner } from './components/LoadingSpinner';
+import { AppBackdrop } from './components/AppBackdrop';
 import { formatText } from './i18n/fillTemplate';
 import { formatCount, localizeDigits } from './i18n/format';
 import { btnPrimary } from './components/ui';
@@ -68,7 +69,7 @@ const EMPTY_STATUS: StatusResponse = {
 
 export default function App() {
   // Hooks
-  const { paletteId, setPaletteId, themeMode, setThemeMode, availablePalettes, resolvedTheme } = useTheme();
+  const { paletteId, setPaletteId, themeMode, setThemeMode, availablePalettes, resolvedTheme, backdrop, setBackdrop } = useTheme();
   const { lang, setLang, isRtl, t } = useTranslation();
 
   // Auth state
@@ -172,8 +173,11 @@ export default function App() {
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       setToasts((prev) => [...prev, { id, message, type }]);
       setTimeout(() => {
+        setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, leaving: true } : t)));
+      }, TOAST_LIFE_MS - TOAST_EXIT_MS);
+      setTimeout(() => {
         setToasts((prev) => prev.filter((t) => t.id !== id));
-      }, 4000);
+      }, TOAST_LIFE_MS);
     },
     []
   );
@@ -561,13 +565,16 @@ export default function App() {
     onSelectThemeMode: setThemeMode,
     availablePalettes,
     resolvedTheme,
+    backdrop,
+    onSelectBackdrop: setBackdrop,
   };
 
   // ─── Loading / Auth Gate ────────────────────────────────
   if (isAuthenticated === null || (isAuthenticated && !initialLoaded)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-dvh px-4">
-        <LoadingSpinner size="xl" label={t('boot_loading')} sublabel={t('boot_loading_hint')} />
+        <AppBackdrop variant="hero" />
+        <LoadingSpinner size="xl" label={t('boot_loading')} sublabel={t('boot_loading_hint')} className="animate-modal-in" />
       </div>
     );
   }
@@ -616,6 +623,7 @@ export default function App() {
 
       {isAuthenticated && (
         <div className="min-h-dvh flex flex-col">
+          <AppBackdrop />
           <Header
             node={status.node}
             tabs={tabs}
@@ -676,7 +684,7 @@ export default function App() {
               role="tabpanel"
               aria-labelledby={isNodeConfigured ? `tab-${activeTab}` : undefined}
               aria-label={isNodeConfigured ? undefined : tabs[0]?.label}
-              className="animate-tab-in"
+              className="animate-tab-in stagger-nested"
             >
               {activeTab === 'node' && (
                 <NodeConfigTab

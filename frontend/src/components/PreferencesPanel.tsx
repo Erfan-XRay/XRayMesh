@@ -1,6 +1,6 @@
 import React from 'react';
-import { Check } from 'lucide-react';
-import { Language, PaletteId, ThemeMode } from '../types';
+import { Check, Image, Sparkles } from 'lucide-react';
+import { BackdropMode, Language, PaletteId, ThemeMode } from '../types';
 import type { Translate } from '../i18n/translations';
 import { PaletteDef } from '../theme/palettes';
 import { ThemeModeSwitch } from './ThemeModeSwitch';
@@ -15,6 +15,8 @@ export interface PreferencesProps {
   onSelectThemeMode: (mode: ThemeMode) => void;
   availablePalettes: PaletteDef[];
   resolvedTheme: 'light' | 'dark';
+  backdrop: BackdropMode;
+  onSelectBackdrop: (mode: BackdropMode) => void;
   t: Translate;
 }
 
@@ -35,6 +37,8 @@ export const PreferencesPanel: React.FC<PreferencesProps> = ({
   onSelectThemeMode,
   availablePalettes,
   resolvedTheme,
+  backdrop,
+  onSelectBackdrop,
   t,
 }) => (
   <div className="space-y-4">
@@ -53,6 +57,19 @@ export const PreferencesPanel: React.FC<PreferencesProps> = ({
 
     <Group label={t('theme_mode')}>
       <ThemeModeSwitch value={themeMode} onChange={onSelectThemeMode} t={t} />
+    </Group>
+
+    <Group label={t('backdrop_label')}>
+      <Segmented
+        block
+        value={backdrop}
+        onChange={onSelectBackdrop}
+        ariaLabel={t('backdrop_label')}
+        options={[
+          { value: 'animated', label: t('backdrop_animated'), icon: <Sparkles className="w-4 h-4" /> },
+          { value: 'static', label: t('backdrop_static'), icon: <Image className="w-4 h-4" /> },
+        ]}
+      />
     </Group>
 
     <Group label={t('theme_selector')}>
