@@ -2,7 +2,7 @@
 
 All notable XRayMesh changes are documented here.
 
-## [Unreleased]
+## [3.0.0-beta.14] - 2026-09-27
 
 ### Fixed
 - Average latency and Host resources no longer drop to huge negative numbers (and keep falling) after the tab sat in the background for a few minutes. The count-up animation now keeps time only from animation frames, so a stale frame timestamp after the tab resumes can no longer push the value backwards. This also covers the speed test gauge and the live ping readout.
