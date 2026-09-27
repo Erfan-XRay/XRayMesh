@@ -42,6 +42,7 @@ jobs:
       - name: Test Web UI helpers and backend
         run: |
           python3 tests/web_interfaces_test.py
+          python3 tests/live_benchmark_test.py
           python3 tests/node_join_test.py
           python3 tests/update_flow_test.py
           bash tests/update_verify_test.sh

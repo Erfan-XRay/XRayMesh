@@ -344,6 +344,152 @@
   }
 }
 
+/* ─── Live speed test & ping ─────────────────────────────────────────── */
+
+/* Particles streaming along a route track; --flow-duration follows throughput. */
+.flow-dot {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 9999px;
+  background: rgb(var(--primary-rgb));
+  box-shadow: 0 0 8px rgb(var(--primary-rgb) / 0.8);
+  animation: flowAcross var(--flow-duration, 1.6s) linear infinite;
+}
+
+/* One echo request: out to the destination and back. */
+.ping-packet {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  margin-left: -5px;
+  border-radius: 9999px;
+  animation: pingEcho 900ms cubic-bezier(0.45, 0, 0.55, 1) both;
+}
+.ping-packet--lost {
+  animation: pingLost 900ms cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+
+/* Ring spreading from a node when a reply lands or a probe is sent. */
+.ping-ripple {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid currentColor;
+  animation: pingRipple 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.ping-ripple--loop {
+  animation: pingRipple 1.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+/* A latency bar rising from the baseline when its reply lands. */
+.ping-bar {
+  transform-origin: bottom;
+  animation: barGrow 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* A short dash sweeping along the dial while the speed test is still connecting. */
+.gauge-scan {
+  animation: gaugeScan 1.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+@keyframes gaugeScan {
+  from {
+    stroke-dashoffset: 90;
+  }
+  to {
+    stroke-dashoffset: -1000;
+  }
+}
+
+@keyframes flowAcross {
+  0% {
+    left: 0%;
+    opacity: 0;
+  }
+  12%,
+  88% {
+    opacity: 1;
+  }
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes pingEcho {
+  0% {
+    left: 0%;
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  8% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    left: 100%;
+    transform: scale(1.15);
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    left: 0%;
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+
+@keyframes pingLost {
+  0% {
+    left: 0%;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    left: 62%;
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+
+@keyframes barGrow {
+  from {
+    transform: scaleY(0);
+    opacity: 0.4;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes pingRipple {
+  0% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  10% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
 @keyframes sheetFromRight {
   from {
     transform: translateX(100%);

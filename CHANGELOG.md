@@ -2,6 +2,17 @@
 
 All notable XRayMesh changes are documented here.
 
+## [Unreleased]
+
+### Added
+- Real-time speed test: throughput is reported every second while iperf3 runs, on a new animated speedometer with a live needle, peak marker, progress bar, packets streaming along the route and a chart that grows as each second arrives. Transferred data, peak, average and retransmits update live.
+- Real-time ping: each reply appears the moment it arrives, with an animated echo packet between the two servers, a latency bar per packet, a quality badge and live min / average / max / jitter / loss.
+- Tests run as live jobs (`/api/ping/start`, `/api/iperf/start`, `/api/live/status`). When another server runs the test, this panel follows that server's live job; servers that predate live tests still work and show the result when it finishes.
+
+### Changed
+- The Ping tab uses the same two-column layout as the speed test.
+- The UDP sending rate is validated before it reaches iperf3.
+
 ## [3.0.0-beta.9] - 2026-09-26
 
 ### Added

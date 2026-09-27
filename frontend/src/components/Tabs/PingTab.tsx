@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useId } from 'react';
-import { Peer, PingResult } from '../../types';
-import { Activity, ArrowRight, ChevronDown, Loader2, Send, Terminal } from 'lucide-react';
+import { LivePing, Peer, PingResult } from '../../types';
+import { Activity, ChevronDown, Loader2, Send, Terminal } from 'lucide-react';
 import type { Translate } from '../../i18n/translations';
-import { formatCount, localizeDigits } from '../../i18n/format';
+import { formatCount } from '../../i18n/format';
 import { toAsciiDigits } from '../../utils/meshInvite';
 import { RoutePicker } from '../RoutePicker';
+import { PingLive } from '../Live/PingLive';
 import { btnPrimary, cardClass, inputClass, labelClass, Pill, SectionHeader, Segmented } from '../ui';
 
 interface PingTabProps {
@@ -14,19 +15,12 @@ interface PingTabProps {
   isRunning: boolean;
   onRun: (target: string, count: number, source?: string) => void;
   lastResult: PingResult | null;
+  /** Snapshot of the ping while it runs; each reply animates as it arrives. */
+  live: LivePing | null;
   t: Translate;
 }
 
-const Stat: React.FC<{ label: string; value: string; className?: string }> = ({ label, value, className = 'text-text-primary' }) => (
-  <div className="p-3.5 rounded-xl bg-surface border border-card-border">
-    <p className="text-xs text-text-muted">{label}</p>
-    <p className={`mt-1 font-mono text-xl font-semibold tabular-nums ${className}`}>
-      {value}
-    </p>
-  </div>
-);
-
-export const PingTab: React.FC<PingTabProps> = ({ peers, targetIp, onTargetChange, isRunning, onRun, lastResult, t }) => {
+export const PingTab: React.FC<PingTabProps> = ({ peers, targetIp, onTargetChange, isRunning, onRun, lastResult, live, t }) => {
   const [count, setCount] = useState<number>(4);
   const targetId = useId();
 
@@ -73,40 +67,42 @@ export const PingTab: React.FC<PingTabProps> = ({ peers, targetIp, onTargetChang
   };
 
   const isRemoteRunner = sourcePeer && !sourcePeer.is_current;
-  const lossPct = Number(lastResult?.packet_loss_percent ?? 0);
-  const resultSource = lastResult?.source || sourceIp;
-  const resultTarget = lastResult?.target || targetIp;
+  const resultSource = (isRunning ? live?.params.source : lastResult?.source) || sourceIp;
+  const resultTarget = (isRunning ? live?.params.target : lastResult?.target) || targetIp;
   const nameOf = (ip: string) => peers.find((p) => p.ipv4 === ip)?.hostname || ip;
   const canSend = Boolean(targetIp.trim() && sourceIp && targetIp.trim() !== sourceIp && !isRunning);
+  const replies = isRunning ? live?.samples || [] : lastResult?.replies || [];
+  const probeCount = (isRunning ? live?.params.count : lastResult?.count) || count;
 
   return (
-    <section aria-labelledby="ping-heading" className={`${cardClass} p-4 sm:p-6`}>
-      <SectionHeader
-        id="ping-heading"
-        icon={<Activity className="w-[18px] h-[18px]" />}
-        title={t('ping_panel_title')}
-        description={t('ping_panel_desc')}
-        actions={isRemoteRunner ? <Pill tone="info">{t('ping_remote_runner')}</Pill> : undefined}
-        className="mb-6"
-      />
-
-      <form onSubmit={handleSend} className="space-y-5">
-        <RoutePicker
-          peers={peers}
-          source={sourceIp}
-          target={targetIp}
-          onSourceChange={handleSourceChange}
-          onTargetChange={onTargetChange}
-          onSwap={handleSwap}
-          sourceLabel={t('ping_source_label')}
-          targetLabel={t('ping_dest_label')}
-          sourcePlaceholder={t('ping_source_placeholder')}
-          targetPlaceholder={t('ping_dest_select_placeholder')}
-          swapLabel={t('ping_swap_nodes')}
-          currentLabel={t('route_this_server')}
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <section aria-labelledby="ping-heading" className={`${cardClass} lg:col-span-5 p-4 sm:p-6`}>
+        <SectionHeader
+          id="ping-heading"
+          icon={<Activity className="w-[18px] h-[18px]" />}
+          title={t('ping_panel_title')}
+          description={t('ping_panel_desc')}
+          actions={isRemoteRunner ? <Pill tone="info">{t('ping_remote_runner')}</Pill> : undefined}
+          className="mb-6"
         />
 
-        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-4 items-end">
+        <form onSubmit={handleSend} className="space-y-5">
+          <RoutePicker
+            peers={peers}
+            source={sourceIp}
+            target={targetIp}
+            onSourceChange={handleSourceChange}
+            onTargetChange={onTargetChange}
+            onSwap={handleSwap}
+            sourceLabel={t('ping_source_label')}
+            targetLabel={t('ping_dest_label')}
+            sourcePlaceholder={t('ping_source_placeholder')}
+            targetPlaceholder={t('ping_dest_select_placeholder')}
+            swapLabel={t('ping_swap_nodes')}
+            currentLabel={t('route_this_server')}
+            stacked
+          />
+
           <div className="flex flex-col gap-1.5 min-w-0">
             <label htmlFor={targetId} className={labelClass}>
               {t('ping_target_ip_label')}
@@ -134,51 +130,39 @@ export const PingTab: React.FC<PingTabProps> = ({ peers, targetIp, onTargetChang
               value={count}
               onChange={setCount}
               ariaLabel={t('ping_count_label')}
-              className="h-11 sm:w-48"
+              className="h-11"
               options={[4, 8, 10].map((n) => ({ value: n, label: formatCount(n, t) }))}
             />
           </div>
-        </div>
 
-        <button type="submit" disabled={!canSend} className={`${btnPrimary} h-11 w-full sm:w-auto sm:px-6`}>
-          {isRunning ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-              <span>{t('ping_running')}</span>
-            </>
-          ) : (
-            <>
-              <Send className="w-4 h-4 rtl:-scale-x-100" aria-hidden="true" />
-              <span>{t('ping_btn_send')}</span>
-            </>
-          )}
-        </button>
-      </form>
+          <button type="submit" disabled={!canSend} className={`${btnPrimary} h-12 w-full`}>
+            {isRunning ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                <span>{t('ping_running')}</span>
+              </>
+            ) : (
+              <>
+                <Send className="w-4 h-4 rtl:-scale-x-100" aria-hidden="true" />
+                <span>{t('ping_btn_send')}</span>
+              </>
+            )}
+          </button>
+        </form>
+      </section>
 
-      {lastResult && (
-        <div className="mt-6 pt-6 border-t border-card-border space-y-4 animate-fade-in" aria-live="polite">
-          {resultSource && resultTarget && (
-            <p className="flex items-center gap-2 min-w-0 text-sm">
-              <span className="text-text-muted shrink-0">{t('ping_route_display')}</span>
-              <span className="inline-flex items-center gap-2 min-w-0 font-medium text-text-primary">
-                <bdi className="truncate">{nameOf(resultSource)}</bdi>
-                <ArrowRight className="w-3.5 h-3.5 text-primary shrink-0 rtl:-scale-x-100" aria-hidden="true" />
-                <bdi className="truncate">{nameOf(resultTarget)}</bdi>
-              </span>
-            </p>
-          )}
+      <section aria-label={t('ping_result_label')} className={`${cardClass} lg:col-span-7 flex flex-col gap-5 p-4 sm:p-6 min-h-[22rem]`}>
+        <PingLive
+          from={resultSource ? nameOf(resultSource) : '—'}
+          to={resultTarget ? nameOf(resultTarget) : '—'}
+          replies={replies}
+          count={probeCount}
+          running={isRunning}
+          result={isRunning ? null : lastResult}
+          t={t}
+        />
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <Stat label={t('ping_min')} value={`${localizeDigits(lastResult.min_ms, t)} ms`} />
-            <Stat label={t('ping_avg')} value={`${localizeDigits(lastResult.avg_ms, t)} ms`} className="text-primary" />
-            <Stat label={t('ping_max')} value={`${localizeDigits(lastResult.max_ms, t)} ms`} />
-            <Stat
-              label={t('ping_loss')}
-              value={t('percent').replace('{n}', localizeDigits(lastResult.packet_loss_percent, t))}
-              className={lossPct === 0 ? 'text-success' : lossPct < 10 ? 'text-warning' : 'text-danger'}
-            />
-          </div>
-
+        {lastResult && !isRunning && (
           <details className="group rounded-xl bg-surface border border-card-border overflow-hidden">
             <summary className="flex items-center gap-2 px-3.5 min-h-11 text-sm font-medium text-text-muted hover:text-text-primary cursor-pointer select-none">
               <Terminal className="w-4 h-4" aria-hidden="true" />
@@ -189,8 +173,8 @@ export const PingTab: React.FC<PingTabProps> = ({ peers, targetIp, onTargetChang
               {lastResult.raw}
             </pre>
           </details>
-        </div>
-      )}
-    </section>
+        )}
+      </section>
+    </div>
   );
 };

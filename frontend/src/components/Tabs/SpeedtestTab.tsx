@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useId } from 'react';
-import { Peer, SpeedtestData } from '../../types';
+import { LiveSpeedtest, Peer, SpeedtestData } from '../../types';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { ArrowRight, Gauge, Info, Loader2, Rocket, ShieldCheck, Target, Zap } from 'lucide-react';
+import { CheckCircle2, Gauge, Info, Loader2, Rocket, ShieldCheck, Target, Zap } from 'lucide-react';
 import type { Translate } from '../../i18n/translations';
-import { fillTemplate, formatText } from '../../i18n/fillTemplate';
-import { formatCount, localizeDigits } from '../../i18n/format';
+import { formatText } from '../../i18n/fillTemplate';
+import { formatCount, formatNumber, localizeDigits } from '../../i18n/format';
+import { useAnimatedNumber } from '../../hooks/useAnimatedNumber';
 import { RoutePicker } from '../RoutePicker';
-import { LoadingSpinner } from '../LoadingSpinner';
-import { btnPrimary, cardClass, labelClass, Pill, SectionHeader, Segmented, selectClass } from '../ui';
+import { LoadingDots } from '../LoadingSpinner';
+import { FlowRoute } from '../Live/FlowRoute';
+import { GaugePhase, SpeedGauge } from '../Live/SpeedGauge';
+import { btnPrimary, cardClass, labelClass, Pill, SectionHeader, Segmented, selectClass, StatusDot } from '../ui';
 
 interface SpeedtestTabProps {
   peers: Peer[];
@@ -16,6 +19,8 @@ interface SpeedtestTabProps {
   isRunning: boolean;
   onRun: (target: string, protocol: 'tcp' | 'udp', duration: number, bandwidth: string, source?: string) => void;
   lastResult: SpeedtestData | null;
+  /** Snapshot of the test while it runs; drives the gauge and chart in real time. */
+  live: LiveSpeedtest | null;
   /** Mirrors the chart's time axis for right-to-left reading. */
   isRtl: boolean;
   t: Translate;
@@ -40,7 +45,7 @@ const Metric: React.FC<{ label: string; value: React.ReactNode }> = ({ label, va
   </div>
 );
 
-export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({ peers, targetIp, onTargetChange, isRunning, onRun, lastResult, isRtl, t }) => {
+export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({ peers, targetIp, onTargetChange, isRunning, onRun, lastResult, live, isRtl, t }) => {
   const [protocol, setProtocol] = useState<'tcp' | 'udp'>('tcp');
   const [duration, setDuration] = useState<number>(5);
   const [bandwidth, setBandwidth] = useState<string>('50M');
@@ -67,7 +72,6 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({ peers, targetIp, onT
   }, [peers, sourceIp, targetIp, onTargetChange]);
 
   const sourcePeer = peers.find((p) => p.ipv4 === sourceIp);
-  const selectedPeer = peers.find((p) => p.ipv4 === targetIp);
 
   const handleSourceChange = (newSource: string) => {
     setSourceIp(newSource);
@@ -113,14 +117,55 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({ peers, targetIp, onT
   };
 
   const isRemoteRunner = sourcePeer && !sourcePeer.is_current;
-  const routeSource = lastResult?.source || sourceIp;
-  const routeTarget = lastResult?.target || targetIp;
+  const routeSource = (isRunning ? live?.params.source : lastResult?.source) || sourceIp;
+  const routeTarget = (isRunning ? live?.params.target : lastResult?.target) || targetIp;
   const nameOf = (ip: string) => peers.find((p) => p.ipv4 === ip)?.hostname || ip;
-  const speed = lastResult ? lastResult.summary.sent_mbps || lastResult.summary.received_mbps || lastResult.summary.mbps || '0.00' : null;
-  const resultProto = lastResult?.summary.jitter_ms !== undefined ? 'udp' : protocol;
-  const intervals = lastResult?.intervals || [];
   const num = (v: string | number) => localizeDigits(v, t);
   const percent = (v: string | number) => t('percent').replace('{n}', num(v));
+
+  // While running, everything is derived from the live samples; afterwards from the final result.
+  const liveSamples = (isRunning && live?.samples) || [];
+  const intervals = isRunning ? liveSamples : lastResult?.intervals || [];
+  const summary = lastResult?.summary;
+  const finalSpeed = summary ? Number(summary.sent_mbps || summary.received_mbps || summary.mbps || 0) : 0;
+  const liveSpeed = liveSamples.length ? liveSamples[liveSamples.length - 1].mbps : 0;
+  const speed = isRunning ? liveSpeed : finalSpeed;
+  const peak = Math.max(speed, ...intervals.map((i) => i.mbps));
+  const average = intervals.length ? intervals.reduce((sum, i) => sum + i.mbps, 0) / intervals.length : 0;
+  const phase: GaugePhase = isRunning
+    ? liveSamples.length || live?.phase === 'running'
+      ? 'running'
+      : 'connecting'
+    : lastResult
+      ? 'done'
+      : 'idle';
+  const resultProto = (isRunning ? live?.params.protocol : summary?.jitter_ms !== undefined ? 'udp' : lastResult ? 'tcp' : undefined) || protocol;
+  const testDuration = (isRunning ? live?.params.duration : lastResult?.duration) || duration;
+  const secondsDone = isRunning ? liveSamples[liveSamples.length - 1]?.end ?? 0 : lastResult ? testDuration : 0;
+  const progress = Math.min(1, secondsDone / testDuration);
+  const liveBytes = liveSamples.reduce((sum, i) => sum + (i.bytes || 0), 0);
+  const liveRetransmits = liveSamples.reduce((sum, i) => sum + (i.retransmits || 0), 0);
+  const shownSpeed = useAnimatedNumber(speed, { tau: 380 });
+  const speedDecimals = shownSpeed >= 1000 ? 0 : shownSpeed >= 100 ? 1 : 2;
+  const mbpsText = (v: number) => `${formatNumber(v, t, v >= 1000 ? 0 : 1)} Mbps`;
+
+  const transferred = isRunning
+    ? liveSamples.length
+      ? num(formatBytes(liveBytes))
+      : '—'
+    : summary
+      ? num(formatBytes(summary.total_bytes_received || summary.total_bytes_sent || summary.total_bytes))
+      : '—';
+  const pending = isRunning ? '…' : '—';
+  const jitter = summary?.jitter_ms !== undefined ? `${num(summary.jitter_ms)} ms` : summary ? t('speed_na') : pending;
+  const loss = summary?.loss_percent !== undefined ? percent(summary.loss_percent) : summary ? percent(0) : pending;
+  const retransmits = isRunning
+    ? resultProto === 'tcp' && liveSamples.length
+      ? formatCount(liveRetransmits, t)
+      : pending
+    : summary
+      ? formatCount(Number(summary.retransmits ?? summary.lost_packets ?? 0), t)
+      : '—';
 
   const presets: { id: Preset; icon: React.ReactNode; title: string; sub: string }[] = [
     { id: 'quick', icon: <Rocket className="w-4 h-4" />, title: t('speed_profile_quick'), sub: t('speed_profile_quick_sub') },
@@ -270,19 +315,15 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({ peers, targetIp, onT
       </section>
 
       {/* Result */}
-      <section aria-label={t('speed_result_label')} aria-live="polite" className={`${cardClass} lg:col-span-7 relative overflow-hidden flex flex-col p-4 sm:p-6 min-h-[22rem]`}>
+      <section aria-label={t('speed_result_label')} className={`${cardClass} lg:col-span-7 relative overflow-hidden flex flex-col p-4 sm:p-6 min-h-[22rem]`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           {routeSource && routeTarget ? (
-            <span className="inline-flex items-center gap-2 min-w-0 max-w-full h-8 px-3 rounded-full bg-surface border border-card-border text-sm">
-              <bdi className="font-medium text-text-primary truncate">{nameOf(routeSource)}</bdi>
-              <ArrowRight className="w-3.5 h-3.5 text-primary shrink-0 rtl:-scale-x-100" aria-hidden="true" />
-              <bdi className="font-medium text-text-primary truncate">{nameOf(routeTarget)}</bdi>
-            </span>
+            <FlowRoute from={nameOf(routeSource)} to={nameOf(routeTarget)} active={phase === 'running'} mbps={speed} />
           ) : (
             <span />
           )}
           <div className="flex items-center gap-1.5">
-            {isRemoteRunner && <Pill tone="info">{t('ping_remote_runner')}</Pill>}
+            {isRemoteRunner && <Pill tone="info" title={formatText(t('speed_remote_runner'), { ip: sourceIp })}>{t('ping_remote_runner')}</Pill>}
             <Pill tone="success" icon={<ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />} title={t('speed_isolation_badge')}>
               <span className="hidden sm:inline">{t('speed_isolation_short')}</span>
               <span className="sm:hidden">iperf3</span>
@@ -290,33 +331,61 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({ peers, targetIp, onT
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col items-center justify-center text-center py-8">
-          <p className="text-xs font-medium text-text-muted">{t(resultProto === 'udp' ? 'speed_unit_udp' : 'speed_unit_tcp')}</p>
-          <p className={`mt-1 font-mono text-5xl sm:text-6xl font-bold tabular-nums ${speed ? 'text-primary' : 'text-text-subtle'}`}>
-            {num(speed ?? '0.00')}
-            <span className="ms-2 text-lg sm:text-xl font-semibold text-text-muted">Mbps</span>
-          </p>
-          {!lastResult && !isRunning && <p className="mt-3 max-w-xs text-sm text-text-muted">{t('speed_idle_hint')}</p>}
+        <div className="flex-1 flex flex-col items-center justify-center pt-6 pb-4">
+          <SpeedGauge value={speed} peak={peak} phase={phase} formatTick={num}>
+            <p className="text-xs font-medium text-text-muted">{t(resultProto === 'udp' ? 'speed_unit_udp' : 'speed_unit_tcp')}</p>
+            <p className={`font-mono text-4xl sm:text-5xl font-bold tabular-nums leading-tight ${phase === 'idle' ? 'text-text-subtle' : 'text-primary'}`}>
+              {formatNumber(shownSpeed, t, speedDecimals)}
+              <span className="ms-1.5 text-base sm:text-lg font-semibold text-text-muted">Mbps</span>
+            </p>
+          </SpeedGauge>
+
+          <div className="mt-3 w-full max-w-[16rem] flex flex-col items-center gap-2">
+            <p role="status" className="inline-flex items-center gap-2 h-6 text-sm font-medium">
+              {phase === 'connecting' && (
+                <>
+                  <span className="text-text-muted">{t('speed_phase_connecting')}</span>
+                  <LoadingDots className="text-primary" />
+                </>
+              )}
+              {phase === 'running' && (
+                <>
+                  <StatusDot tone="primary" pulse />
+                  <span className="text-primary">{t('speed_phase_running')}</span>
+                </>
+              )}
+              {phase === 'done' && (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-success" aria-hidden="true" />
+                  <span className="text-text-primary">{t('speed_phase_done')}</span>
+                </>
+              )}
+            </p>
+            {phase !== 'idle' ? (
+              <>
+                <div className="w-full h-1.5 rounded-full bg-surface border border-card-border overflow-hidden" aria-hidden="true">
+                  <div
+                    className="h-full rounded-full bg-primary transition-[width] duration-500 ease-linear"
+                    style={{ width: `${progress * 100}%` }}
+                  />
+                </div>
+                <p className="text-2xs text-text-muted tabular-nums">
+                  {formatText(t('speed_progress'), { s: formatCount(Math.round(secondsDone), t), total: formatCount(testDuration, t) })}
+                </p>
+              </>
+            ) : (
+              <p className="max-w-xs text-center text-sm text-text-muted">{t('speed_idle_hint')}</p>
+            )}
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          <Metric
-            label={t('speed_metric_transferred')}
-            value={
-              lastResult
-                ? num(formatBytes(lastResult.summary.total_bytes_received || lastResult.summary.total_bytes_sent || lastResult.summary.total_bytes))
-                : '—'
-            }
-          />
-          <Metric
-            label={t('speed_metric_jitter')}
-            value={lastResult?.summary.jitter_ms !== undefined ? `${num(lastResult.summary.jitter_ms)} ms` : lastResult ? t('speed_na') : '—'}
-          />
-          <Metric
-            label={t('speed_metric_loss')}
-            value={lastResult?.summary.loss_percent !== undefined ? percent(lastResult.summary.loss_percent) : lastResult ? percent(0) : '—'}
-          />
-          <Metric label={t('speed_metric_retrans')} value={lastResult ? formatCount(Number(lastResult.summary.retransmits ?? lastResult.summary.lost_packets ?? 0), t) : '—'} />
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+          <Metric label={t('speed_metric_transferred')} value={transferred} />
+          <Metric label={t('speed_metric_peak')} value={intervals.length ? mbpsText(peak) : phase === 'idle' ? '—' : pending} />
+          <Metric label={t('speed_metric_avg')} value={intervals.length ? mbpsText(average) : phase === 'idle' ? '—' : pending} />
+          <Metric label={t('speed_metric_jitter')} value={jitter} />
+          <Metric label={t('speed_metric_loss')} value={loss} />
+          <Metric label={t('speed_metric_retrans')} value={retransmits} />
         </div>
 
         {intervals.length > 0 && (
@@ -337,6 +406,10 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({ peers, targetIp, onT
                   <CartesianGrid vertical={false} stroke="var(--border-subtle)" strokeDasharray="3 3" />
                   <XAxis
                     dataKey="interval"
+                    type="number"
+                    // A fixed time axis lets the curve grow across the chart as seconds arrive.
+                    domain={[0, Math.max(1, testDuration - 1)]}
+                    allowDecimals={false}
                     reversed={isRtl}
                     tick={{ fill: 'var(--text-subtle)', fontSize: 10 }}
                     tickFormatter={(v) => num(v)}
@@ -366,17 +439,18 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({ peers, targetIp, onT
                     formatter={(val: any) => [`${num(val)} Mbps`, t('speed_chart_series')]}
                     labelFormatter={(label: any) => formatText(t('speed_chart_time'), { s: num(label) })}
                   />
-                  <Area type="monotone" dataKey="mbps" stroke="rgb(var(--primary-rgb))" strokeWidth={2} fill="url(#speedGradient)" />
+                  <Area
+                    type="monotone"
+                    dataKey="mbps"
+                    stroke="rgb(var(--primary-rgb))"
+                    strokeWidth={2}
+                    fill="url(#speedGradient)"
+                    dot={isRunning ? { r: 2.5, fill: 'rgb(var(--primary-rgb))', strokeWidth: 0 } : false}
+                    isAnimationActive={!isRunning}
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          </div>
-        )}
-
-        {isRunning && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 p-6 text-center bg-card animate-fade-in">
-            <LoadingSpinner size="lg" label={t('speed_running')} sublabel={fillTemplate(t('route_from_to'), { from: <bdi>{sourcePeer?.hostname || sourceIp}</bdi>, to: <bdi>{selectedPeer?.hostname || targetIp}</bdi> })} />
-            {isRemoteRunner && <Pill tone="info">{formatText(t('speed_remote_runner'), { ip: sourceIp })}</Pill>}
           </div>
         )}
       </section>

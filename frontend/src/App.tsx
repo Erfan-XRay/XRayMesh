@@ -4,6 +4,8 @@ import {
   Peer,
   SpeedtestData,
   PingResult,
+  LivePing,
+  LiveSpeedtest,
   ToastItem,
   HaproxyTunnel,
   IptablesTunnel,
@@ -99,11 +101,13 @@ export default function App() {
   const [speedTarget, setSpeedTarget] = useState('');
   const [isSpeedtesting, setIsSpeedtesting] = useState(false);
   const [speedResult, setSpeedResult] = useState<SpeedtestData | null>(null);
+  const [speedLive, setSpeedLive] = useState<LiveSpeedtest | null>(null);
 
   // Ping state
   const [pingTarget, setPingTarget] = useState('');
   const [isPinging, setIsPinging] = useState(false);
   const [pingResult, setPingResult] = useState<PingResult | null>(null);
+  const [pingLive, setPingLive] = useState<LivePing | null>(null);
 
   // Tunnel modal state
   const [tunnelModalOpen, setTunnelModalOpen] = useState(false);
@@ -367,8 +371,10 @@ export default function App() {
     ) => {
       setIsSpeedtesting(true);
       setSpeedResult(null);
+      setSpeedLive(null);
       try {
-        const data = await api.runSpeedtest(target, protocol, duration, bandwidth, source);
+        const id = await api.startSpeedtest(target, protocol, duration, bandwidth, source);
+        const data = await api.followLiveTest(id, setSpeedLive, 500);
         setSpeedResult(data);
         const mbps =
           data.summary?.sent_mbps || data.summary?.received_mbps || data.summary?.mbps || '?';
@@ -387,8 +393,10 @@ export default function App() {
     async (target: string, count: number, source?: string) => {
       setIsPinging(true);
       setPingResult(null);
+      setPingLive(null);
       try {
-        const data = await api.runPing(target, count, source);
+        const id = await api.startPing(target, count, source);
+        const data = await api.followLiveTest(id, setPingLive, 300);
         setPingResult(data);
         addToast(formatText(t('toast_ping_done'), { avg: localizeDigits(data.avg_ms, t) }), 'success');
       } catch (e: any) {
@@ -704,6 +712,7 @@ export default function App() {
                   isRunning={isSpeedtesting}
                   onRun={handleRunSpeedtest}
                   lastResult={speedResult}
+                  live={speedLive}
                   isRtl={isRtl}
                   t={t}
                 />
@@ -716,6 +725,7 @@ export default function App() {
                   isRunning={isPinging}
                   onRun={handleRunPing}
                   lastResult={pingResult}
+                  live={pingLive}
                   t={t}
                 />
               )}

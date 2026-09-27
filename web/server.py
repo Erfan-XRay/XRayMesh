@@ -1976,129 +1976,514 @@ def proxy_tunnel_if_remote(handler, data, tunnel_type, action):
     return False
 
 
-def execute_iperf_benchmark(target, protocol="tcp", duration=5, bandwidth="50M", port=5201, source_ip=None):
-    if not re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", target):
+IPV4_RE = re.compile(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
+IPERF_BANDWIDTH_RE = re.compile(r"^\d+(?:\.\d+)?[KMG]?$")
+# One iperf3 report row, e.g. "[  5]   1.00-2.00   sec  2.23 GBytes  19133 Mbits/sec    0   1023 KBytes".
+IPERF_LINE_RE = re.compile(
+    r"^\[\s*\d+\]\s+([\d.]+)-([\d.]+)\s+sec\s+([\d.]+)\s+([KMGT]?)Bytes\s+([\d.]+)\s+([KMGT]?)bits/sec\s*(.*)$"
+)
+IPERF_UDP_TOTALS_RE = re.compile(r"([\d.]+)\s*ms\s+(\d+)/(\d+)\s*\(([^)%]*)%\)")
+IPERF_BYTE_UNITS = {"": 1, "K": 1024, "M": 1024 ** 2, "G": 1024 ** 3, "T": 1024 ** 4}
+IPERF_BIT_UNITS = {"": 1, "K": 1e3, "M": 1e6, "G": 1e9, "T": 1e12}
+PING_REPLY_RE = re.compile(r"(?:icmp_)?seq=(\d+)\s+ttl=(\d+)\s+time[=<]\s*([\d.]+)\s*ms")
+PING_TIMEOUT_RE = re.compile(r"no answer yet for icmp_seq=(\d+)")
+PING_ERROR_RE = re.compile(r"^From\s+\S+.*?icmp_seq=(\d+)\s+(.+)$")
+_IPERF_FORCEFLUSH = None
+_PING_IPUTILS = None
+
+
+def iperf_supports_forceflush():
+    """iperf3 buffers its reports on a pipe unless --forceflush (3.1.5+) is available."""
+    global _IPERF_FORCEFLUSH
+    if _IPERF_FORCEFLUSH is None:
+        try:
+            res = subprocess.run(["iperf3", "--help"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=5)
+            _IPERF_FORCEFLUSH = "--forceflush" in res.stdout
+        except Exception:
+            _IPERF_FORCEFLUSH = False
+    return _IPERF_FORCEFLUSH
+
+
+def ping_is_iputils():
+    """iputils ping reports unanswered probes live with -O; BusyBox ping has no such flag."""
+    global _PING_IPUTILS
+    if _PING_IPUTILS is None:
+        try:
+            res = subprocess.run(["ping", "-V"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=5)
+            _PING_IPUTILS = "iputils" in res.stdout
+        except Exception:
+            _PING_IPUTILS = False
+    return _PING_IPUTILS
+
+
+def run_streaming_command(cmd, timeout, on_line):
+    """Run cmd, handing every output line to on_line as it is printed.
+    Returns (returncode, full_output, timed_out)."""
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    timed_out = threading.Event()
+
+    def kill():
+        timed_out.set()
+        proc.kill()
+
+    timer = threading.Timer(timeout, kill)
+    timer.daemon = True
+    timer.start()
+    lines = []
+    try:
+        for line in proc.stdout:
+            lines.append(line)
+            try:
+                on_line(line)
+            except Exception:
+                pass
+        proc.wait()
+    finally:
+        timer.cancel()
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+    return proc.returncode, "".join(lines), timed_out.is_set()
+
+
+def parse_iperf_line(line):
+    """Parse one iperf3 text report row (per-second interval or final sender/receiver total)."""
+    m = IPERF_LINE_RE.match(line.strip())
+    if not m:
+        return None
+    rest = m.group(7).strip()
+    role = None
+    for suffix in ("sender", "receiver"):
+        if rest.endswith(suffix):
+            role = suffix
+            rest = rest[: -len(suffix)].strip()
+            break
+    row = {
+        "start": float(m.group(1)),
+        "end": float(m.group(2)),
+        "bytes": int(float(m.group(3)) * IPERF_BYTE_UNITS[m.group(4)]),
+        "mbps": round(float(m.group(5)) * IPERF_BIT_UNITS[m.group(6)] / 1e6, 2),
+        "role": role,
+    }
+    udp = IPERF_UDP_TOTALS_RE.search(rest)
+    if udp:
+        row["jitter_ms"] = float(udp.group(1))
+        row["lost_packets"] = int(udp.group(2))
+        row["total_packets"] = int(udp.group(3))
+        try:
+            row["loss_percent"] = float(udp.group(4))
+        except ValueError:
+            row["loss_percent"] = round(100.0 * row["lost_packets"] / row["total_packets"], 2) if row["total_packets"] else 0.0
+    else:
+        first = rest.split()[0] if rest.split() else ""
+        if first.isdigit():
+            # Retransmits on TCP rows, datagrams sent on UDP interval rows.
+            row["count"] = int(first)
+    return row
+
+
+def execute_iperf_benchmark(target, protocol="tcp", duration=5, bandwidth="50M", port=5201, source_ip=None, on_progress=None):
+    """Run an iperf3 client. on_progress(event, data) is called with ("connected", None) once the
+    control connection is up and ("interval", row) for every per-second report."""
+    if not IPV4_RE.match(target):
         return False, "Invalid target IP", 400
 
     if protocol not in ("tcp", "udp"):
         protocol = "tcp"
+    if not IPERF_BANDWIDTH_RE.match(bandwidth or ""):
+        bandwidth = "50M"
 
-    # Check iperf3 command available
-    try:
-        subprocess.run(["iperf3", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-    except Exception:
+    if not shutil.which("iperf3"):
         return False, "iperf3 is not installed on this server. Run sudo ./xraymesh.sh web to install.", 500
 
-    cmd = ["iperf3", "-c", target, "-p", str(port), "-t", str(duration), "-J"]
+    cmd = ["iperf3", "-c", target, "-p", str(port), "-t", str(duration), "-f", "m"]
+    if iperf_supports_forceflush():
+        cmd.append("--forceflush")
     if protocol == "udp":
         cmd.extend(["-u", "-b", bandwidth])
 
+    intervals = []
+    totals = {}
+
+    def on_line(line):
+        if " connected to " in line and on_progress:
+            on_progress("connected", None)
+            return
+        row = parse_iperf_line(line)
+        if not row:
+            return
+        if row["role"]:
+            totals[row["role"]] = row
+            return
+        sample = {
+            "start": row["start"],
+            "end": row["end"],
+            "interval": row["start"],
+            "mbps": row["mbps"],
+            "bytes": row["bytes"],
+        }
+        if protocol == "tcp" and "count" in row:
+            sample["retransmits"] = row["count"]
+        intervals.append(sample)
+        if on_progress:
+            on_progress("interval", sample)
+
     try:
         # Add 8s grace period to timeout
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=duration + 8)
-        raw_json = res.stdout.strip()
-        if not raw_json:
-            err_msg = res.stderr.strip() or "No output from iperf3 test"
-            return False, err_msg, 500
-
-        parsed_res = json.loads(raw_json)
-
-        if "error" in parsed_res:
-            return False, parsed_res["error"], 500
-
-        benchmark = {
-            "source": source_ip or "local",
-            "target": target,
-            "protocol": protocol,
-            "duration": duration,
-            "error": None,
-            "intervals": [],
-            "summary": {}
-        }
-
-        end_data = parsed_res.get("end", {})
-        if protocol == "tcp":
-            sum_sent = end_data.get("sum_sent", {})
-            sum_received = end_data.get("sum_received", {})
-            benchmark["summary"] = {
-                "sent_mbps": round(sum_sent.get("bits_per_second", 0) / 1e6, 2),
-                "received_mbps": round(sum_received.get("bits_per_second", 0) / 1e6, 2),
-                "total_bytes_sent": sum_sent.get("bytes", 0),
-                "total_bytes_received": sum_received.get("bytes", 0),
-                "retransmits": sum_sent.get("retransmits", 0)
-            }
-        else:
-            sum_udp = end_data.get("sum", {})
-            benchmark["summary"] = {
-                "mbps": round(sum_udp.get("bits_per_second", 0) / 1e6, 2),
-                "total_bytes": sum_udp.get("bytes", 0),
-                "jitter_ms": round(sum_udp.get("jitter_ms", 0), 3),
-                "lost_packets": sum_udp.get("lost_packets", 0),
-                "total_packets": sum_udp.get("packets", 0),
-                "loss_percent": round(sum_udp.get("lost_percent", 0), 2)
-            }
-
-        # Add interval data for charting
-        for interval in parsed_res.get("intervals", []):
-            sum_int = interval.get("sum", {})
-            benchmark["intervals"].append({
-                "start": sum_int.get("start", 0),
-                "end": sum_int.get("end", 0),
-                "interval": sum_int.get("start", 0),
-                "mbps": round(sum_int.get("bits_per_second", 0) / 1e6, 2)
-            })
-
-        return True, benchmark, 200
-    except subprocess.TimeoutExpired:
-        return False, "iperf3 test timed out. Ensure the target node is running an iperf3 server on port 5201.", 504
+        code, output, timed_out = run_streaming_command(cmd, duration + 8, on_line)
     except Exception as e:
         return False, str(e), 500
 
+    if timed_out:
+        return False, "iperf3 test timed out. Ensure the target node is running an iperf3 server on port 5201.", 504
 
-def execute_ping_benchmark(target, count=4, source_ip=None):
-    if not re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", target):
+    err = re.search(r"iperf3:\s*error\s*-\s*(.+)", output)
+    if err:
+        return False, err.group(1).strip(), 500
+    if code != 0 or not totals:
+        return False, output.strip().splitlines()[-1] if output.strip() else "No output from iperf3 test", 500
+
+    sender = totals.get("sender", {})
+    receiver = totals.get("receiver", {})
+    if protocol == "tcp":
+        summary = {
+            "sent_mbps": sender.get("mbps", 0),
+            "received_mbps": receiver.get("mbps", 0),
+            "total_bytes_sent": sender.get("bytes", 0),
+            "total_bytes_received": receiver.get("bytes", 0),
+            "retransmits": sender.get("count", 0),
+        }
+    else:
+        # The receiver row carries the server-measured jitter and loss.
+        udp = receiver or sender
+        summary = {
+            "mbps": udp.get("mbps", 0),
+            "total_bytes": udp.get("bytes", 0),
+            "jitter_ms": round(udp.get("jitter_ms", 0), 3),
+            "lost_packets": udp.get("lost_packets", 0),
+            "total_packets": udp.get("total_packets", 0),
+            "loss_percent": round(udp.get("loss_percent", 0), 2),
+        }
+
+    return True, {
+        "source": source_ip or "local",
+        "target": target,
+        "protocol": protocol,
+        "duration": duration,
+        "error": None,
+        "intervals": intervals,
+        "summary": summary,
+    }, 200
+
+
+def execute_ping_benchmark(target, count=4, source_ip=None, on_progress=None):
+    """Ping target. on_progress(event, data) is called with ("reply", sample) for every answered,
+    unanswered or rejected probe as ping reports it."""
+    if not IPV4_RE.match(target):
         return False, "Invalid target IP", 400
 
     count = min(max(int(count), 1), 10)
+    cmd = ["ping", "-c", str(count), "-W", "2"]
+    if ping_is_iputils():
+        cmd.append("-O")
+    cmd.append(target)
+
+    replies = {}
+
+    def on_line(line):
+        sample = None
+        m = PING_REPLY_RE.search(line)
+        if m:
+            sample = {"seq": int(m.group(1)), "status": "ok", "ttl": int(m.group(2)), "time_ms": float(m.group(3))}
+        else:
+            m = PING_TIMEOUT_RE.search(line)
+            if m:
+                sample = {"seq": int(m.group(1)), "status": "timeout", "time_ms": None}
+            else:
+                m = PING_ERROR_RE.match(line.strip())
+                if m:
+                    sample = {"seq": int(m.group(1)), "status": "error", "time_ms": None, "message": m.group(2).strip()}
+        # A late reply may follow "no answer yet"; never let a duplicate overwrite it.
+        if not sample or replies.get(sample["seq"], {}).get("status") == "ok":
+            return
+        replies[sample["seq"]] = sample
+        if on_progress:
+            on_progress("reply", sample)
+
     try:
-        cmd = ["ping", "-c", str(count), "-W", "2", target]
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=count * 2 + 5)
-        output = res.stdout
-
-        stats = {
-            "source": source_ip or "local",
-            "target": target,
-            "count": count,
-            "raw": output,
-            "packets_sent": count,
-            "packets_received": 0,
-            "packet_loss_percent": 100.0,
-            "min_ms": 0.0,
-            "avg_ms": 0.0,
-            "max_ms": 0.0,
-            "mdev_ms": 0.0
-        }
-
-        loss_match = re.search(r"(\d+)% packet loss", output)
-        if loss_match:
-            stats["packet_loss_percent"] = float(loss_match.group(1))
-
-        rx_match = re.search(r"(\d+)\s+(?:packets\s+)?received", output)
-        if rx_match:
-            stats["packets_received"] = int(rx_match.group(1))
-
-        rtt_match = re.search(r"(?:rtt|round-trip)\s+min/avg/max/(?:mdev|stddev)\s*=\s*([0-9.]+)/([0-9.]+)/([0-9.]+)/([0-9.]+)", output)
-        if rtt_match:
-            stats["min_ms"] = float(rtt_match.group(1))
-            stats["avg_ms"] = float(rtt_match.group(2))
-            stats["max_ms"] = float(rtt_match.group(3))
-            stats["mdev_ms"] = float(rtt_match.group(4))
-
-        return True, stats, 200
-    except subprocess.TimeoutExpired:
-        return False, "Ping request timed out", 504
+        _, output, timed_out = run_streaming_command(cmd, count * 2 + 5, on_line)
     except Exception as e:
         return False, str(e), 500
+    if timed_out and not replies:
+        return False, "Ping request timed out", 504
+
+    stats = {
+        "source": source_ip or "local",
+        "target": target,
+        "count": count,
+        "raw": output,
+        "packets_sent": count,
+        "packets_received": 0,
+        "packet_loss_percent": 100.0,
+        "min_ms": 0.0,
+        "avg_ms": 0.0,
+        "max_ms": 0.0,
+        "mdev_ms": 0.0,
+        "replies": [],
+    }
+
+    loss_match = re.search(r"([\d.]+)% packet loss", output)
+    if loss_match:
+        stats["packet_loss_percent"] = float(loss_match.group(1))
+
+    rx_match = re.search(r"(\d+)\s+(?:packets\s+)?received", output)
+    if rx_match:
+        stats["packets_received"] = int(rx_match.group(1))
+
+    rtt_match = re.search(r"(?:rtt|round-trip)\s+min/avg/max/(?:mdev|stddev)\s*=\s*([0-9.]+)/([0-9.]+)/([0-9.]+)/([0-9.]+)", output)
+    if rtt_match:
+        stats["min_ms"] = float(rtt_match.group(1))
+        stats["avg_ms"] = float(rtt_match.group(2))
+        stats["max_ms"] = float(rtt_match.group(3))
+        stats["mdev_ms"] = float(rtt_match.group(4))
+
+    # BusyBox numbers probes from 0; iputils from 1. Anything never answered is lost.
+    first_seq = 0 if 0 in replies else 1
+    stats["replies"] = [
+        replies.get(seq, {"seq": seq, "status": "timeout", "time_ms": None})
+        for seq in range(first_seq, first_seq + count)
+    ]
+    return True, stats, 200
+
+
+# ─── Live benchmarks ─────────────────────────────────────────────────────────
+# A live test runs on a background thread; the browser polls its snapshot to
+# animate intervals and replies as they arrive. When another node runs the test,
+# this node mirrors that node's live job over signed cluster requests.
+
+LIVE_TESTS = {}
+LIVE_TESTS_LOCK = threading.Lock()
+LIVE_TEST_RETENTION_SEC = 300
+LIVE_TEST_MAX_RUNNING = 6
+LIVE_POLL_INTERVAL_SEC = 0.5
+
+
+def prune_live_tests():
+    now = time.time()
+    with LIVE_TESTS_LOCK:
+        for job_id in [
+            jid for jid, job in LIVE_TESTS.items()
+            if job["status"] != "running" and now - job["updated"] > LIVE_TEST_RETENTION_SEC
+        ]:
+            del LIVE_TESTS[job_id]
+
+
+def create_live_test(kind, params):
+    """Register a live test, or return None when too many are already running."""
+    prune_live_tests()
+    with LIVE_TESTS_LOCK:
+        running = sum(1 for job in LIVE_TESTS.values() if job["status"] == "running")
+        if running >= LIVE_TEST_MAX_RUNNING:
+            return None
+        now = time.time()
+        job = {
+            "id": uuid.uuid4().hex,
+            "kind": kind,
+            "status": "running",
+            "phase": "connecting",
+            "params": dict(params),
+            "samples": [],
+            "result": None,
+            "error": None,
+            "started": now,
+            "updated": now,
+        }
+        LIVE_TESTS[job["id"]] = job
+        return job
+
+
+def update_live_test(job, **fields):
+    with LIVE_TESTS_LOCK:
+        job.update(fields)
+        job["updated"] = time.time()
+
+
+def add_live_sample(job, sample):
+    with LIVE_TESTS_LOCK:
+        job["samples"].append(sample)
+        job["phase"] = "running"
+        job["updated"] = time.time()
+
+
+def finish_live_test(job, ok, res):
+    if ok:
+        update_live_test(job, status="done", phase="done", result=res)
+    else:
+        update_live_test(job, status="error", phase="done", error=str(res))
+
+
+def live_test_snapshot(job_id):
+    with LIVE_TESTS_LOCK:
+        job = LIVE_TESTS.get(job_id)
+        if not job:
+            return None
+        return {
+            "id": job["id"],
+            "kind": job["kind"],
+            "status": job["status"],
+            "phase": job["phase"],
+            "params": dict(job["params"]),
+            "samples": list(job["samples"]),
+            "result": job["result"],
+            "error": job["error"],
+            "elapsed": round(time.time() - job["started"], 2),
+        }
+
+
+def run_local_live_test(job, local_ip):
+    params = job["params"]
+
+    def on_progress(event, data):
+        if event == "connected":
+            update_live_test(job, phase="running")
+        else:
+            add_live_sample(job, data)
+
+    try:
+        if job["kind"] == "ping":
+            update_live_test(job, phase="running")
+            ok, res, _ = execute_ping_benchmark(params["target"], count=params["count"], source_ip=local_ip, on_progress=on_progress)
+        else:
+            ok, res, _ = execute_iperf_benchmark(
+                params["target"], params["protocol"], params["duration"], params["bandwidth"], params["port"],
+                source_ip=local_ip, on_progress=on_progress,
+            )
+    except Exception as e:
+        ok, res = False, str(e)
+    finish_live_test(job, ok, res)
+
+
+def run_remote_live_test(job, source, secret):
+    """Start the test on the source node and mirror its live job here. Nodes that predate live
+    tests answer the start request with 401/404; for those, fall back to the blocking endpoint."""
+    params = job["params"]
+    kind = job["kind"]
+    payload = {k: v for k, v in params.items() if k not in ("source",)}
+    peer_port = PEER_VERSION_CACHE.get(source, {}).get("port", PORT)
+    if kind == "ping":
+        legacy_endpoint, legacy_timeout = "/api/cluster/ping/run", params["count"] * 2 + 10
+        deadline = time.time() + params["count"] * 2 + 20
+    else:
+        legacy_endpoint, legacy_timeout = "/api/cluster/iperf/run", params["duration"] + 15
+        deadline = time.time() + params["duration"] + 30
+
+    def finish_with_source(ok, res):
+        if ok and isinstance(res, dict):
+            res["source"] = source
+            res["target"] = params["target"]
+        finish_live_test(job, ok, res)
+
+    try:
+        ok, res, status = cluster_request(source, peer_port, f"/api/cluster/{kind}/start", secret, payload, timeout=8)
+        if not ok and status in (401, 404):
+            ok, res = send_cluster_http(source, peer_port, legacy_endpoint, secret, payload, timeout=legacy_timeout)
+            if ok and isinstance(res, dict) and res.get("ok"):
+                finish_with_source(True, res.get("data", {}))
+            else:
+                err = res.get("error") if isinstance(res, dict) else str(res)
+                finish_live_test(job, False, f"Remote node {source} error: {err}")
+            return
+        if not ok or not isinstance(res, dict) or not res.get("ok"):
+            err = res.get("error") if isinstance(res, dict) else str(res)
+            finish_live_test(job, False, f"Remote node {source} error: {err}")
+            return
+
+        remote_id = res.get("job_id", "")
+        failures = 0
+        while time.time() < deadline:
+            time.sleep(LIVE_POLL_INTERVAL_SEC)
+            ok, res, _ = cluster_request(source, peer_port, "/api/cluster/live/status", secret, {"job_id": remote_id}, timeout=5)
+            remote = res.get("job") if ok and isinstance(res, dict) and res.get("ok") else None
+            if not isinstance(remote, dict):
+                failures += 1
+                if failures >= 6:
+                    err = res.get("error") if isinstance(res, dict) else str(res)
+                    finish_live_test(job, False, f"Remote node {source} error: {err}")
+                    return
+                continue
+            failures = 0
+            update_live_test(job, phase=remote.get("phase", "running"), samples=list(remote.get("samples") or []))
+            if remote.get("status") == "done":
+                finish_with_source(True, remote.get("result") or {})
+                return
+            if remote.get("status") == "error":
+                finish_live_test(job, False, f"Remote node {source} error: {remote.get('error')}")
+                return
+        finish_live_test(job, False, f"Remote node {source} did not finish the test in time")
+    except Exception as e:
+        finish_live_test(job, False, f"Remote node {source} error: {e}")
+
+
+def start_live_test(kind, params, local_ip, secret=""):
+    """Create and start a live test. Returns (job, error_message, http_status)."""
+    job = create_live_test(kind, params)
+    if not job:
+        return None, "Too many tests are running. Wait for one to finish and try again.", 429
+    source = params.get("source", "")
+    if source and source not in ("local", "127.0.0.1", local_ip):
+        if not secret:
+            update_live_test(job, status="error", phase="done", error="Cluster secret not configured on this node")
+            return None, "Cluster secret not configured on this node", 500
+        target_fn, args = run_remote_live_test, (job, source, secret)
+    else:
+        target_fn, args = run_local_live_test, (job, local_ip)
+    threading.Thread(target=target_fn, args=args, daemon=True).start()
+    return job, "", 200
+
+
+def parse_ping_request(data):
+    """Validate a ping request body. Returns (params, error)."""
+    target = str(data.get("target", "")).strip()
+    source = str(data.get("source", "")).strip()
+    try:
+        count = min(max(int(data.get("count", 4)), 1), 10)
+    except (TypeError, ValueError):
+        count = 4
+    if not IPV4_RE.match(target):
+        return None, "Invalid target IP"
+    if source and target == source:
+        return None, "Source and target cannot be the same node"
+    return {"target": target, "source": source, "count": count}, ""
+
+
+def parse_iperf_request(data):
+    """Validate a speed test request body. Returns (params, error)."""
+    target = str(data.get("target", "")).strip()
+    source = str(data.get("source", "")).strip()
+    protocol = str(data.get("protocol", "tcp")).lower()
+    bandwidth = str(data.get("bandwidth", "50M")).strip()
+    try:
+        duration = min(max(int(data.get("duration", 5)), 1), 30)
+    except (TypeError, ValueError):
+        duration = 5
+    try:
+        port = int(data.get("port", 5201))
+    except (TypeError, ValueError):
+        port = 5201
+    if not IPV4_RE.match(target):
+        return None, "Invalid target IP"
+    if source and target == source:
+        return None, "Source and target cannot be the same node"
+    if not 1 <= port <= 65535:
+        return None, "Invalid iperf3 port"
+    return {
+        "target": target,
+        "source": source,
+        "protocol": protocol if protocol in ("tcp", "udp") else "tcp",
+        "duration": duration,
+        "bandwidth": bandwidth if IPERF_BANDWIDTH_RE.match(bandwidth) else "50M",
+        "port": port,
+    }, ""
 
 
 class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
@@ -2485,6 +2870,14 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             })
             return
 
+        elif path == "/api/live/status":
+            snapshot = live_test_snapshot(query.get("id", ""))
+            if snapshot:
+                self.send_json({"ok": True, "job": snapshot})
+            else:
+                self.send_json({"ok": False, "error": "This test is no longer available."}, status=404)
+            return
+
         elif path == "/api/cluster/status":
             now = time.time()
             rem = max(0.0, ROLLBACK_EXPIRY - now) if ROLLBACK_EXPIRY > now else 0.0
@@ -2694,7 +3087,8 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             "/api/cluster/prepare", "/api/cluster/commit", "/api/cluster/confirm", "/api/cluster/rollback",
             "/api/cluster/tunnels", "/api/cluster/tunnel/create", "/api/cluster/tunnel/edit", "/api/cluster/tunnel/delete",
             "/api/cluster/node/update", "/api/cluster/node/update-status", "/api/cluster/node/channel",
-            "/api/cluster/interfaces", "/api/cluster/iperf/run", "/api/cluster/ping/run"
+            "/api/cluster/interfaces", "/api/cluster/iperf/run", "/api/cluster/ping/run",
+            "/api/cluster/iperf/start", "/api/cluster/ping/start", "/api/cluster/live/status"
         ):
             valid, err_msg = verify_cluster_hmac(self.headers, body)
             if not valid:
@@ -2917,6 +3311,30 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                     self.send_json({"ok": False, "error": res}, status=status)
                 return
 
+            elif path in ("/api/cluster/ping/start", "/api/cluster/iperf/start"):
+                kind = "ping" if path == "/api/cluster/ping/start" else "iperf"
+                # The requesting node already chose this node as the runner.
+                data = dict(data, source="")
+                params, err = parse_ping_request(data) if kind == "ping" else parse_iperf_request(data)
+                if not params:
+                    self.send_json({"ok": False, "error": err}, status=400)
+                    return
+                local_ip = load_env_file(CONFIG_FILE).get("IPV4", "")
+                job, err, status = start_live_test(kind, params, local_ip)
+                if job:
+                    self.send_json({"ok": True, "job_id": job["id"]})
+                else:
+                    self.send_json({"ok": False, "error": err}, status=status)
+                return
+
+            elif path == "/api/cluster/live/status":
+                snapshot = live_test_snapshot(str(data.get("job_id", "")))
+                if snapshot:
+                    self.send_json({"ok": True, "job": snapshot})
+                else:
+                    self.send_json({"ok": False, "error": "Live test not found"}, status=410)
+                return
+
         # Authenticated Endpoints
         auth_ok, _ = is_authenticated(self.headers)
         if not auth_ok:
@@ -2929,6 +3347,22 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             if not os.path.isfile(CONFIG_FILE) or not node_cfg.get("IPV4"):
                 self.send_json({"ok": False, "error": "Mesh node is not configured yet. Please complete node setup first."}, status=400)
                 return
+
+        if path in ("/api/ping/start", "/api/iperf/start"):
+            kind = "ping" if path == "/api/ping/start" else "iperf"
+            params, err = parse_ping_request(data) if kind == "ping" else parse_iperf_request(data)
+            if not params:
+                self.send_json({"ok": False, "error": err}, status=400)
+                return
+            cfg = load_env_file(CONFIG_FILE)
+            job, err, status = start_live_test(
+                kind, params, cfg.get("IPV4", "").strip(), cfg.get("NETWORK_SECRET", "").strip()
+            )
+            if job:
+                self.send_json({"ok": True, "job_id": job["id"]})
+            else:
+                self.send_json({"ok": False, "error": err}, status=status)
+            return
 
         if path == "/api/ping":
             target = data.get("target", "").strip()

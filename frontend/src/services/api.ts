@@ -1,4 +1,4 @@
-import { StatusResponse, Peer, TunnelsData, TunnelNodeState, TunnelNodeResponse, PingResult, SpeedtestData, NodeConfig, MeshInviteData, JoinMeshResult, RollbackInfo, VersionInfo, UpdateSummary } from '../types';
+import { StatusResponse, Peer, TunnelsData, TunnelNodeState, TunnelNodeResponse, LiveTest, NodeConfig, MeshInviteData, JoinMeshResult, RollbackInfo, VersionInfo, UpdateSummary } from '../types';
 
 export async function fetchAuthStatus(): Promise<{ authenticated: boolean; password_configured: boolean }> {
   const res = await fetch('/api/auth/status');
@@ -126,36 +126,61 @@ export async function fetchInterfaces(node?: string, signal?: AbortSignal): Prom
   return interfaces;
 }
 
-export async function runPing(
-  target: string,
-  count: number,
-  source?: string
-): Promise<PingResult> {
-  const res = await fetch('/api/ping', {
+// Live tests: start one, then poll its snapshot until it finishes.
+async function startLiveTest(path: string, body: object, fallbackError: string): Promise<string> {
+  const res = await fetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target, count, source }),
+    body: JSON.stringify(body),
   });
   const d = await res.json();
-  if (!res.ok || !d.ok) throw new Error(d.error || 'Ping failed');
-  return d.data;
+  if (!res.ok || !d.ok || !d.job_id) throw new Error(d.error || fallbackError);
+  return d.job_id;
 }
 
-export async function runSpeedtest(
+export const startPing = (target: string, count: number, source?: string) =>
+  startLiveTest('/api/ping/start', { target, count, source }, 'Ping failed');
+
+export const startSpeedtest = (
   target: string,
   protocol: 'tcp' | 'udp',
   duration: number,
   bandwidth: string,
   source?: string
-): Promise<SpeedtestData> {
-  const res = await fetch('/api/iperf/run', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target, protocol, duration, bandwidth, source }),
-  });
-  const d = await res.json();
-  if (!res.ok || !d.ok) throw new Error(d.error || 'Speedtest failed');
-  return d.data;
+) => startLiveTest('/api/iperf/start', { target, protocol, duration, bandwidth, source }, 'Speedtest failed');
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Poll a live test, reporting every snapshot, and resolve with its final result.
+ * Brief network blips are retried; a test the server no longer knows ends the wait.
+ */
+export async function followLiveTest<S, R>(
+  id: string,
+  onUpdate: (test: LiveTest<S, R>) => void,
+  intervalMs = 400
+): Promise<R> {
+  let misses = 0;
+  for (;;) {
+    await sleep(intervalMs);
+    let test: LiveTest<S, R>;
+    try {
+      const res = await fetch(`/api/live/status?id=${encodeURIComponent(id)}`);
+      const d = await res.json();
+      if (!res.ok || !d.ok) {
+        if (res.status === 404 || res.status === 401) throw Object.assign(new Error(d.error || 'Test not found'), { fatal: true });
+        throw new Error(d.error || 'Status check failed');
+      }
+      test = d.job;
+    } catch (e: any) {
+      if (e?.fatal || ++misses >= 8) throw e;
+      continue;
+    }
+    misses = 0;
+    onUpdate(test);
+    if (test.status === 'done' && test.result) return test.result;
+    if (test.status === 'error') throw new Error(test.error || 'Test failed');
+  }
 }
 
 // Tunnel mutations

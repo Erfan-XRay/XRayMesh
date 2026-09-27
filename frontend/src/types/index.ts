@@ -170,6 +170,10 @@ export interface VersionInfo {
 export interface SpeedtestInterval {
   interval: number;
   mbps: number;
+  start?: number;
+  end?: number;
+  bytes?: number;
+  retransmits?: number;
 }
 
 export interface SpeedtestSummary {
@@ -194,15 +198,46 @@ export interface SpeedtestData {
   intervals: SpeedtestInterval[];
 }
 
+export interface PingReply {
+  seq: number;
+  status: 'ok' | 'timeout' | 'error';
+  time_ms: number | null;
+  ttl?: number;
+  message?: string;
+}
+
 export interface PingResult {
   source?: string;
   target?: string;
+  count?: number;
+  packets_received?: number;
   min_ms: number;
   avg_ms: number;
   max_ms: number;
+  mdev_ms?: number;
   packet_loss_percent: number;
   raw: string;
+  /** Per-probe replies; absent when an older node ran the ping. */
+  replies?: PingReply[];
 }
+
+/** A test running on the server; its samples grow while the browser polls it. */
+export interface LiveTest<Sample, Result> {
+  id: string;
+  kind: 'ping' | 'iperf';
+  status: 'running' | 'done' | 'error';
+  /** "connecting" until the first data arrives. */
+  phase: 'connecting' | 'running' | 'done';
+  params: { source?: string; target?: string; count?: number; protocol?: 'tcp' | 'udp'; duration?: number };
+  samples: Sample[];
+  result: Result | null;
+  error: string | null;
+  /** Seconds since the test started. */
+  elapsed: number;
+}
+
+export type LivePing = LiveTest<PingReply, PingResult>;
+export type LiveSpeedtest = LiveTest<SpeedtestInterval, SpeedtestData>;
 
 export type Language = 'en' | 'fa';
 
