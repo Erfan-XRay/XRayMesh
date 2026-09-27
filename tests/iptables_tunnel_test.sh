@@ -20,7 +20,8 @@ validate_iptables_interface any
 
 grep -Fq -- '--ctstate DNAT' "${ROOT_DIR}/xraymesh.sh"
 ! grep -Fq -- '--ctstatus DNAT' "${ROOT_DIR}/xraymesh.sh"
-grep -Fq 'iptables_tunnel_menu()' "${ROOT_DIR}/xraymesh.sh"
-grep -Fq 'iptables) require_root; require_linux; iptables_tunnel_menu' "${ROOT_DIR}/xraymesh.sh"
+grep -Fq 'iptables-create) shift; require_linux; create_iptables_tunnel_noninteractive' "${ROOT_DIR}/xraymesh.sh"
+grep -Fq 'iptables-edit) shift; require_linux; edit_iptables_tunnel_noninteractive' "${ROOT_DIR}/xraymesh.sh"
+grep -Fq 'iptables-delete) shift; require_linux; delete_iptables_tunnel_noninteractive' "${ROOT_DIR}/xraymesh.sh"
 
 printf 'iptables tunnel helper tests passed.\n'

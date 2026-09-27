@@ -20,12 +20,8 @@ declare -F validate_gost_ports >/dev/null
 declare -F save_gost_tunnel >/dev/null
 declare -F generate_gost_config >/dev/null
 declare -F apply_gost_config >/dev/null
-declare -F create_gost_tunnel >/dev/null
-declare -F list_gost_tunnels >/dev/null
-declare -F edit_gost_tunnel >/dev/null
-declare -F delete_gost_tunnel >/dev/null
-declare -F gost_tunnel_menu >/dev/null
 declare -F create_gost_tunnel_noninteractive >/dev/null
+declare -F edit_gost_tunnel_noninteractive >/dev/null
 declare -F delete_gost_tunnel_noninteractive >/dev/null
 
 # Test architecture asset mapping
@@ -80,8 +76,9 @@ validate_gost_ports "new_tunnel" "9000" "both" >/dev/null
 grep -Fq 'GOST_TUNNEL_DIR' "${ROOT_DIR}/web/server.py"
 grep -Fq '/api/tunnels/gost/create' "${ROOT_DIR}/web/server.py"
 grep -Fq '/api/tunnels/gost/delete' "${ROOT_DIR}/web/server.py"
-grep -Fq 'gostTunnelsContainer' "${ROOT_DIR}/web/static/index.html"
-grep -Fq 'modalGost' "${ROOT_DIR}/web/static/index.html"
-grep -Fq 'submitCreateGost' "${ROOT_DIR}/web/static/index.html"
+grep -Fq '/api/tunnels/gost/edit' "${ROOT_DIR}/web/server.py"
+grep -Fq '/api/tunnels/gost/create' "${ROOT_DIR}/web/static/index.html"
+grep -Fq '/api/tunnels/gost/edit' "${ROOT_DIR}/web/static/index.html"
+grep -Fq '/api/tunnels/gost/delete' "${ROOT_DIR}/web/static/index.html"
 
 printf 'GOST tunnel helper and configuration tests passed.\n'

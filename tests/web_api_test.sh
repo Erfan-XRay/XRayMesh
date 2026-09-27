@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=../xraymesh.sh
 source "${ROOT_DIR}/xraymesh.sh"
 
-[[ "$VERSION" == "1.8.0" ]]
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]
 [[ "$DEFAULT_WEB_PORT" == "11080" ]]
 [[ "$(get_web_port)" == "11080" ]]
 
@@ -18,7 +18,6 @@ declare -F get_server_ip >/dev/null
 declare -F generate_web_token >/dev/null
 declare -F set_web_password >/dev/null
 declare -F configure_web_port >/dev/null
-declare -F web_menu >/dev/null
 declare -F create_haproxy_tunnel_noninteractive >/dev/null
 declare -F edit_haproxy_tunnel_noninteractive >/dev/null
 declare -F delete_haproxy_tunnel_noninteractive >/dev/null
@@ -38,7 +37,7 @@ test -f "${ROOT_DIR}/systemd/xraymesh-iperf.service"
 
 grep -Fq 'xraymesh-web.service' "${ROOT_DIR}/xraymesh.sh"
 grep -Fq 'xraymesh-iperf.service' "${ROOT_DIR}/xraymesh.sh"
-grep -Fq 'web_menu' "${ROOT_DIR}/xraymesh.sh"
+grep -Fq 'web|link|token|login-link) require_root; require_linux; generate_web_token' "${ROOT_DIR}/xraymesh.sh"
 grep -Fq 'TimeoutStopSec=5' "${ROOT_DIR}/systemd/xraymesh-web.service"
 grep -Fq 'TimeoutStopSec=5' "${ROOT_DIR}/systemd/xraymesh-iperf.service"
 grep -Fq 'TimeoutStopSec=5' "${ROOT_DIR}/xraymesh.sh"
