@@ -139,7 +139,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       <AppBackdrop variant="hero" className="fixed inset-0" />
 
       {/* Preferences */}
-      <div className="fixed top-3 end-3 sm:top-4 sm:end-4 z-10 flex items-center gap-1 p-1 rounded-2xl bg-card border border-card-border shadow-card">
+      <div className="fixed top-[calc(0.75rem+env(safe-area-inset-top))] end-3 sm:top-[calc(1rem+env(safe-area-inset-top))] sm:end-4 z-10 flex items-center gap-1 p-1 rounded-2xl bg-card border border-card-border shadow-card">
         <button
           type="button"
           onClick={() => onSelectLang(lang === 'fa' ? 'en' : 'fa')}
@@ -154,7 +154,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         </button>
       </div>
 
-      <main className="relative min-h-full flex flex-col items-center justify-center px-4 py-16">
+      <main className="relative min-h-full flex flex-col items-center justify-center px-4 py-16 pt-[calc(4rem+env(safe-area-inset-top))]">
         <div className="w-full max-w-[26rem] animate-modal-in">
           {/* Brand */}
           <div className="flex flex-col items-center text-center mb-7">

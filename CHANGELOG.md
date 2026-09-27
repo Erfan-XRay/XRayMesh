@@ -2,6 +2,15 @@
 
 All notable XRayMesh changes are documented here.
 
+## [Unreleased]
+
+### Added
+- The dashboard can be installed as a web app: use "Add to Home Screen" (iOS Safari) or "Install app" (Android Chrome) and it opens full-screen with its own icon, without the browser's address bar. The server now serves a web app manifest and home-screen icons.
+
+### Fixed
+- On phones, tapping the sign-in field or any other input no longer zooms the page in. Text fields use a 16px font on touch screens, and double-tap zoom is turned off on controls (pinch zoom still works).
+- In the installed app on notched iPhones, the header, sign-in controls and side menu stay clear of the status bar.
+
 ## [3.0.0-beta.12] - 2026-09-27
 
 ### Added

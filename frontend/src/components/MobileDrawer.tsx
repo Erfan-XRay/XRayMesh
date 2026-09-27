@@ -63,7 +63,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
 
       <div
         ref={panelRef}
-        className="sheet-from-end absolute inset-y-0 end-0 flex flex-col w-[88vw] max-w-sm bg-elevated border-s border-card-border shadow-pop"
+        className="sheet-from-end absolute inset-y-0 end-0 flex flex-col w-[88vw] max-w-sm pt-[env(safe-area-inset-top)] bg-elevated border-s border-card-border shadow-pop"
       >
         <div className="flex items-center justify-between gap-3 px-4 h-14 border-b border-card-border shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">

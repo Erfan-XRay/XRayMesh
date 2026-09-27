@@ -31,6 +31,9 @@ import shutil
 import concurrent.futures
 import ipaddress
 import ssl
+import struct
+import zlib
+import functools
 from pathlib import Path
 
 # Paths & Defaults
@@ -2486,6 +2489,93 @@ def parse_iperf_request(data):
     }, ""
 
 
+# ─── Installable web app (PWA) ───────────────────────────────────────────
+# Only server.py and index.html ship to nodes, so the manifest and home-screen
+# icons are generated here instead of living as extra static files.
+
+APP_ICON_SIZES = (180, 192, 512)
+APP_BG_RGB = (0x14, 0x19, 0x20)
+APP_ACCENT_RGB = (0x2D, 0xD4, 0xBF)
+
+
+def web_app_manifest():
+    icons = [
+        {"src": f"icon-{size}.png", "sizes": f"{size}x{size}", "type": "image/png", "purpose": "any"}
+        for size in APP_ICON_SIZES if size != 180
+    ]
+    icons.append({"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"})
+    return {
+        "id": "/",
+        "name": "XRayMesh",
+        "short_name": "XRayMesh",
+        "description": "XRayMesh cluster dashboard",
+        "start_url": "/",
+        "scope": "/",
+        "display": "standalone",
+        "orientation": "any",
+        "background_color": "#0b0e13",
+        "theme_color": "#0b0e13",
+        "icons": icons,
+    }
+
+
+def _capsule_dist(px, py, ax, ay, bx, by, radius):
+    dx, dy = bx - ax, by - ay
+    t = ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)
+    t = 0.0 if t < 0 else 1.0 if t > 1 else t
+    return ((px - ax - t * dx) ** 2 + (py - ay - t * dy) ** 2) ** 0.5 - radius
+
+
+def _disc_dist(px, py, cx, cy, radius):
+    return ((px - cx) ** 2 + (py - cy) ** 2) ** 0.5 - radius
+
+
+@functools.lru_cache(maxsize=len(APP_ICON_SIZES))
+def render_app_icon(size):
+    """Rasterize the favicon mark as a full-bleed PNG; the OS applies its own corner mask."""
+    # Shapes in the favicon's 64-unit space, painted in order: (distance fn, color).
+    shapes = (
+        (lambda x, y: _capsule_dist(x, y, 20, 20, 44, 44, 2.5), APP_ACCENT_RGB),
+        (lambda x, y: _capsule_dist(x, y, 44, 20, 20, 44, 2.5), APP_ACCENT_RGB),
+        (lambda x, y: _disc_dist(x, y, 20, 20, 5), APP_ACCENT_RGB),
+        (lambda x, y: _disc_dist(x, y, 44, 20, 5), APP_ACCENT_RGB),
+        (lambda x, y: _disc_dist(x, y, 20, 44, 5), APP_ACCENT_RGB),
+        (lambda x, y: _disc_dist(x, y, 44, 44, 5), APP_ACCENT_RGB),
+        (lambda x, y: _disc_dist(x, y, 32, 32, 7.5), APP_ACCENT_RGB),
+        (lambda x, y: _disc_dist(x, y, 32, 32, 4.5), APP_BG_RGB),
+    )
+    unit = 64.0 / size
+    rows = []
+    for j in range(size):
+        y = (j + 0.5) * unit
+        row = bytearray(b"\x00")  # PNG filter type: none
+        for i in range(size):
+            x = (i + 0.5) * unit
+            r, g, b = APP_BG_RGB
+            if 13 <= x <= 51 and 13 <= y <= 51:
+                for dist, color in shapes:
+                    alpha = 0.5 - dist(x, y) / unit
+                    if alpha <= 0:
+                        continue
+                    alpha = min(alpha, 1.0)
+                    r += (color[0] - r) * alpha
+                    g += (color[1] - g) * alpha
+                    b += (color[2] - b) * alpha
+            row += bytes((int(r + 0.5), int(g + 0.5), int(b + 0.5)))
+        rows.append(bytes(row))
+
+    def chunk(tag, data):
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+
+    header = struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0)  # 8-bit RGB
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(b"".join(rows), 9))
+        + chunk(b"IEND", b"")
+    )
+
+
 class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
     """Custom HTTP handler with REST API and Single Page Application routing."""
 
@@ -2528,6 +2618,14 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
         except Exception as e:
             self.send_error(500, f"Error reading file: {e}")
 
+    def send_bytes(self, content, content_type, max_age=86400):
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(content)))
+        self.send_header("Cache-Control", f"public, max-age={max_age}")
+        self.end_headers()
+        self.wfile.write(content)
+
     def do_HEAD(self):
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -2559,6 +2657,19 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
         if path == "/" or path == "/index.html":
             index_path = os.path.join(STATIC_DIR, "index.html")
             self.serve_static(index_path, "text/html; charset=utf-8")
+            return
+
+        # Web app manifest and home-screen icons (public, like the page itself)
+        if path == "/manifest.webmanifest":
+            self.send_bytes(json.dumps(web_app_manifest()).encode("utf-8"), "application/manifest+json")
+            return
+        icon_match = re.fullmatch(r"/(?:icon-(\d+)|apple-touch-icon(?:-precomposed)?)\.png", path)
+        if icon_match:
+            size = int(icon_match.group(1) or 180)
+            if size in APP_ICON_SIZES:
+                self.send_bytes(render_app_icon(size), "image/png")
+            else:
+                self.send_error(404, "File not found")
             return
 
         # Auth status check

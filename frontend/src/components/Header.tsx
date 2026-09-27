@@ -150,7 +150,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="glass-bar sticky top-0 z-40 border-b border-card-border">
+    <header className="glass-bar sticky top-0 z-40 border-b border-card-border pt-[env(safe-area-inset-top)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between gap-3 h-14 md:h-16">
           {/* Brand and node identity */}
