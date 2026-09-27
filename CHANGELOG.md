@@ -2,6 +2,15 @@
 
 All notable XRayMesh changes are documented here.
 
+## [3.0.5] - 2026-09-27
+
+### Added
+- Terminal menu: a Tunnels section. "Tunnels overview" lists every saved HAProxy, iptables, GOST and Realm tunnel with its target, protocol, ports and service state, warns when a tunnel listens on the web panel's port, and can start the saved tunnels again. "Stop all tunnels" is an emergency stop for when a tunnel blocks the panel: it stops every tunnel, keeps them off after a reboot and keeps their settings. ICMP/PCK links keep running.
+- CLI: `xraymesh tunnels`, `xraymesh tunnels-stop` and `xraymesh tunnels-apply` do the same without the menu.
+
+### Changed
+- Terminal menu: Health check, Update and Uninstall are now options 17, 18 and 19.
+
 ## [3.0.4] - 2026-09-27
 
 ### Fixed

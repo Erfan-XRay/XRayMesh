@@ -36,6 +36,9 @@ jobs:
       - name: Test GOST tunnel helpers
         run: bash tests/gost_tunnel_test.sh
 
+      - name: Test tunnels overview and emergency stop
+        run: bash tests/tunnels_overview_test.sh
+
       - name: Test ICMP link helpers
         run: bash tests/icmp_link_test.sh
 

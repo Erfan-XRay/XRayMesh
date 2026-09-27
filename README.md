@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Erfan-XRay/XRayMesh/releases/tag/v3.0.4"><img src="https://img.shields.io/badge/version-3.0.4-2dd4bf.svg?style=flat-square" alt="Version 3.0.4" /></a>
+  <a href="https://github.com/Erfan-XRay/XRayMesh/releases/tag/v3.0.5"><img src="https://img.shields.io/badge/version-3.0.5-2dd4bf.svg?style=flat-square" alt="Version 3.0.5" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Source--Available-red.svg?style=flat-square" alt="Source-Available License" /></a>
   <img src="https://img.shields.io/badge/EasyTier-v2.6.4-cyan.svg?style=flat-square" alt="EasyTier core" />
   <img src="https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-orange.svg?style=flat-square" alt="Supported OS" />
@@ -167,6 +167,9 @@ All forwarding tunnels (HAProxy, Realm, GOST, iptables) and SafeSync cluster act
 | `xraymesh logs` | View live systemd logs for the mesh daemon |
 | `xraymesh link-list` | Show ICMP/PCK links (BackPack) and their packet counters |
 | `xraymesh link-delete` | Delete one ICMP/PCK link by name (e.g. `out-1234`) |
+| `xraymesh tunnels` | Show saved tunnels, their ports and service state, even when the panel is down |
+| `xraymesh tunnels-stop` | Stop all tunnels and keep them off after a reboot (saved tunnels are kept) |
+| `xraymesh tunnels-apply` | Start the saved tunnels again |
 | `xraymesh self-test` | Run diagnostic tests on local services and connectivity |
 | `xraymesh start` | Start or apply node configuration and start all services |
 | `xraymesh restart` | Restart all XRayMesh services |

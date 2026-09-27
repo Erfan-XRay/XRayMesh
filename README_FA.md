@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Erfan-XRay/XRayMesh/releases/tag/v3.0.4"><img src="https://img.shields.io/badge/version-3.0.4-2dd4bf.svg?style=flat-square" alt="Version 3.0.4" /></a>
+  <a href="https://github.com/Erfan-XRay/XRayMesh/releases/tag/v3.0.5"><img src="https://img.shields.io/badge/version-3.0.5-2dd4bf.svg?style=flat-square" alt="Version 3.0.5" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Source--Available-red.svg?style=flat-square" alt="Source-Available License" /></a>
   <img src="https://img.shields.io/badge/EasyTier-v2.6.4-cyan.svg?style=flat-square" alt="EasyTier core" />
   <img src="https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-orange.svg?style=flat-square" alt="Supported OS" />
@@ -166,6 +166,9 @@ xraymesh
 | `xraymesh logs` | مشاهده لاگ‌های زنده دیمن شبکه مش |
 | `xraymesh link-list` | نمایش لینک‌های ICMP/PCK (BackPack) و شمارندهٔ بسته‌هایشان |
 | `xraymesh link-delete` | حذف یک لینک ICMP/PCK با نام آن (مثلاً `out-1234`) |
+| `xraymesh tunnels` | نمایش تانل‌های ذخیره‌شده، پورت‌ها و وضعیت سرویسشان، حتی وقتی پنل در دسترس نیست |
+| `xraymesh tunnels-stop` | توقف همهٔ تانل‌ها، که بعد از ریبوت هم خاموش می‌مانند (تانل‌های ذخیره‌شده حذف نمی‌شوند) |
+| `xraymesh tunnels-apply` | راه‌اندازی دوبارهٔ تانل‌های ذخیره‌شده |
 | `xraymesh self-test` | اجرای تست‌های تشخیصی سلامت سرویس‌ها و اتصالات |
 | `xraymesh start` | راه‌اندازی یا اعمال تنظیمات نود و استارت تمام سرویس‌ها |
 | `xraymesh restart` | ریستارت کلیه سرویس‌های XRayMesh |

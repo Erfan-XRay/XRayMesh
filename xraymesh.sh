@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="3.0.4"
+readonly VERSION="3.0.5"
 readonly DEFAULT_BRANCH="main"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
@@ -61,6 +61,14 @@ readonly IPERF_SERVICE_FILE="/etc/systemd/system/xraymesh-iperf.service"
 readonly IPERF_RUNNER="${INSTALL_DIR}/xraymesh-iperf-runner"
 readonly WEB_TOKEN_FILE="/etc/xraymesh/web-tokens.json"
 readonly DEFAULT_WEB_PORT="11080"
+# One row per kind of port-forwarding tunnel: "kind|label|definitions dir|service unit".
+# apply_<kind>_config rebuilds and starts that kind from its saved definitions.
+readonly TUNNEL_KINDS=(
+  "haproxy|HAProxy|${HAPROXY_TUNNEL_DIR}|xraymesh-haproxy.service"
+  "iptables|iptables|${IPTABLES_TUNNEL_DIR}|xraymesh-iptables.service"
+  "gost|GOST|${GOST_TUNNEL_DIR}|xraymesh-gost.service"
+  "realm|Realm|${REALM_TUNNEL_DIR}|xraymesh-realm.service"
+)
 readonly LOG_TAG="xraymesh"
 readonly FALLBACK_EASYTIER_VERSION="v2.6.4"
 
@@ -1077,22 +1085,7 @@ setup_node() {
     return 1
   fi
   [[ -z "$config_backup" ]] || rm -f "$config_backup"
-  if compgen -G "${HAPROXY_TUNNEL_DIR}/*.env" >/dev/null; then
-    info "Re-enabling the existing HAProxy tunnels."
-    apply_haproxy_config || warn "The mesh is online, but HAProxy tunnels need attention."
-  fi
-  if compgen -G "${IPTABLES_TUNNEL_DIR}/*.env" >/dev/null; then
-    info "Re-enabling the existing iptables UDP/TCP tunnels."
-    apply_iptables_config || warn "The mesh is online, but iptables tunnels need attention."
-  fi
-  if compgen -G "${GOST_TUNNEL_DIR}/*.env" >/dev/null; then
-    info "Re-enabling the existing GOST TCP/UDP tunnels."
-    apply_gost_config || warn "The mesh is online, but GOST tunnels need attention."
-  fi
-  if compgen -G "${REALM_TUNNEL_DIR}/*.env" >/dev/null; then
-    info "Re-enabling the existing Realm TCP/UDP tunnels."
-    apply_realm_config || warn "The mesh is online, but Realm tunnels need attention."
-  fi
+  reapply_tunnels "The mesh is online, but "
   trap 'handle_interrupt' INT
 }
 
@@ -5204,6 +5197,149 @@ logs_screen() {
 }
 
 # ---------------------------------------------------------------------------
+# Tunnels without the web panel: an overview, re-apply and an emergency stop,
+# for when the panel is unreachable (for example a tunnel took the panel's port).
+# ---------------------------------------------------------------------------
+
+TUNNELS_SAVED=0     # saved tunnel definitions, counted by the last tunnels_overview
+
+# tunnel_fields <kind> <definition>: print "name<TAB>target<TAB>protocol<TAB>ports".
+tunnel_fields() {
+  (
+    unset TUNNEL_NAME TARGET_IP PORT_SPEC PROTOCOL FORWARD_PROTOCOL
+    # shellcheck disable=SC1090
+    source "$2" 2>/dev/null
+    case "$1" in
+      haproxy) proto="tcp" ;;
+      iptables) proto="${FORWARD_PROTOCOL:-udp}" ;;
+      *) proto="${PROTOCOL:-both}" ;;
+    esac
+    printf '%s\t%s\t%s\t%s\n' "${TUNNEL_NAME:-$(basename "$2" .env)}" "${TARGET_IP:-?}" "${proto,,}" "${PORT_SPEC:-?}"
+  )
+}
+
+# tunnels_overview: every saved tunnel under its service's state, with a warning for
+# any tunnel that listens on the web panel's TCP port.
+tunnels_overview() {
+  local entry kind label dir unit state def name target proto ports shown room web_port
+  local -a clashes=()
+  TUNNELS_SAVED=0
+  web_port="$(get_web_port)"
+  ui_term_size
+  room=$(( $(ui_width) - 43 ))
+  (( room < 8 )) && room=8
+
+  section "TUNNELS"
+  for entry in "${TUNNEL_KINDS[@]}"; do
+    IFS='|' read -r kind label dir unit <<< "$entry"
+    compgen -G "${dir}/*.env" >/dev/null || continue
+    state="$(systemctl is-active "$unit" 2>/dev/null || true)"
+    printf '\n'
+    ui_state_row "${state:-inactive}" "$label"
+    for def in "$dir"/*.env; do
+      [[ -f "$def" ]] || continue
+      IFS=$'\t' read -r name target proto ports < <(tunnel_fields "$kind" "$def")
+      TUNNELS_SAVED=$(( TUNNELS_SAVED + 1 ))
+      shown="$ports"
+      (( ${#shown} > room )) && shown="${shown:0:room-1}…"
+      printf '    %-16s %-15s %-5s %s\n' "$name" "$target" "$proto" "$shown"
+      if [[ "$proto" != "udp" ]] && expand_port_spec "$ports" 2>/dev/null | grep -qx "$web_port"; then
+        clashes+=("${label} tunnel '${name}'")
+      fi
+    done
+  done
+  if (( TUNNELS_SAVED == 0 )); then
+    info "No port-forwarding tunnels are saved on this server."
+    info "Create them in the web panel, under Tunnels."
+  fi
+
+  if compgen -G "${ICMP_LINK_DIR}/*.env" >/dev/null; then
+    section "ICMP / PCK LINKS"
+    list_icmp_links
+  fi
+
+  if (( ${#clashes[@]} )); then
+    printf '\n'
+    for entry in "${clashes[@]}"; do
+      warn "${entry} listens on TCP port ${web_port}, the web panel's port."
+    done
+    warn "Stop all tunnels, or move the panel to another port, to reach the panel again."
+  fi
+  return 0
+}
+
+# reapply_tunnels [warning prefix]: rebuild and start every kind of tunnel that has saved definitions.
+reapply_tunnels() {
+  local entry kind label dir unit rc=0
+  for entry in "${TUNNEL_KINDS[@]}"; do
+    IFS='|' read -r kind label dir unit <<< "$entry"
+    compgen -G "${dir}/*.env" >/dev/null || continue
+    info "Re-enabling the saved ${label} tunnels."
+    "apply_${kind}_config" || { warn "${1:-}${label} tunnels need attention."; rc=1; }
+  done
+  return "$rc"
+}
+
+# stop_all_tunnels: stop every port-forwarding tunnel and keep it off after a reboot.
+# The saved definitions stay, so reapply_tunnels brings them back.
+stop_all_tunnels() {
+  local entry kind label dir unit stopped=0
+  for entry in "${TUNNEL_KINDS[@]}"; do
+    IFS='|' read -r kind label dir unit <<< "$entry"
+    if [[ "$kind" == "iptables" ]]; then
+      # The rules live in the kernel, not in a process, so they are removed too.
+      [[ -f "/etc/systemd/system/${unit}" || -x "$IPTABLES_APPLY_SCRIPT" ]] || continue
+      disable_iptables_tunnels
+    else
+      [[ -f "/etc/systemd/system/${unit}" ]] || continue
+      systemctl disable --now "$unit" >/dev/null 2>&1 || true
+    fi
+    ok "${label} tunnels stopped."
+    stopped=1
+  done
+  (( stopped )) || info "No tunnel services are set up on this server."
+  return 0
+}
+
+tunnels_screen() {
+  header
+  tunnels_overview
+  (( TUNNELS_SAVED )) || return 0
+  printf '\n'
+  local pick=0
+  ui_choose pick 0 "Back to the menu" "Re-apply saved tunnels" || pick=0
+  if (( pick == 0 )); then
+    UI_PAUSED=1
+    return 0
+  fi
+  printf '\n'
+  info "Applying the saved tunnels. Ctrl+C is paused until this finishes."
+  trap '' INT
+  if reapply_tunnels; then
+    ok "The saved tunnels are running."
+  fi
+  trap 'handle_interrupt' INT
+  service_status_table
+}
+
+stop_tunnels_screen() {
+  header
+  section "STOP ALL TUNNELS"
+  warn "Every HAProxy, iptables, GOST and Realm tunnel stops, and stays off after a reboot."
+  info "The saved tunnels are kept. 'Tunnels overview' can start them again."
+  info "ICMP/PCK links carry the mesh itself and keep running."
+  printf '\n'
+  if ! ask_yes_no "Stop all tunnels?" no; then
+    info "Nothing was stopped."
+    return 0
+  fi
+  trap '' INT
+  stop_all_tunnels
+  trap 'handle_interrupt' INT
+  service_status_table
+}
+
+# ---------------------------------------------------------------------------
 # Main menu
 # Arrow keys (or j/k) move, Enter opens, digits jump to an item, q quits.
 # ---------------------------------------------------------------------------
@@ -5231,14 +5367,18 @@ MENU_ROWS=(
   "stop|13|Stop all services|Stop the mesh, the web panel and the tunnels. Asks first."
   "logs|14|Live logs|Follow the mesh, panel, tunnel or link logs. Ctrl+C comes back here."
   ""
+  "#TUNNELS"
+  "tunnels|15|Tunnels overview|Saved tunnels, their ports and state. Can start them again."
+  "tunoff|16|Stop all tunnels|Emergency stop, e.g. a tunnel took the panel's port. Asks first."
+  ""
   "#SYSTEM"
-  "doctor|15|Health check|Checks the binaries, config permissions and every service."
-  "update|16|Update XRayMesh|Verified download of the newest release, with automatic rollback."
-  "uninstall|17|Uninstall XRayMesh|Removes XRayMesh and everything it set up. Asks first."
+  "doctor|17|Health check|Checks the binaries, config permissions and every service."
+  "update|18|Update XRayMesh|Verified download of the newest release, with automatic rollback."
+  "uninstall|19|Uninstall XRayMesh|Removes XRayMesh and everything it set up. Asks first."
   "exit|0|Exit|Close the menu. Run 'xraymesh' to open it again."
 )
 # Items whose number is drawn in red.
-MENU_DANGER=" stop uninstall "
+MENU_DANGER=" stop tunoff uninstall "
 
 MENU_SEL=1          # index in MENU_ROWS of the highlighted item
 MENU_TOP=0          # first list row on screen when the list scrolls
@@ -5588,6 +5728,8 @@ menu() {
       diag) run_screen diagnostics ;;
       restart|start|stop) run_screen services_screen "$MENU_CHOICE" ;;
       logs) run_screen logs_screen ;;
+      tunnels) run_screen tunnels_screen ;;
+      tunoff) run_screen stop_tunnels_screen ;;
       doctor) run_screen self_test ;;
       update)
         run_screen update_core
@@ -5667,6 +5809,9 @@ main() {
   link-invite) shift; require_root; require_linux; ensure_icmp_listen_link "${1:-xdi}" ;;
   icmp-join|link-join) shift; require_root; require_linux; create_icmp_dial_link "$@" ;;
   icmp-list|icmp-links|link-list|links) require_linux; list_icmp_links ;;
+  tunnels|tunnel-list) require_linux; tunnels_overview ;;
+  tunnels-stop) require_root; require_linux; stop_all_tunnels ;;
+  tunnels-apply) require_root; require_linux; reapply_tunnels ;;
   icmp-delete|link-delete) shift; require_root; require_linux; delete_icmp_link "$@" ;;
   icmp-prune|link-prune) require_root; require_linux; prune_icmp_links ;;
   icmp-apply|link-apply) require_root; require_linux; apply_icmp_links ;;
@@ -5729,6 +5874,9 @@ main() {
     printf '  %-20s %s\n' "xraymesh routes" "Show mesh routing table"
     printf '  %-20s %s\n' "xraymesh link-list" "Show ICMP/PCK links (BackPack) and their packet counters"
     printf '  %-20s %s\n' "xraymesh link-delete" "Delete one ICMP/PCK link by name (e.g. out-1234)"
+    printf '  %-20s %s\n' "xraymesh tunnels" "Show saved tunnels, their ports and service state"
+    printf '  %-20s %s\n' "xraymesh tunnels-stop" "Stop all tunnels and keep them off after a reboot"
+    printf '  %-20s %s\n' "xraymesh tunnels-apply" "Start the saved tunnels again"
     printf '  %-20s %s\n' "xraymesh logs" "Stream live systemd service logs"
     printf '  %-20s %s\n' "xraymesh self-test" "Run installation and service health self-tests"
     printf '  %-20s %s\n' "xraymesh start" "Start or apply node and start all services"
@@ -5741,7 +5889,7 @@ main() {
     printf '\n'
     ;;
   *)
-    echo "Usage: $0 [menu|join|invite|token|password|port|ssl|remove-ssl|status|peers|routes|logs|self-test|start|restart|stop|update|delete|uninstall|version|help]"
+    echo "Usage: $0 [menu|join|invite|token|password|port|ssl|remove-ssl|status|peers|routes|tunnels|tunnels-stop|tunnels-apply|logs|self-test|start|restart|stop|update|delete|uninstall|version|help]"
     exit 2
     ;;
   esac

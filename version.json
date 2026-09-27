@@ -1,8 +1,8 @@
 {
-  "version": "3.0.4",
+  "version": "3.0.5",
   "branch": "main",
-  "release_name": "XRayMesh v3.0.4 (Servers list traffic alignment)",
+  "release_name": "XRayMesh v3.0.5 (Tunnels in the terminal menu)",
   "release_date": "2026-09-27",
-  "changelog": "In the Servers list, traffic now sits under the Traffic title instead of in the middle of its column.",
+  "changelog": "The terminal menu gets a Tunnels section: an overview of every saved tunnel with a warning when one takes the panel's port, a way to start them again, and an emergency stop for when a tunnel blocks the panel.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh) update"
 }
