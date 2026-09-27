@@ -2,9 +2,19 @@
 
 All notable XRayMesh changes are documented here.
 
-## [Unreleased]
+## [3.0.1] - 2026-09-27
+
+The first stable release of the 3.0 line, published on the `main` branch. It includes everything from 3.0.0-beta.1 to 3.0.0-beta.16 below, plus the changes in this section. Servers on 2.2.x get it through the normal update (`xraymesh update` or the panel).
+
+### Highlights of 3.0
+- New mesh transports: **ICMP** (inside ping packets) and **PCK** (inside TCP segments built without the kernel's TCP stack), both provided by [BackPack](https://github.com/AminMGMT/BackPack) by Amin Mohammadi (AminMGMT).
+- Mesh nodes accept only servers that share the network secret (EasyTier private mode), and a multi-thread mode runs EasyTier on more than one CPU core.
+- Redesigned Firouzeh web panel with full Persian RTL support, a live speed test and ping, an installable web app, and animated backgrounds.
+- Update channels (stable and beta) and per-server updates from the panel with verification and automatic rollback.
 
 ### Changed
+- Stable installs now use the `main` update channel. Servers that turned on beta updates keep the beta channel.
+- The README logo is now the same mark as the web panel and home-screen icon.
 - The terminal menu was redesigned. Move with the arrow keys (or j/k) and open with Enter; typing an item's number still jumps to it. A status panel at the top shows the mesh node, web panel, speedtest server and sign-in mode, a hint line describes the highlighted item, and the list scrolls on short terminals and redraws when the window is resized.
 - The menu has new items: Live status & peers, Connection diagnostics and Health check. Menu numbers changed: Update is now 16 and Uninstall is 17.
 - Choices inside screens (setup method, protocol, IPv4 or IPv6, password options, log source) use the same arrow-key picker. Text questions support editing with the arrow keys, Home and End.

@@ -1,8 +1,8 @@
 {
-  "version": "3.0.0-beta.16",
-  "branch": "beta",
-  "release_name": "XRayMesh v3.0.0-beta.16 (Private Mesh & Multi-thread)",
+  "version": "3.0.1",
+  "branch": "main",
+  "release_name": "XRayMesh v3.0.1 (Stable 3.0: ICMP/PCK Transports, Private Mesh & New Terminal Menu)",
   "release_date": "2026-09-27",
-  "changelog": "Mesh nodes now only accept servers that share your network secret, so strangers can no longer use your server as a free EasyTier relay. New multi-thread mode runs EasyTier on more than one CPU core (on by default for new servers, a toggle for existing ones). New servers use EasyTier's MTU of 1360 for encrypted links, node settings saved from the panel are checked on the server and a failed save restores the previous working configuration, wg:// peer addresses work, and yes/no questions in the terminal setup accept only yes or no.",
-  "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update"
+  "changelog": "First stable release of the 3.0 line. The mesh can now run over ICMP (inside ping packets) and PCK (raw TCP segments) links powered by BackPack. Mesh nodes only accept servers that share your network secret, multi-thread mode uses more CPU cores, and the redesigned Firouzeh panel adds live speed tests, update channels (stable/beta), per-server updates with rollback, and an installable web app. The terminal menu was redesigned with arrow-key navigation, and Ctrl+C no longer freezes the terminal.",
+  "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh) update"
 }

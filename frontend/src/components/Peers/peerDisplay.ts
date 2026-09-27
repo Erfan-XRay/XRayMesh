@@ -72,7 +72,7 @@ export function updateErrorText(code: string | undefined, host: string, t: Trans
 
 /** When the panel cannot reach or drive a server, its own terminal still can. */
 export function cliUpdateCommand(branch: string): string {
-  const b = branch === 'main' || branch === 'beta' ? branch : 'beta';
+  const b = branch === 'main' || branch === 'beta' ? branch : 'main';
   return `bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/${b}/xraymesh.sh) update`;
 }
 

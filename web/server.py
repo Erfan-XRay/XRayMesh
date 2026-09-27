@@ -37,8 +37,8 @@ import functools
 from pathlib import Path
 
 # Paths & Defaults
-CURRENT_VERSION = "3.0.0-beta.16"
-CURRENT_BRANCH = "beta"
+CURRENT_VERSION = "3.0.1"
+CURRENT_BRANCH = "main"
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/xraymesh")
 BIN_DIR = os.path.join(INSTALL_DIR, "bin")
 CONFIG_FILE = os.environ.get("CONFIG_FILE", "/etc/xraymesh/config.env")

@@ -49,18 +49,18 @@ class VersionAndBranchTests(unittest.TestCase):
 
     def test_get_active_branch_defaults_and_overrides(self):
         with mock.patch.dict(server.os.environ, {}, clear=True):
-            self.assertEqual(server.get_active_branch(), "beta")
+            self.assertEqual(server.get_active_branch(), "main")
 
         with mock.patch.dict(server.os.environ, {"XRAYMESH_BRANCH": "custom-branch"}):
             self.assertEqual(server.get_active_branch(), "custom-branch")
 
-    def test_get_version_info_fetches_from_beta_branch(self):
+    def test_get_version_info_fetches_from_main_branch(self):
         fake_remote_payload = {
-            "version": "3.0.0-beta.17",
-            "release_name": "XRayMesh v3.0.0-beta.17",
+            "version": "3.0.2",
+            "release_name": "XRayMesh v3.0.2",
             "release_date": "2026-09-25",
-            "changelog": "Beta 2 changes",
-            "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update"
+            "changelog": "Stable changes",
+            "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh) update"
         }
 
         class FakeResp:
@@ -77,14 +77,14 @@ class VersionAndBranchTests(unittest.TestCase):
         with mock.patch.object(server.urllib.request, "urlopen", return_value=FakeResp(fake_remote_payload)) as mock_open:
             v_info = server.get_version_info()
 
-        # Verify URL targeted the beta branch
+        # Verify URL targeted the main branch
         call_url = mock_open.call_args[0][0].full_url
-        self.assertIn("/beta/version.json", call_url)
-        self.assertEqual(v_info["current_version"], "3.0.0-beta.16")
-        self.assertEqual(v_info["latest_version"], "3.0.0-beta.17")
-        self.assertEqual(v_info["branch"], "beta")
+        self.assertIn("/main/version.json", call_url)
+        self.assertEqual(v_info["current_version"], "3.0.1")
+        self.assertEqual(v_info["latest_version"], "3.0.2")
+        self.assertEqual(v_info["branch"], "main")
         self.assertTrue(v_info["update_available"])
-        self.assertIn("beta/xraymesh.sh", v_info["update_command"])
+        self.assertIn("main/xraymesh.sh", v_info["update_command"])
 
 
 if __name__ == "__main__":
