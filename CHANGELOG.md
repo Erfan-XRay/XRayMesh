@@ -2,6 +2,16 @@
 
 All notable XRayMesh changes are documented here.
 
+## [Unreleased]
+
+### Fixed
+- Tunnels: creating, editing or deleting a tunnel on another server failed with "NetworkError when attempting to fetch resource" (or a JSON parse error). The panel crashed while forwarding the request to that server, so the browser got no answer.
+- Tunnels: a change on another server gave up after 8 seconds, although the first tunnel of an engine installs it there and can take minutes. Remote changes now wait up to 270 seconds, and an offline server is reported within seconds.
+- Tunnels: remote errors now say what went wrong: the server is offline, the network secrets differ, the server needs an update, or the server is still applying the change.
+- Tunnels: a tunnel's destination list no longer offers the tunnel's own origin server.
+- Tunnels: requests from other servers are validated like local ones, and tunnel changes on one server run one at a time so they cannot overwrite each other's engine config.
+- Panel: an unexpected server error now returns a readable message instead of dropping the connection.
+
 ## [3.0.6] - 2026-09-27
 
 ### Changed

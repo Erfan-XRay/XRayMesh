@@ -413,6 +413,12 @@ export default function App() {
   );
 
   // ─── Tunnel CRUD ────────────────────────────────────────
+  const tunnelErrorMessage = useCallback(
+    (e: unknown, fallback: string) =>
+      e instanceof api.PanelUnreachableError ? t('tunnel_err_network') : (e as Error)?.message || fallback,
+    [t]
+  );
+
   const openCreateTunnel = useCallback((type: TunnelModalType) => {
     setTunnelModalType(type);
     setTunnelModalEdit(false);
@@ -451,7 +457,7 @@ export default function App() {
             formData.name,
             formData.target,
             formData.ports,
-            formData.protocol || 'tcp',
+            formData.protocol || 'udp',
             formData.interface || 'any',
             formData.source_cidr || formData.sourceCidr || '0.0.0.0/0',
             undefined
@@ -462,7 +468,7 @@ export default function App() {
             formData.name,
             formData.target,
             formData.ports,
-            formData.protocol || 'tcp',
+            formData.protocol || 'both',
             formData.originNode
           );
         } else if (tunnelModalType === 'realm') {
@@ -471,7 +477,7 @@ export default function App() {
             formData.name,
             formData.target,
             formData.ports,
-            formData.protocol || 'tcp,udp',
+            formData.protocol || 'both',
             formData.originNode
           );
         }
@@ -479,11 +485,12 @@ export default function App() {
         setTunnelModalOpen(false);
         await tunnelStore.reloadNode(formData.originNode || (tunnelModalEdit ? tunnelModalData?._node_ip : undefined));
       } catch (e: any) {
-        addToast(e.message || t('toast_save_failed'), 'error');
-        throw e;
+        const message = tunnelErrorMessage(e, t('toast_save_failed'));
+        addToast(message, 'error');
+        throw new Error(message);
       }
     },
-    [tunnelModalType, tunnelModalEdit, tunnelModalData, addToast, tunnelStore, t]
+    [tunnelModalType, tunnelModalEdit, tunnelModalData, addToast, tunnelStore, tunnelErrorMessage, t]
   );
 
   const handleDeleteTunnelRequest = useCallback(
@@ -513,11 +520,11 @@ export default function App() {
       setDeleteTarget(null);
       await tunnelStore.reloadNode(deleteTarget.originNode);
     } catch (e: any) {
-      addToast(e.message || t('toast_delete_failed'), 'error');
+      addToast(tunnelErrorMessage(e, t('toast_delete_failed')), 'error');
     } finally {
       setIsDeleting(false);
     }
-  }, [deleteTarget, addToast, tunnelStore, t]);
+  }, [deleteTarget, addToast, tunnelStore, tunnelErrorMessage, t]);
 
 
   // ─── Computed Values ────────────────────────────────────

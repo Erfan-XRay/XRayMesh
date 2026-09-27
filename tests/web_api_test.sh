@@ -45,8 +45,6 @@ grep -Fq 'KillMode=mixed' "${ROOT_DIR}/systemd/xraymesh-web.service"
 grep -Fq 'KillMode=mixed' "${ROOT_DIR}/xraymesh.sh"
 grep -Fq 'threading.Thread(target=server.shutdown' "${ROOT_DIR}/web/server.py"
 grep -Fq 'ensure_xraymesh_script' "${ROOT_DIR}/web/server.py"
-grep -Fq '/api/tunnels/haproxy/edit' "${ROOT_DIR}/web/server.py"
-grep -Fq '/api/tunnels/iptables/edit' "${ROOT_DIR}/web/server.py"
-grep -Fq '/api/tunnels/gost/edit' "${ROOT_DIR}/web/server.py"
+grep -Fq '^/api/tunnels/(haproxy|iptables|gost|realm)/(create|edit|delete)$' "${ROOT_DIR}/web/server.py"
 
 printf 'Web UI & speedtest helper tests passed.\n'

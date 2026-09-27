@@ -94,8 +94,8 @@ export async function fetchTunnels(): Promise<TunnelsData> {
 
 export async function fetchTunnelNodes(): Promise<TunnelNodeState[]> {
   const res = await fetch('/api/tunnels/nodes');
-  if (!res.ok) throw new Error('Failed to fetch tunnel nodes');
-  const d = await res.json();
+  const d = await readJson(res);
+  if (!res.ok) throw new Error(d.error || 'Failed to fetch tunnel nodes');
   return (d.nodes || []).map((n: TunnelNodeState) => ({ ...n, status: 'idle' as const }));
 }
 
@@ -184,6 +184,31 @@ export async function followLiveTest<S, R>(
 }
 
 // Tunnel mutations
+/** The panel could not be reached at all (connection dropped, offline, blocked). */
+export class PanelUnreachableError extends Error {
+  constructor() {
+    super('Could not reach the panel.');
+    this.name = 'PanelUnreachableError';
+  }
+}
+
+/** POST JSON to the panel; a dropped connection or a non-JSON reply becomes a readable error. */
+async function postJson(url: string, body: unknown, fallbackError: string): Promise<any> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new PanelUnreachableError();
+  }
+  const d = await readJson(res);
+  if (!res.ok || !d.ok) throw new Error(d.error || fallbackError);
+  return d;
+}
+
 export async function saveHaproxyTunnel(
   isEdit: boolean,
   name: string,
@@ -192,24 +217,12 @@ export async function saveHaproxyTunnel(
   originNode?: string
 ): Promise<string> {
   const endpoint = isEdit ? '/api/tunnels/haproxy/edit' : '/api/tunnels/haproxy/create';
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, target, ports, origin_node: originNode }),
-  });
-  const d = await res.json();
-  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to save HAProxy tunnel');
+  const d = await postJson(endpoint, { name, target, ports, origin_node: originNode }, 'Failed to save HAProxy tunnel');
   return d.message;
 }
 
 export async function deleteHaproxyTunnel(name: string, originNode?: string): Promise<string> {
-  const res = await fetch('/api/tunnels/haproxy/delete', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, origin_node: originNode }),
-  });
-  const d = await res.json();
-  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to delete tunnel');
+  const d = await postJson('/api/tunnels/haproxy/delete', { name, origin_node: originNode }, 'Failed to delete tunnel');
   return d.message;
 }
 
@@ -224,10 +237,9 @@ export async function saveIptablesTunnel(
   originNode?: string
 ): Promise<string> {
   const endpoint = isEdit ? '/api/tunnels/iptables/edit' : '/api/tunnels/iptables/create';
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  const d = await postJson(
+    endpoint,
+    {
       name,
       target,
       ports,
@@ -235,21 +247,14 @@ export async function saveIptablesTunnel(
       interface: iface,
       source_cidr: sourceCidr || '0.0.0.0/0',
       origin_node: originNode,
-    }),
-  });
-  const d = await res.json();
-  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to save iptables tunnel');
+    },
+    'Failed to save iptables tunnel'
+  );
   return d.message;
 }
 
 export async function deleteIptablesTunnel(name: string, originNode?: string): Promise<string> {
-  const res = await fetch('/api/tunnels/iptables/delete', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, origin_node: originNode }),
-  });
-  const d = await res.json();
-  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to delete tunnel');
+  const d = await postJson('/api/tunnels/iptables/delete', { name, origin_node: originNode }, 'Failed to delete tunnel');
   return d.message;
 }
 
@@ -262,24 +267,12 @@ export async function saveGostTunnel(
   originNode?: string
 ): Promise<string> {
   const endpoint = isEdit ? '/api/tunnels/gost/edit' : '/api/tunnels/gost/create';
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, target, ports, protocol, origin_node: originNode }),
-  });
-  const d = await res.json();
-  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to save GOST tunnel');
+  const d = await postJson(endpoint, { name, target, ports, protocol, origin_node: originNode }, 'Failed to save GOST tunnel');
   return d.message;
 }
 
 export async function deleteGostTunnel(name: string, originNode?: string): Promise<string> {
-  const res = await fetch('/api/tunnels/gost/delete', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, origin_node: originNode }),
-  });
-  const d = await res.json();
-  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to delete tunnel');
+  const d = await postJson('/api/tunnels/gost/delete', { name, origin_node: originNode }, 'Failed to delete tunnel');
   return d.message;
 }
 
@@ -292,24 +285,12 @@ export async function saveRealmTunnel(
   originNode?: string
 ): Promise<string> {
   const endpoint = isEdit ? '/api/tunnels/realm/edit' : '/api/tunnels/realm/create';
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, target, ports, protocol, origin_node: originNode }),
-  });
-  const d = await res.json();
-  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to save Realm tunnel');
+  const d = await postJson(endpoint, { name, target, ports, protocol, origin_node: originNode }, 'Failed to save Realm tunnel');
   return d.message;
 }
 
 export async function deleteRealmTunnel(name: string, originNode?: string): Promise<string> {
-  const res = await fetch('/api/tunnels/realm/delete', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, origin_node: originNode }),
-  });
-  const d = await res.json();
-  if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to delete Realm tunnel');
+  const d = await postJson('/api/tunnels/realm/delete', { name, origin_node: originNode }, 'Failed to delete Realm tunnel');
   return d.message;
 }
 

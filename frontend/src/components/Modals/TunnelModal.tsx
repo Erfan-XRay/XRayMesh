@@ -195,6 +195,10 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
   const current = peers.find((p) => p.is_current);
   const originState = nodeStates.find((n) => n.ip === originNode)?.status;
   const originDown = Boolean(originNode && originState && originState !== 'ok' && originState !== 'idle');
+  const originIsRemote = Boolean(originNode && originNode !== current?.ipv4);
+  // A tunnel forwards to another server, so the origin itself is not offered as a destination.
+  const originIp = originNode || current?.ipv4 || '';
+  const destinations = peers.filter((p) => p.ipv4 !== originIp);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -353,17 +357,17 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
           <label htmlFor={`${id}-target`} className={labelClass}>
             {t('modal_tunnel_dest')}
           </label>
-          <div className={`grid gap-2 ${peers.length > 0 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
-            {peers.length > 0 && (
+          <div className={`grid gap-2 ${destinations.length > 0 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+            {destinations.length > 0 && (
               <select
                 aria-label={t('modal_tunnel_dest_select')}
-                value={peers.some((p) => p.ipv4 === target) ? target : ''}
+                value={destinations.some((p) => p.ipv4 === target) ? target : ''}
                 onChange={(e) => e.target.value && setTarget(e.target.value)}
                 disabled={isRemoteIptablesEdit}
                 className={selectClass}
               >
                 <option value="">{t('modal_tunnel_dest_select')}</option>
-                {peers.map((p) => (
+                {destinations.map((p) => (
                   <option key={p.ipv4} value={p.ipv4}>
                     {p.hostname || p.ipv4} ({p.ipv4})
                   </option>
@@ -500,6 +504,11 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
         )}
 
         {error && <FieldError message={error} />}
+        {isLoading && originIsRemote && (
+          <p className="text-xs text-text-muted leading-relaxed" role="status">
+            {t('tunnel_saving_remote')}
+          </p>
+        )}
 
         <div className="grid grid-cols-1 sm:flex sm:justify-end gap-2 pt-4 border-t border-card-border">
           <button type="submit" disabled={isLoading || isRemoteIptablesEdit} className={`${btnPrimary} sm:order-last`}>

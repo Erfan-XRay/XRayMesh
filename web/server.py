@@ -26,7 +26,9 @@ import hmac
 import secrets
 import re
 import signal
+import socket
 import threading
+import traceback
 import shutil
 import concurrent.futures
 import ipaddress
@@ -1780,9 +1782,18 @@ def send_cluster_http(target_ip, target_port, endpoint, secret, payload, timeout
     return ok, data
 
 
-def cluster_request(target_ip, target_port, endpoint, secret, payload, timeout=6, strict_port=False):
+def is_timeout_error(error):
+    return isinstance(error, (socket.timeout, TimeoutError)) or isinstance(
+        getattr(error, "reason", None), (socket.timeout, TimeoutError)
+    )
+
+
+def cluster_request(target_ip, target_port, endpoint, secret, payload, timeout=6, strict_port=False, stop_on_timeout=False):
     """Like send_cluster_http, but also returns the HTTP status of the last reply
-    (None when the peer could not be reached at all)."""
+    (None when the peer could not be reached at all).
+
+    stop_on_timeout is for commands that change state: a timeout may mean the peer is still
+    running the command, so it must not be sent again on another scheme or port."""
     body_bytes, headers = sign_cluster_request(secret, payload)
 
     insecure_ssl_ctx = ssl.create_default_context()
@@ -1826,6 +1837,8 @@ def cluster_request(target_ip, target_port, endpoint, secret, payload, timeout=6
                     return False, last_err, e.code
                 continue
             except Exception as e:
+                if stop_on_timeout and is_timeout_error(e):
+                    return False, "Request timed out", None
                 last_err = str(e)
                 continue
     return False, last_err, last_status
@@ -1939,13 +1952,14 @@ def get_tunnel_nodes():
     return local_node, peers
 
 
-def tag_remote_tunnels(tunnels, ip, name):
+def tag_tunnels(tunnels, ip, name, is_local=False):
+    """Stamp each tunnel with the node that runs it, so edits and deletes reach that node."""
     out = {}
     for t_type in TUNNEL_TYPES:
         items = []
         for item in tunnels.get(t_type, []) or []:
             if isinstance(item, dict):
-                items.append(dict(item, _node_ip=ip, _node_name=name, _is_local=False))
+                items.append(dict(item, _node_ip=ip, _node_name=name, _is_local=is_local))
         out[t_type] = items
     return out
 
@@ -1983,7 +1997,7 @@ def fetch_remote_tunnels(peer):
         )
         if ok and isinstance(res, dict) and res.get("ok"):
             name = res.get("node_name") or peer["name"]
-            data = tag_remote_tunnels(res.get("tunnels") or {}, peer["ip"], name)
+            data = tag_tunnels(res.get("tunnels") or {}, peer["ip"], name)
             now = time.time()
             with TUNNEL_CACHE_LOCK:
                 TUNNEL_CACHE[peer["ip"]] = {"tunnels": data, "name": name, "fetched_at": now}
@@ -1998,21 +2012,111 @@ def fetch_remote_tunnels(peer):
     return tunnel_cache_fallback(peer, status, error)
 
 
-def proxy_tunnel_if_remote(handler, data, tunnel_type, action):
-    """If origin_node is specified and not local, forward tunnel request via HMAC-signed cluster request."""
-    origin_node = (data.get("origin_node") or "").strip()
-    if not is_local_origin(origin_node):
-        secret = cfg.get("NETWORK_SECRET", "").strip()
-        payload = dict(data)
-        payload["tunnel_type"] = tunnel_type
-        ok, res = send_cluster_http(origin_node, PORT, f"/api/cluster/tunnel/{action}", secret, payload, timeout=8)
-        if ok and isinstance(res, dict) and res.get("ok"):
-            handler.send_json({"ok": True, "message": res.get("message", f"Tunnel {action} succeeded on remote node {origin_node}.")})
-        else:
-            err = res.get("error") if isinstance(res, dict) else str(res)
-            handler.send_json({"ok": False, "error": f"Remote node {origin_node} error: {err}"}, status=400)
-        return True
-    return False
+TUNNEL_ACTION_RE = re.compile(r"^/api/tunnels/(haproxy|iptables|gost|realm)/(create|edit|delete)$")
+TUNNEL_ENGINE_LABELS = {"haproxy": "HAProxy", "iptables": "iptables", "gost": "GOST", "realm": "Realm"}
+TUNNEL_ACTION_DONE = {"create": "created", "edit": "updated", "delete": "deleted"}
+TUNNEL_NAME_ERROR = "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."
+# The first tunnel of an engine installs it (apt packages plus a binary download), which can take minutes.
+TUNNEL_CMD_TIMEOUT = 240
+TUNNEL_PROXY_TIMEOUT = TUNNEL_CMD_TIMEOUT + 30
+TUNNEL_CMD_LOCK = threading.Lock()  # engines rewrite one shared config, so changes run one at a time
+
+
+def tunnel_field(data, key, default=""):
+    value = data.get(key)
+    return default if value is None else str(value).strip()
+
+
+def build_tunnel_command(t_type, action, data):
+    """Validate a tunnel change and return (xraymesh.sh args, error)."""
+    if t_type not in TUNNEL_TYPES or action not in TUNNEL_ACTION_DONE:
+        return None, f"Invalid tunnel request: {t_type} {action}"
+    name = tunnel_field(data, "name")
+    if not name:
+        return None, "Missing tunnel name"
+    if not valid_tunnel_name(name):
+        return None, TUNNEL_NAME_ERROR
+    if action == "delete":
+        return [f"{t_type}-delete", name], ""
+
+    target, ports = tunnel_field(data, "target"), tunnel_field(data, "ports")
+    if not target or not ports:
+        return None, "Missing required fields: name, target, ports"
+    if not IPV4_RE.match(target):
+        return None, "Target must be a valid IPv4 mesh address."
+    args = [f"{t_type}-{action}", name, target, ports]
+    if t_type == "haproxy":
+        return args, ""
+
+    default_proto = "udp" if t_type == "iptables" else "both"
+    protocol = tunnel_field(data, "protocol").lower().replace(" ", "") or default_proto
+    if protocol in ("tcp,udp", "tcp+udp", "udp,tcp"):
+        protocol = "both"
+    if protocol not in ("tcp", "udp", "both"):
+        return None, "Protocol must be tcp, udp, or both."
+    args.append(protocol)
+    if t_type == "iptables":
+        args += [tunnel_field(data, "interface") or "any", tunnel_field(data, "source_cidr") or "0.0.0.0/0"]
+    return args, ""
+
+
+def run_tunnel_command(t_type, action, data):
+    """Apply a tunnel change on this node; returns (ok, message)."""
+    args, err = build_tunnel_command(t_type, action, data)
+    if not args:
+        return False, err
+    with TUNNEL_CMD_LOCK:
+        ok, msg = run_xraymesh_cmd(args, timeout=TUNNEL_CMD_TIMEOUT)
+    label = TUNNEL_ENGINE_LABELS[t_type]
+    if ok:
+        return True, msg or f"{label} tunnel {TUNNEL_ACTION_DONE[action]} successfully."
+    verb = "update" if action == "edit" else action
+    return False, msg or f"Failed to {verb} {label} tunnel."
+
+
+def proxy_tunnel_request(origin_node, t_type, action, data):
+    """Apply a tunnel change on another mesh node; returns (ok, message, http status)."""
+    if not IPV4_RE.match(origin_node):
+        return False, "Origin server must be a mesh IPv4 address.", 400
+    args, err = build_tunnel_command(t_type, action, data)
+    if not args:
+        return False, err, 400  # Reject bad input here instead of bothering the peer.
+    secret = load_env_file(CONFIG_FILE).get("NETWORK_SECRET", "").strip()
+    if not secret:
+        return False, "Cluster secret not configured on this node", 500
+
+    # Probe first: an offline node fails in seconds instead of holding the request for the full command timeout.
+    info, port, probe_err = {}, None, ""
+    for _ in range(2):  # lossy links drop single probes
+        info, port, probe_err = fetch_peer_cluster_info(
+            origin_node, PEER_VERSION_CACHE.get(origin_node, {}).get("port"), timeout=4.0
+        )
+        if info:
+            break
+    if not info:
+        return False, f"Node {origin_node} is not reachable over the mesh ({probe_err}).", 502
+
+    payload = {k: v for k, v in data.items() if k != "origin_node"}
+    payload["tunnel_type"] = t_type
+    ok, res, http_status = cluster_request(
+        origin_node, port, f"/api/cluster/tunnel/{action}", secret, payload,
+        TUNNEL_PROXY_TIMEOUT, strict_port=True, stop_on_timeout=True,
+    )
+    if ok and isinstance(res, dict) and res.get("ok"):
+        label = TUNNEL_ENGINE_LABELS[t_type]
+        return True, res.get("message") or f"{label} tunnel {TUNNEL_ACTION_DONE[action]} on node {origin_node}.", 200
+
+    err = (res.get("error") if isinstance(res, dict) else str(res)) or "Request to the peer failed."
+    if http_status == 403:
+        return False, f"Node {origin_node} rejected the request ({err}). Both nodes must share the same network secret.", 502
+    if http_status == 404:
+        return False, f"Node {origin_node} runs an XRayMesh version that cannot manage tunnels remotely. Update it first.", 502
+    if http_status is None and "timed out" in err:
+        return False, (
+            f"Node {origin_node} did not answer within {TUNNEL_PROXY_TIMEOUT}s. "
+            "The change may still finish there; refresh the list in a minute."
+        ), 504
+    return False, f"Remote node {origin_node} error: {err}", 502 if http_status is None else 400
 
 
 IPV4_RE = re.compile(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
@@ -2668,7 +2772,36 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("Server", f"XRayMesh-Web/{CURRENT_VERSION}")
         self.end_headers()
 
+    def send_response(self, code, message=None):
+        self._response_started = True
+        super().send_response(code, message)
+
+    def run_safely(self, handler):
+        """Answer with a JSON 500 when a handler crashes, instead of dropping the connection
+        (which the browser only reports as a bare NetworkError)."""
+        self._response_started = False
+        try:
+            handler()
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # The client went away.
+        except Exception as e:
+            print(f"[!] {self.command} {self.path} failed:", flush=True)
+            traceback.print_exc()
+            if self._response_started:
+                self.close_connection = True
+                return
+            try:
+                self.send_json({"ok": False, "error": f"Internal server error: {e}"}, status=500)
+            except Exception:
+                self.close_connection = True
+
     def do_GET(self):
+        self.run_safely(self.handle_get)
+
+    def do_POST(self):
+        self.run_safely(self.handle_post)
+
+    def handle_get(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         query = dict(urllib.parse.parse_qsl(parsed.query))
@@ -2951,7 +3084,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             if query_node in ("local", "127.0.0.1", local_node["ip"]):
                 self.send_json({
                     "ok": True,
-                    "data": get_tunnels(),
+                    "data": tag_tunnels(get_tunnels(), local_node["ip"], local_node["name"], is_local=True),
                     "node": dict(local_node, is_local=True, status="ok", stale=False,
                                  fetched_at=time.time(), latency_ms=0),
                 })
@@ -2968,12 +3101,8 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 return
 
             # Legacy aggregate view: every node, bounded by one overall deadline.
-            local_tunnels = get_tunnels()
-            for t_type in TUNNEL_TYPES:
-                for item in local_tunnels.get(t_type, []):
-                    item["_node_ip"] = local_node["ip"]
-                    item["_node_name"] = local_node["name"]
-                    item["_is_local"] = True
+            local_tunnels = dict(get_tunnels())
+            local_tunnels.update(tag_tunnels(local_tunnels, local_node["ip"], local_node["name"], is_local=True))
             node_states = [dict(local_node, is_local=True, status="ok", stale=False)]
             if peers:
                 executor = concurrent.futures.ThreadPoolExecutor(max_workers=8)
@@ -3176,7 +3305,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
 
         self.send_error(404, "Endpoint not found")
 
-    def do_POST(self):
+    def handle_post(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
 
@@ -3191,6 +3320,8 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             data = json.loads(body.decode("utf-8")) if body else {}
         except Exception:
             pass
+        if not isinstance(data, dict):
+            data = {}
 
         # Public Auth Endpoints
         if path == "/api/auth/login":
@@ -3337,71 +3468,13 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 })
                 return
 
-            elif path == "/api/cluster/tunnel/create":
-                t_type = data.get("tunnel_type", "").lower()
-                name = data.get("name", "").strip()
-                target = data.get("target", "").strip()
-                ports = data.get("ports", "").strip()
-                protocol = data.get("protocol", "both").strip().lower()
-                in_if = data.get("interface", "any").strip()
-                src_cidr = data.get("source_cidr", "0.0.0.0/0").strip()
-
-                if t_type == "haproxy":
-                    ok, msg = run_xraymesh_cmd(["haproxy-create", name, target, ports])
-                elif t_type == "iptables":
-                    ok, msg = run_xraymesh_cmd(["iptables-create", name, target, ports, protocol, in_if, src_cidr])
-                elif t_type == "gost":
-                    ok, msg = run_xraymesh_cmd(["gost-create", name, target, ports, protocol])
-                elif t_type == "realm":
-                    ok, msg = run_xraymesh_cmd(["realm-create", name, target, ports, protocol])
-                else:
-                    self.send_json({"ok": False, "error": f"Invalid tunnel type: {t_type}"}, status=400)
-                    return
-
+            elif path in ("/api/cluster/tunnel/create", "/api/cluster/tunnel/edit", "/api/cluster/tunnel/delete"):
+                action = path.rsplit("/", 1)[1]
+                ok, msg = run_tunnel_command(tunnel_field(data, "tunnel_type").lower(), action, data)
                 if ok:
-                    self.send_json({"ok": True, "message": msg or f"{t_type} tunnel created."})
+                    self.send_json({"ok": True, "message": msg})
                 else:
-                    self.send_json({"ok": False, "error": msg or f"Failed to create {t_type} tunnel."}, status=400)
-                return
-
-            elif path == "/api/cluster/tunnel/edit":
-                t_type = data.get("tunnel_type", "").lower()
-                name = data.get("name", "").strip()
-                target = data.get("target", "").strip()
-                ports = data.get("ports", "").strip()
-                protocol = data.get("protocol", "both").strip().lower()
-                in_if = data.get("interface", "any").strip()
-                src_cidr = data.get("source_cidr", "0.0.0.0/0").strip()
-
-                if t_type == "haproxy":
-                    ok, msg = run_xraymesh_cmd(["haproxy-edit", name, target, ports])
-                elif t_type == "iptables":
-                    ok, msg = run_xraymesh_cmd(["iptables-edit", name, target, ports, protocol, in_if, src_cidr])
-                elif t_type == "gost":
-                    ok, msg = run_xraymesh_cmd(["gost-edit", name, target, ports, protocol])
-                elif t_type == "realm":
-                    ok, msg = run_xraymesh_cmd(["realm-edit", name, target, ports, protocol])
-                else:
-                    self.send_json({"ok": False, "error": f"Invalid tunnel type: {t_type}"}, status=400)
-                    return
-
-                if ok:
-                    self.send_json({"ok": True, "message": msg or f"{t_type} tunnel updated."})
-                else:
-                    self.send_json({"ok": False, "error": msg or f"Failed to update {t_type} tunnel."}, status=400)
-                return
-
-            elif path == "/api/cluster/tunnel/delete":
-                t_type = data.get("tunnel_type", "").lower()
-                name = data.get("name", "").strip()
-                if t_type in ("haproxy", "iptables", "gost", "realm") and name:
-                    ok, msg = run_xraymesh_cmd([f"{t_type}-delete", name])
-                    if ok:
-                        self.send_json({"ok": True, "message": msg or f"{t_type} tunnel deleted."})
-                    else:
-                        self.send_json({"ok": False, "error": msg or f"Failed to delete {t_type} tunnel."}, status=400)
-                    return
-                self.send_json({"ok": False, "error": "Invalid tunnel delete request"}, status=400)
+                    self.send_json({"ok": False, "error": msg}, status=400)
                 return
 
             elif path == "/api/cluster/node/update":
@@ -3615,276 +3688,21 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": res}, status=status)
             return
 
-        elif path == "/api/tunnels/haproxy/create":
-            if proxy_tunnel_if_remote(self, data, "haproxy", "create"):
-                return
-            name = data.get("name", "").strip()
-            target = data.get("target", "").strip()
-            ports = data.get("ports", "").strip()
-
-            if not name or not target or not ports:
-                self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
-                return
-
-            if not valid_tunnel_name(name):
-                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
-                return
-
-            ok, msg = run_xraymesh_cmd(["haproxy-create", name, target, ports])
-            if ok:
-                self.send_json({"ok": True, "message": msg or "HAProxy tunnel created successfully."})
+        elif TUNNEL_ACTION_RE.match(path):
+            t_type, action = TUNNEL_ACTION_RE.match(path).groups()
+            origin_node = tunnel_field(data, "origin_node")
+            if is_local_origin(origin_node):
+                ok, msg = run_tunnel_command(t_type, action, data)
+                status = 200 if ok else 400
+            elif t_type == "iptables" and action != "delete":
+                ok, status = False, 400
+                msg = "iptables tunnels can only be configured locally on the host server. Please manage iptables tunnels directly from that node's web panel."
             else:
-                self.send_json({"ok": False, "error": msg or "Failed to create HAProxy tunnel."}, status=400)
-            return
-
-        elif path == "/api/tunnels/haproxy/edit":
-            if proxy_tunnel_if_remote(self, data, "haproxy", "edit"):
-                return
-            name = data.get("name", "").strip()
-            target = data.get("target", "").strip()
-            ports = data.get("ports", "").strip()
-
-            if not name or not target or not ports:
-                self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
-                return
-
-            if not valid_tunnel_name(name):
-                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
-                return
-
-            ok, msg = run_xraymesh_cmd(["haproxy-edit", name, target, ports])
+                ok, msg, status = proxy_tunnel_request(origin_node, t_type, action, data)
             if ok:
-                self.send_json({"ok": True, "message": msg or "HAProxy tunnel updated successfully."})
+                self.send_json({"ok": True, "message": msg})
             else:
-                self.send_json({"ok": False, "error": msg or "Failed to update HAProxy tunnel."}, status=400)
-            return
-
-        elif path == "/api/tunnels/haproxy/delete":
-            if proxy_tunnel_if_remote(self, data, "haproxy", "delete"):
-                return
-            name = data.get("name", "").strip()
-            if not name:
-                self.send_json({"ok": False, "error": "Missing tunnel name"}, status=400)
-                return
-
-            if not valid_tunnel_name(name):
-                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
-                return
-
-            ok, msg = run_xraymesh_cmd(["haproxy-delete", name])
-            if ok:
-                self.send_json({"ok": True, "message": msg or "HAProxy tunnel deleted successfully."})
-            else:
-                self.send_json({"ok": False, "error": msg or "Failed to delete HAProxy tunnel."}, status=400)
-            return
-
-        elif path == "/api/tunnels/iptables/create":
-            origin_node = (data.get("origin_node") or "").strip()
-            if not is_local_origin(origin_node):
-                self.send_json({
-                    "ok": False,
-                    "error": "iptables tunnels can only be configured locally on the host server. Please manage iptables tunnels directly from that node's web panel."
-                }, status=400)
-                return
-            name = data.get("name", "").strip()
-            target = data.get("target", "").strip()
-            ports = data.get("ports", "").strip()
-            protocol = data.get("protocol", "udp").strip().lower()
-            in_if = data.get("interface", "any").strip()
-            source_cidr = data.get("source_cidr", "0.0.0.0/0").strip()
-
-            if not name or not target or not ports:
-                self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
-                return
-
-            if not valid_tunnel_name(name):
-                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
-                return
-
-            ok, msg = run_xraymesh_cmd(["iptables-create", name, target, ports, protocol, in_if, source_cidr])
-            if ok:
-                self.send_json({"ok": True, "message": msg or "iptables tunnel created successfully."})
-            else:
-                self.send_json({"ok": False, "error": msg or "Failed to create iptables tunnel."}, status=400)
-            return
-
-        elif path == "/api/tunnels/iptables/edit":
-            origin_node = (data.get("origin_node") or "").strip()
-            if not is_local_origin(origin_node):
-                self.send_json({
-                    "ok": False,
-                    "error": "iptables tunnels can only be configured locally on the host server. Please manage iptables tunnels directly from that node's web panel."
-                }, status=400)
-                return
-            name = data.get("name", "").strip()
-            target = data.get("target", "").strip()
-            ports = data.get("ports", "").strip()
-            protocol = data.get("protocol", "udp").strip().lower()
-            in_if = data.get("interface", "any").strip()
-            source_cidr = data.get("source_cidr", "0.0.0.0/0").strip()
-
-            if not name or not target or not ports:
-                self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
-                return
-
-            if not valid_tunnel_name(name):
-                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
-                return
-
-            ok, msg = run_xraymesh_cmd(["iptables-edit", name, target, ports, protocol, in_if, source_cidr])
-            if ok:
-                self.send_json({"ok": True, "message": msg or "iptables tunnel updated successfully."})
-            else:
-                self.send_json({"ok": False, "error": msg or "Failed to update iptables tunnel."}, status=400)
-            return
-
-        elif path == "/api/tunnels/iptables/delete":
-            if proxy_tunnel_if_remote(self, data, "iptables", "delete"):
-                return
-            name = data.get("name", "").strip()
-            if not name:
-                self.send_json({"ok": False, "error": "Missing tunnel name"}, status=400)
-                return
-
-            if not valid_tunnel_name(name):
-                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
-                return
-
-            ok, msg = run_xraymesh_cmd(["iptables-delete", name])
-            if ok:
-                self.send_json({"ok": True, "message": msg or "iptables tunnel deleted successfully."})
-            else:
-                self.send_json({"ok": False, "error": msg or "Failed to delete iptables tunnel."}, status=400)
-            return
-
-        elif path == "/api/tunnels/gost/create":
-            if proxy_tunnel_if_remote(self, data, "gost", "create"):
-                return
-            name = data.get("name", "").strip()
-            target = data.get("target", "").strip()
-            ports = data.get("ports", "").strip()
-            protocol = data.get("protocol", "both").strip().lower()
-
-            if not name or not target or not ports:
-                self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
-                return
-
-            if not valid_tunnel_name(name):
-                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
-                return
-
-            ok, msg = run_xraymesh_cmd(["gost-create", name, target, ports, protocol])
-            if ok:
-                self.send_json({"ok": True, "message": msg or "GOST tunnel created successfully."})
-            else:
-                self.send_json({"ok": False, "error": msg or "Failed to create GOST tunnel."}, status=400)
-            return
-
-        elif path == "/api/tunnels/gost/edit":
-            if proxy_tunnel_if_remote(self, data, "gost", "edit"):
-                return
-            name = data.get("name", "").strip()
-            target = data.get("target", "").strip()
-            ports = data.get("ports", "").strip()
-            protocol = data.get("protocol", "both").strip().lower()
-
-            if not name or not target or not ports:
-                self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
-                return
-
-            if not valid_tunnel_name(name):
-                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
-                return
-
-            ok, msg = run_xraymesh_cmd(["gost-edit", name, target, ports, protocol])
-            if ok:
-                self.send_json({"ok": True, "message": msg or "GOST tunnel updated successfully."})
-            else:
-                self.send_json({"ok": False, "error": msg or "Failed to update GOST tunnel."}, status=400)
-            return
-
-        elif path == "/api/tunnels/gost/delete":
-            if proxy_tunnel_if_remote(self, data, "gost", "delete"):
-                return
-            name = data.get("name", "").strip()
-            if not name:
-                self.send_json({"ok": False, "error": "Missing tunnel name"}, status=400)
-                return
-
-            if not valid_tunnel_name(name):
-                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
-                return
-
-            ok, msg = run_xraymesh_cmd(["gost-delete", name])
-            if ok:
-                self.send_json({"ok": True, "message": msg or "GOST tunnel deleted successfully."})
-            else:
-                self.send_json({"ok": False, "error": msg or "Failed to delete GOST tunnel."}, status=400)
-            return
-
-        elif path == "/api/tunnels/realm/create":
-            if proxy_tunnel_if_remote(self, data, "realm", "create"):
-                return
-            name = data.get("name", "").strip()
-            target = data.get("target", "").strip()
-            ports = data.get("ports", "").strip()
-            protocol = data.get("protocol", "both").strip().lower()
-
-            if not name or not target or not ports:
-                self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
-                return
-
-            if not valid_tunnel_name(name):
-                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
-                return
-
-            ok, msg = run_xraymesh_cmd(["realm-create", name, target, ports, protocol])
-            if ok:
-                self.send_json({"ok": True, "message": msg or "Realm tunnel created successfully."})
-            else:
-                self.send_json({"ok": False, "error": msg or "Failed to create Realm tunnel."}, status=400)
-            return
-
-        elif path == "/api/tunnels/realm/edit":
-            if proxy_tunnel_if_remote(self, data, "realm", "edit"):
-                return
-            name = data.get("name", "").strip()
-            target = data.get("target", "").strip()
-            ports = data.get("ports", "").strip()
-            protocol = data.get("protocol", "both").strip().lower()
-
-            if not name or not target or not ports:
-                self.send_json({"ok": False, "error": "Missing required fields: name, target, ports"}, status=400)
-                return
-
-            if not valid_tunnel_name(name):
-                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
-                return
-
-            ok, msg = run_xraymesh_cmd(["realm-edit", name, target, ports, protocol])
-            if ok:
-                self.send_json({"ok": True, "message": msg or "Realm tunnel updated successfully."})
-            else:
-                self.send_json({"ok": False, "error": msg or "Failed to update Realm tunnel."}, status=400)
-            return
-
-        elif path == "/api/tunnels/realm/delete":
-            if proxy_tunnel_if_remote(self, data, "realm", "delete"):
-                return
-            name = data.get("name", "").strip()
-            if not name:
-                self.send_json({"ok": False, "error": "Missing tunnel name"}, status=400)
-                return
-
-            if not valid_tunnel_name(name):
-                self.send_json({"ok": False, "error": "Tunnel name must be 1-32 characters using only letters, numbers, '_' or '-'."}, status=400)
-                return
-
-            ok, msg = run_xraymesh_cmd(["realm-delete", name])
-            if ok:
-                self.send_json({"ok": True, "message": msg or "Realm tunnel deleted successfully."})
-            else:
-                self.send_json({"ok": False, "error": msg or "Failed to delete Realm tunnel."}, status=400)
+                self.send_json({"ok": False, "error": msg}, status=status)
             return
 
         elif path == "/api/node/config":
