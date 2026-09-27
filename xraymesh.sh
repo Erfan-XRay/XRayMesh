@@ -714,8 +714,8 @@ setup_node() {
   if is_backpack_proto "$protocol"; then
     info "${protocol^^} links are created per server: run 'xraymesh invite' here and join from the other server."
     [[ "$protocol" == "pck" ]] && info "PCK: create the invite on the server abroad and join from the server in Iran (Iran dials out)."
-    info "${protocol^^} links are already encrypted by BackPack (Noise). Answer 'no' to encryption below to save CPU,"
-    info "but only if every server in this mesh connects over ICMP or PCK links; direct peers would then be unencrypted."
+    info "BackPack (Noise) encrypts each ${protocol^^} link, but servers that joined over links also reach each other"
+    info "directly over plain UDP. Answer 'no' to encryption below only if this mesh will have just two servers."
     [[ "$default_mtu" == "1380" ]] && default_mtu="$ICMP_MESH_MTU"
   fi
 
@@ -869,8 +869,21 @@ show_mesh_invite() {
     fi
   fi
 
-  local icmp_link="" link_key=""
+  local icmp_link="" link_key="" joined_via=""
   if is_backpack_proto "$proto"; then
+    joined_via="$(backpack_joined_via)"
+    if [[ -n "$joined_via" ]]; then
+      warn "This server joined the mesh over a ${proto^^} link through ${joined_via}."
+      warn "Create the code for the next server there: run 'xraymesh invite' on ${joined_via}."
+      if [[ -t 0 ]]; then
+        local here
+        read -r -p "  Create a code on this server anyway? The next server would connect through this one. [y/N]: " here
+        if [[ ! "$here" =~ ^[Yy]$ ]]; then
+          pause
+          return 0
+        fi
+      fi
+    fi
     # Every invite carries one BackPack link; it is reused until a server has actually joined on it.
     icmp_link="$(ensure_icmp_listen_link "$(backpack_carrier_for_proto "$proto")" | tail -n1)"
     if [[ "$icmp_link" != "{"* ]]; then
@@ -919,9 +932,9 @@ print(f'xrmesh://{token}')
   info "On another server, run 'xraymesh join' and paste this code to connect instantly."
   if is_backpack_proto "$proto"; then
     say "  How ${proto^^} links work:" "$BOLD$YELLOW"
-    say "   1. This server is the main server; every other server joins with a code from here." "$YELLOW"
-    say "   2. One code connects ONE server. Paste it with 'xraymesh join' on that server." "$YELLOW"
-    say "   3. Once it shows up in 'xraymesh peers', run 'xraymesh invite' again for the next server." "$YELLOW"
+    [[ -z "$joined_via" ]] && say "   • This server is the main server; every other server joins with a code from here." "$YELLOW"
+    say "   • One code connects ONE server. Paste it with 'xraymesh join' on that server." "$YELLOW"
+    say "   • Once it shows up in 'xraymesh peers', run 'xraymesh invite' again for the next server." "$YELLOW"
     if [[ "$proto" == "pck" ]]; then
       local pck_port
       pck_port="$(python3 -c 'import sys, json; print(json.loads(sys.argv[1])["p"])' "$icmp_link" 2>/dev/null || true)"
@@ -929,8 +942,8 @@ print(f'xrmesh://{token}')
       say "   • Run this on the server abroad and join from the server in Iran." "$YELLOW"
     fi
     if [[ "$enc" != "no" ]]; then
-      info "${proto^^} links are already encrypted by BackPack. If every server joins over ICMP or PCK links,"
-      info "you can turn off mesh encryption to save CPU. Direct peers would then be unencrypted."
+      info "BackPack encrypts each ${proto^^} link, but servers that joined over links also reach each other"
+      info "directly over plain UDP. Turn off mesh encryption only if this mesh will have just two servers."
     fi
   fi
   pause
@@ -3286,6 +3299,23 @@ delete_icmp_link() {
     fi
   fi
   ok "Link '${name}' deleted."
+}
+
+# Print the public address of the server this one joined over a BackPack link, if any.
+backpack_joined_via() {
+  [[ -d "$ICMP_LINK_DIR" ]] || return 0
+  local env peers
+  peers="$( (grep -E '^PEERS=' "$CONFIG_FILE" 2>/dev/null || true) | head -n1)"
+  for env in "$ICMP_LINK_DIR"/out-*.env; do
+    [[ -f "$env" ]] || continue
+    unset PEER_IP PEER_HOST
+    # shellcheck disable=SC1090
+    source "$env"
+    if [[ -n "${PEER_IP:-}" && "$peers" == *"//${PEER_IP}:"* ]]; then
+      echo "${PEER_HOST:-}"
+      return 0
+    fi
+  done
 }
 
 # Remove dialling links that no configured peer uses any more (e.g. after joining another mesh).

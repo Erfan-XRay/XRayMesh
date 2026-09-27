@@ -52,6 +52,8 @@ export interface Peer {
   latest_version?: string;
   update?: UpdateJob;
   connection?: 'direct' | 'relay' | 'local';
+  /** Set when the direct connection runs across a BackPack link; `tunnel_proto` then only says "udp". */
+  transport?: 'icmp' | 'pck';
   /** Runs the pre-2.2.6-beta.5 updater: no step reports, no remote channel change. */
   legacy?: boolean;
   loss_rate?: string | number;
@@ -274,6 +276,12 @@ export interface NodeConfig {
   node_configured: boolean;
   service_active: boolean;
   last_rollback?: RollbackInfo;
+}
+
+/** Answer on a server that joined over an ICMP/PCK link: codes come from the server it joined through. */
+export interface MeshInviteJoinedVia {
+  joined_via: string;
+  proto: string;
 }
 
 export interface MeshInviteData {

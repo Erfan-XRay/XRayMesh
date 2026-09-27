@@ -1,4 +1,4 @@
-import { StatusResponse, Peer, TunnelsData, TunnelNodeState, TunnelNodeResponse, LiveTest, NodeConfig, MeshInviteData, JoinMeshResult, RollbackInfo, VersionInfo, UpdateSummary } from '../types';
+import { StatusResponse, Peer, TunnelsData, TunnelNodeState, TunnelNodeResponse, LiveTest, NodeConfig, MeshInviteData, MeshInviteJoinedVia, JoinMeshResult, RollbackInfo, VersionInfo, UpdateSummary } from '../types';
 
 export async function fetchAuthStatus(): Promise<{ authenticated: boolean; password_configured: boolean }> {
   const res = await fetch('/api/auth/status');
@@ -374,8 +374,9 @@ export async function removeMeshPeer(peer: string): Promise<string[]> {
   return d.peers || [];
 }
 
-export async function fetchMeshInvite(): Promise<MeshInviteData> {
-  const res = await fetch('/api/node/invite');
+/** `here` creates a code even on a server that joined over an ICMP/PCK link. */
+export async function fetchMeshInvite(here = false): Promise<MeshInviteData | MeshInviteJoinedVia> {
+  const res = await fetch(here ? '/api/node/invite?here=1' : '/api/node/invite');
   const d = await readJson(res);
   if (!res.ok || !d.ok) throw new Error(d.error || 'Failed to generate invite');
   return d.data;

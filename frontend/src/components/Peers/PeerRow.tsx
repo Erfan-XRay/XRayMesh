@@ -94,6 +94,9 @@ export const PeerRow: React.FC<PeerRowProps> = ({
       {t(relayed ? 'peer_conn_relay' : 'peer_conn_direct')}
     </span>
   );
+  // EasyTier reports a peer across an ICMP/PCK link as plain UDP; the link is what actually crosses the network.
+  const protocol = peer.transport ? peer.transport.toUpperCase() : formatProtocol(peer.tunnel_proto);
+  const protocolTitle = peer.transport ? formatText(t('peer_via_link'), { transport: protocol }) : undefined;
 
   return (
     <li className="px-4 py-3.5 sm:px-5 transition-colors hover:bg-hover">
@@ -123,8 +126,8 @@ export const PeerRow: React.FC<PeerRowProps> = ({
             <span className="text-text-subtle" aria-hidden="true">
               ·
             </span>
-            <span className="font-mono" dir="ltr">
-              {formatProtocol(peer.tunnel_proto)}
+            <span className="font-mono" dir="ltr" title={protocolTitle}>
+              {protocol}
             </span>
           </span>
           <Traffic peer={peer} t={t} />
@@ -171,8 +174,8 @@ export const PeerRow: React.FC<PeerRowProps> = ({
 
         <div className="flex flex-col gap-0.5 min-w-0 text-sm">
           {connection}
-          <span className="font-mono text-xs text-text-subtle" dir="ltr">
-            {formatProtocol(peer.tunnel_proto)}
+          <span className="font-mono text-xs text-text-subtle" dir="ltr" title={protocolTitle}>
+            {protocol}
           </span>
         </div>
 

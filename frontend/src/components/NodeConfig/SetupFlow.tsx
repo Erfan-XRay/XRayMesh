@@ -164,8 +164,10 @@ export const SetupFlow: React.FC<SetupFlowProps> = ({ config, t, onCopy, copiedK
       let noPublicIp = false;
       try {
         const invite = await fetchMeshInvite();
-        if (invite.details.endpoint) inviteCode = invite.invite;
-        else noPublicIp = true;
+        if ('invite' in invite) {
+          if (invite.details.endpoint) inviteCode = invite.invite;
+          else noPublicIp = true;
+        }
       } catch {
         // The code is still available later under Peers & invite.
       }

@@ -730,6 +730,51 @@ def get_easytier_peers():
     return None
 
 
+def get_easytier_peer_remote_hosts():
+    """Map each directly connected peer's id to the remote hosts of its tunnels.
+
+    The peer table only says "udp" for a peer reached across a BackPack link, so the
+    verbose listing is needed to see which address the tunnel actually runs to.
+    """
+    cli_path = os.path.join(BIN_DIR, "easytier-cli")
+    if not os.path.isfile(cli_path):
+        cli_path = "easytier-cli"
+    try:
+        res = subprocess.run(
+            [cli_path, "-p", "127.0.0.1:15888", "-o", "json", "-v", "peer"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5,
+        )
+        data = json.loads(res.stdout) if res.returncode == 0 and res.stdout.strip() else None
+    except Exception:
+        return {}
+
+    hosts = {}
+
+    def walk(node):
+        if isinstance(node, list):
+            for item in node:
+                walk(item)
+        elif isinstance(node, dict):
+            if isinstance(node.get("conns"), list):
+                peer_id = str(node.get("peer_id", ""))
+                for conn in node["conns"]:
+                    tunnel = conn.get("tunnel") if isinstance(conn, dict) else None
+                    remote = tunnel.get("remote_addr") if isinstance(tunnel, dict) else None
+                    url = remote.get("url") if isinstance(remote, dict) else remote
+                    try:
+                        host = urllib.parse.urlparse(str(url or "")).hostname
+                    except ValueError:
+                        host = None
+                    if peer_id and host:
+                        hosts.setdefault(peer_id, set()).add(host)
+            else:
+                for value in node.values():
+                    walk(value)
+
+    walk(data)
+    return hosts
+
+
 def get_easytier_routes():
     """Call easytier-cli route and return table/JSON."""
     cli_path = os.path.join(BIN_DIR, "easytier-cli")
@@ -1429,6 +1474,37 @@ def last_json_line(output):
             except ValueError:
                 return None
     return None
+
+
+def backpack_links():
+    """This server's BackPack links, read from the link files xraymesh.sh writes."""
+    try:
+        names = sorted(os.listdir(ICMP_LINK_DIR))
+    except OSError:
+        return []
+    links = []
+    for fname in names:
+        if not fname.endswith(".env"):
+            continue
+        env = load_env_file(os.path.join(ICMP_LINK_DIR, fname))
+        if not env.get("PEER_IP"):
+            continue
+        links.append({
+            "role": env.get("ROLE", ""),
+            # Links written before PCK existed have no CARRIER and are ICMP links.
+            "transport": "pck" if env.get("CARRIER") == "pck" else "icmp",
+            "peer_ip": env["PEER_IP"],
+            "peer_host": env.get("PEER_HOST", ""),
+        })
+    return links
+
+
+def joined_via_link(links, peers):
+    """Public address of the server this one joined over a BackPack link, or '' if it did not."""
+    for link in links:
+        if link["role"] == "dial" and f"//{link['peer_ip']}:" in (peers or ""):
+            return link["peer_host"]
+    return ""
 
 
 def valid_mesh_hostname(name):
@@ -2782,11 +2858,18 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             elif isinstance(peers_data, dict):
                 peers_list = peers_data.get("peers", []) or []
 
+            # Peers reached across a BackPack link show up as plain UDP; name the link's carrier instead.
+            link_transports = {link["peer_ip"]: link["transport"] for link in backpack_links()}
+            remote_hosts = get_easytier_peer_remote_hosts() if link_transports else {}
+
             for p in peers_list:
                 if isinstance(p, dict) and p.get("ipv4"):
                     p["is_current"] = bool(local_ip and p.get("ipv4", "").strip() == local_ip)
                     cost = str(p.get("cost", "")).strip().lower()
                     p["connection"] = "local" if p["is_current"] or cost == "local" else ("relay" if cost.startswith("relay") else "direct")
+                    over = sorted({link_transports[h] for h in remote_hosts.get(str(p.get("id", "")), ()) if h in link_transports})
+                    if over and p["connection"] == "direct":
+                        p["transport"] = over[0]
 
             if peers_list:
                 with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
@@ -3092,6 +3175,12 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                     ipv6_unavailable = "not_detected"
             if proto in BACKPACK_CARRIERS:
                 name = proto.upper()
+                # A server that joined over a link is not where codes come from; creating one here
+                # would leave an extra BackPack listener running, so it takes an explicit request.
+                joined_via = joined_via_link(backpack_links(), config.get("PEERS", ""))
+                if joined_via and query.get("here") != "1":
+                    self.send_json({"ok": True, "data": {"joined_via": joined_via, "proto": proto}})
+                    return
                 if not pub_ip:
                     self.send_json({"ok": False, "error": f"This server's public IP is unknown, so no {name} link can be offered."}, status=500)
                     return

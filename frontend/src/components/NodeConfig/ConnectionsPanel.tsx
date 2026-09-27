@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Check, Copy, Link2, Loader2, Pencil, Plus, Radio, RefreshCw, Server, Share2, Trash2, Users } from 'lucide-react';
-import { MeshInviteData } from '../../types';
+import { MeshInviteData, MeshInviteJoinedVia } from '../../types';
 import type { Translate, TranslationKey } from '../../i18n/translations';
 import { fillTemplate, formatText } from '../../i18n/fillTemplate';
 import { addMeshPeer, fetchMeshInvite, removeMeshPeer } from '../../services/api';
@@ -37,6 +37,10 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
   const [invite, setInvite] = useState<MeshInviteData | null>(null);
   const [inviteState, setInviteState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [inviteError, setInviteError] = useState('');
+  // A server that joined over an ICMP/PCK link sends people to the server it joined through,
+  // unless they explicitly ask for a code here.
+  const [joinedVia, setJoinedVia] = useState<MeshInviteJoinedVia | null>(null);
+  const [codeHere, setCodeHere] = useState(false);
   const [addressOverride, setAddressOverride] = useState('');
   const [editingAddress, setEditingAddress] = useState(false);
   const [family, setFamily] = useState<'ipv4' | 'ipv6'>('ipv4');
@@ -49,14 +53,21 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
   const loadInvite = useCallback(async () => {
     setInviteState('loading');
     try {
-      setInvite(await fetchMeshInvite());
+      const data = await fetchMeshInvite(codeHere);
+      if ('invite' in data) {
+        setInvite(data);
+        setJoinedVia(null);
+      } else {
+        setInvite(null);
+        setJoinedVia(data);
+      }
       setInviteState('ready');
     } catch (err) {
       // The server's reason (e.g. an outdated CLI on this server) is what the user needs to act on.
       setInviteError(err instanceof Error ? err.message : String(err));
       setInviteState('error');
     }
-  }, []);
+  }, [codeHere]);
 
   useEffect(() => {
     loadInvite();
@@ -161,6 +172,30 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
           </div>
         )}
 
+        {inviteState === 'ready' && joinedVia && (
+          <div className="mt-4">
+            <Callout tone="info" icon={<Radio className="w-4 h-4" />} title={t('invite_joined_via_title')}>
+              <p>
+                {fillTemplate(t('invite_joined_via_body'), {
+                  proto: joinedVia.proto.toUpperCase(),
+                  host: (
+                    <bdi dir="ltr" className="font-mono">
+                      {joinedVia.joined_via}
+                    </bdi>
+                  ),
+                })}
+              </p>
+              <div className="mt-3 flex flex-col items-start gap-1.5">
+                <button type="button" onClick={() => setCodeHere(true)} className={btnGhostSm}>
+                  <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>{t('invite_joined_via_here')}</span>
+                </button>
+                <p className="text-xs text-text-muted leading-relaxed">{t('invite_joined_via_here_hint')}</p>
+              </div>
+            </Callout>
+          </div>
+        )}
+
         {inviteState === 'ready' && invite && (
           <div className="mt-4 space-y-4">
             {isBackpackProtocol(invite.details.proto) && (
@@ -176,7 +211,8 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({
                 }
               >
                 <ol className="mt-1 space-y-1">
-                  {(['icmp_howto_1', 'icmp_howto_2', 'icmp_howto_3'] as const).map((key, i) => (
+                  {/* A code made on a joined server is not from the main server, so the first step does not apply. */}
+                  {((codeHere ? ['icmp_howto_2', 'icmp_howto_3'] : ['icmp_howto_1', 'icmp_howto_2', 'icmp_howto_3']) as TranslationKey[]).map((key, i) => (
                     <li key={key} className="flex gap-2">
                       <span className="shrink-0 tabular-nums text-text-subtle" aria-hidden="true">
                         {localizeDigits(i + 1, t)}.

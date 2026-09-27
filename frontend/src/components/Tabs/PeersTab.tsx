@@ -72,7 +72,7 @@ export const PeersTab: React.FC<PeersTabProps> = ({
       if (filter === 'updates' && !p.update_available) return false;
       if (filter === 'relayed' && p.connection !== 'relay') return false;
       if (!q) return true;
-      return [p.ipv4, p.hostname, p.tunnel_proto].some((v) => (v || '').toLowerCase().includes(q));
+      return [p.ipv4, p.hostname, p.tunnel_proto, p.transport].some((v) => (v || '').toLowerCase().includes(q));
     });
   }, [others, search, filter]);
 

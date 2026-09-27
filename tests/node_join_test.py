@@ -388,6 +388,57 @@ class NodeJoinEndpointTests(unittest.TestCase):
         self.assertEqual(cfg["PEERS"], "udp://10.214.0.170:11010")
         self.assertEqual((cfg["PROTOCOL"], cfg["MTU"], cfg["ENCRYPTION"]), ("pck", str(server.ICMP_MESH_MTU), "no"))
 
+    def test_joined_server_points_to_the_main_server_until_asked_for_a_code(self):
+        link_dir = os.path.join(self.tmp.name, "icmp-links")
+        os.makedirs(link_dir)
+        with open(os.path.join(link_dir, "out-42.env"), "w") as f:
+            f.write("LINK_NAME=out-42\nROLE=dial\nPEER_HOST=185.100.200.30\nCARRIER=pck\nPEER_IP=10.214.0.170\n")
+        self.write_existing_config()
+        cfg = server.load_env_file(server.CONFIG_FILE)
+        cfg.update({"PROTOCOL": "pck", "PEERS": "udp://10.214.0.170:11010"})
+        server.save_node_config_env(cfg)
+        link_out = '{"t":"' + "b" * 48 + '","p":24567,"i":7}'
+
+        with mock.patch.object(server, "ICMP_LINK_DIR", link_dir), \
+                mock.patch.object(server, "get_server_public_ip", return_value="5.160.10.20"), \
+                mock.patch.object(server, "run_xraymesh_cmd", return_value=(True, link_out)) as run_cmd:
+            status, payload = parse_single_response(self, call_handler("GET", "/api/node/invite"))
+            self.assertEqual(status, 200)
+            self.assertEqual(payload["data"], {"joined_via": "185.100.200.30", "proto": "pck"})
+            run_cmd.assert_not_called()
+
+            status, payload = parse_single_response(self, call_handler("GET", "/api/node/invite?here=1"))
+            self.assertEqual(status, 200)
+            run_cmd.assert_called_once_with(["link-invite", "pck"], timeout=120)
+            self.assertEqual(payload["data"]["details"]["link"]["i"], 7)
+
+
+class BackpackPeerTransportTests(unittest.TestCase):
+    def test_reads_tunnel_remote_hosts_from_the_verbose_peer_listing(self):
+        listing = [{
+            "route": {"peer_id": 111, "hostname": "abroad"},
+            "peer": {"peer_id": 111, "conns": [{"tunnel": {"tunnel_type": "udp", "remote_addr": {"url": "udp://10.214.0.170:11010"}}}]},
+        }, {
+            "route": {"peer_id": 222, "hostname": "shiraz"},
+            "peer": {"peer_id": 222, "conns": [{"tunnel": {"tunnel_type": "udp", "remote_addr": "udp://5.160.10.21:11010"}}]},
+        }, {
+            "route": {"peer_id": 333, "hostname": "relayed"},
+            "peer": None,
+        }]
+        done = mock.Mock(returncode=0, stdout=json.dumps(listing))
+        with mock.patch.object(server.subprocess, "run", return_value=done):
+            hosts = server.get_easytier_peer_remote_hosts()
+        self.assertEqual(hosts, {"111": {"10.214.0.170"}, "222": {"5.160.10.21"}})
+
+    def test_joined_via_needs_a_dial_link_the_config_peers_through(self):
+        links = [
+            {"role": "listen", "transport": "pck", "peer_ip": "10.214.0.169", "peer_host": ""},
+            {"role": "dial", "transport": "pck", "peer_ip": "10.214.0.170", "peer_host": "185.100.200.30"},
+        ]
+        self.assertEqual(server.joined_via_link(links, "udp://10.214.0.170:11010"), "185.100.200.30")
+        self.assertEqual(server.joined_via_link(links, "udp://10.214.0.1:11010"), "")
+        self.assertEqual(server.joined_via_link(links[:1], "udp://10.214.0.169:11010"), "")
+
 
 class InviteCompletenessTests(unittest.TestCase):
     """Invite codes carry every setting a joining server needs, including the mesh port and address family."""
