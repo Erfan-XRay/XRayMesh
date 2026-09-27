@@ -134,7 +134,7 @@ export const Header: React.FC<HeaderProps> = ({
   t,
   ...prefs
 }) => {
-  const version = node.xraymesh_version || '3.0.0-beta.11';
+  const version = node.xraymesh_version || '3.0.0-beta.12';
   const { listRef, box } = useTabIndicator(activeTab, [tabs.length, showTabs]);
   const isBeta = node.branch === 'beta';
 

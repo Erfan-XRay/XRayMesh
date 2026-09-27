@@ -2,6 +2,18 @@
 
 All notable XRayMesh changes are documented here.
 
+## [3.0.0-beta.12] - 2026-09-27
+
+### Added
+- Animated ambient background: soft drifting accent light, a dot lattice and a faint mesh of peers with packets travelling between them. It follows every palette and light/dark mode, and the sign-in and startup screens use a stronger version.
+- A dedicated XRayMesh loading animation (peers send packets into the hub, which answers with a ripple) on the startup screen, the self-update restart overlay and while node settings load.
+- Background setting in Appearance & language: Animated or Static. The choice is remembered and applied before the page first paints.
+
+### Changed
+- The header tab underline glides to the selected tab, and the phone bottom bar's highlight slides between sections.
+- Tab sections and server rows rise in one after another; overview numbers count up and glide between refreshes.
+- Notifications animate in and out and show a thin countdown line; primary buttons glow softly on hover.
+
 ## [3.0.0-beta.11] - 2026-09-27
 
 ### Fixed
