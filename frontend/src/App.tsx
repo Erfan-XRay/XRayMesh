@@ -703,10 +703,8 @@ export default function App() {
                   updateRuns={updateRuns}
                   onStartUpdate={startUpdate}
                   onDismissUpdate={dismissUpdate}
-                  onRefresh={loadDashboard}
                   onQuickPing={handleQuickPing}
                   onQuickSpeedtest={handleQuickSpeedtest}
-                  onNotify={addToast}
                   onCopy={handleCopy}
                   copiedKey={copiedKey}
                   t={t}

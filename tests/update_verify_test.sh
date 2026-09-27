@@ -70,14 +70,14 @@ expect_fail stage_file_ok "${stage}/server.py" "unknown/file.txt" "9.9.9-beta.1"
 # Status is written as JSON that keeps a queued job's start time.
 mkdir -p "$(dirname "$XRAYMESH_UPDATE_STATUS_FILE")"
 printf '{"state": "queued", "started_at": 1000}\n' > "$XRAYMESH_UPDATE_STATUS_FILE"
-export UPDATE_FROM="2.2.6-beta.4" UPDATE_TARGET="2.2.6-beta.5" UPDATE_BRANCH="beta"
+export UPDATE_FROM="2.2.6-beta.4" UPDATE_TARGET="2.2.6-beta.5" UPDATE_BRANCH="main"
 update_status running download
 python3 - "$XRAYMESH_UPDATE_STATUS_FILE" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 assert d["state"] == "running" and d["step"] == "download", d
 assert d["started_at"] == 1000, d
-assert d["from_version"] == "2.2.6-beta.4" and d["target_version"] == "2.2.6-beta.5" and d["branch"] == "beta", d
+assert d["from_version"] == "2.2.6-beta.4" and d["target_version"] == "2.2.6-beta.5" and d["branch"] == "main", d
 assert "finished_at" not in d, d
 PY
 update_status failed rollback 'Health check "timed out"' true

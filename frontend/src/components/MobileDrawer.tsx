@@ -74,8 +74,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
               </p>
               <p className="font-mono text-2xs text-text-subtle">
                 <bdi dir="ltr">
-                  v{node.xraymesh_version || '3.0.1'}
-                  {node.branch === 'beta' && ' · beta'}
+                  v{node.xraymesh_version || '3.0.2'}
                 </bdi>
               </p>
             </div>

@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Erfan-XRay/XRayMesh/releases/tag/v3.0.1"><img src="https://img.shields.io/badge/version-3.0.1-2dd4bf.svg?style=flat-square" alt="Version 3.0.1" /></a>
+  <a href="https://github.com/Erfan-XRay/XRayMesh/releases/tag/v3.0.2"><img src="https://img.shields.io/badge/version-3.0.2-2dd4bf.svg?style=flat-square" alt="Version 3.0.2" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Source--Available-red.svg?style=flat-square" alt="Source-Available License" /></a>
   <img src="https://img.shields.io/badge/EasyTier-v2.6.4-cyan.svg?style=flat-square" alt="EasyTier core" />
   <img src="https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-orange.svg?style=flat-square" alt="Supported OS" />
@@ -48,7 +48,7 @@
 - **تست پینگ تعاملی:** اندازه‌گیری دقیق تاخیر و پکت‌لاس بین سرورها با یک کلیک.
 - **طراحی فیروزه و ریسپانسیو:** چند پالت رنگی با حالت روشن و تیره، پس‌زمینهٔ متحرک، نوار پایین مخصوص موبایل و پشتیبانی کامل از زبان‌های فارسی (راست‌چین) و انگلیسی.
 - **نصب به‌عنوان اپلیکیشن:** داشبورد را به صفحهٔ اصلی گوشی اضافه کنید (Safari در iOS یا Chrome در اندروید) تا تمام‌صفحه و با آیکون خودش باز شود.
-- **بروزرسانی از داخل پنل:** هر سرور مش را از داشبورد بروزرسانی کنید، همراه با بررسی صحت و بازگشت خودکار در صورت خطا. کانال بروزرسانی پایدار یا بتا را برای هر سرور جدا انتخاب کنید.
+- **بروزرسانی از داخل پنل:** هر سرور مش را از داشبورد بروزرسانی کنید، همراه با بررسی صحت و بازگشت خودکار در صورت خطا. بروزرسانی‌ها همیشه از برنچ پایدار `main` دریافت می‌شوند.
 
 ### 🛡️ مدیریت ۴ گانه تونل‌های فورواردینگ
 - **تونل‌های HAProxy:** پروکسی پرسرعت TCP با لود بالانسینگ و بررسی سلامت سرور.

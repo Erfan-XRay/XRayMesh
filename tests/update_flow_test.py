@@ -73,41 +73,39 @@ class UpdateTestCase(unittest.TestCase):
         self.status_file.write_text(json.dumps(fields), encoding="utf-8")
 
 
-class ChannelTests(UpdateTestCase):
-    def test_set_channel_persists_applies_live_and_keeps_other_settings(self):
-        self.web_env.write_text('WEB_PORT="11080"\nXRAYMESH_BRANCH="main"\nWEB_PASSWORD_HASH="x"', encoding="utf-8")
-        server.VERSION_CACHE["beta"] = {"data": {"latest_version": "old"}, "last_checked": time.time()}
+class BranchTests(UpdateTestCase):
+    def test_leftover_beta_branch_is_ignored(self):
+        # A server that used the removed beta channel still has it in web.env and the service environment.
+        self.web_env.write_text('WEB_PORT="11080"\nXRAYMESH_BRANCH="beta"\n', encoding="utf-8")
+        os.environ["XRAYMESH_BRANCH"] = "beta"
+        self.assertEqual(server.get_active_branch(), "main")
 
-        server.set_update_channel("beta")
-
-        lines = self.web_env.read_text(encoding="utf-8").splitlines()
-        self.assertEqual(lines, ['WEB_PORT="11080"', 'XRAYMESH_BRANCH="beta"', 'WEB_PASSWORD_HASH="x"'])
-        self.assertEqual(os.environ["XRAYMESH_BRANCH"], "beta")
-        self.assertEqual(server.get_active_branch(), "beta")
-        self.assertNotIn("beta", server.VERSION_CACHE)
-        self.assertEqual(server.branch_channel("beta"), "beta")
-        self.assertEqual(server.branch_channel("main"), "stable")
-        self.assertEqual(server.branch_channel("feature-x"), "custom")
-
-    def test_channel_endpoint_validates_input(self):
-        status, payload = call_handler("POST", "/api/update/channel", {"channel": "nightly"})
-        self.assertEqual((status, payload["code"]), (400, "invalid_channel"))
+    def test_channel_endpoints_are_gone(self):
+        for path in ("/api/update/channel", "/api/cluster/channel"):
+            with self.subTest(path=path):
+                raw = json.dumps({"target_ip": "10.144.144.7", "channel": "beta"}).encode("utf-8")
+                handler = server.XRayMeshHandler.__new__(server.XRayMeshHandler)
+                handler.rfile = io.BytesIO(raw)
+                handler.wfile = io.BytesIO()
+                handler.headers = {"Content-Length": str(len(raw)), "Content-Type": "application/json"}
+                handler.path = path
+                handler.command = "POST"
+                handler.request_version = "HTTP/1.0"
+                handler.requestline = f"POST {path} HTTP/1.0"
+                handler.client_address = ("127.0.0.1", 50000)
+                handler.do_POST()
+                self.assertTrue(handler.wfile.getvalue().startswith(b"HTTP/1.0 404"))
         self.assertFalse(self.web_env.exists())
 
-        with mock.patch.object(server, "get_version_info", return_value={}):
-            status, payload = call_handler("POST", "/api/update/channel", {"channel": "stable"})
-        self.assertEqual(status, 200)
-        self.assertEqual(payload["status"]["channel"], "stable")
-        self.assertIn('XRAYMESH_BRANCH="main"', self.web_env.read_text(encoding="utf-8"))
-
-    def test_cluster_info_reports_channel_and_update_job(self):
+    def test_cluster_info_reports_main_and_update_job(self):
         os.environ["XRAYMESH_BRANCH"] = "beta"
         self.write_status(state="running", step="download", target_version="9.0.0", updated_at=time.time())
         with mock.patch.object(server, "get_cached_version_info", return_value={"latest_version": "9.0.0"}):
             status, payload = call_handler("GET", "/api/cluster/info")
         self.assertEqual(status, 200)
         self.assertEqual(payload["version"], server.CURRENT_VERSION)
-        self.assertEqual((payload["branch"], payload["channel"]), ("beta", "beta"))
+        # Older panels in the mesh still read "channel"; it is always stable now.
+        self.assertEqual((payload["branch"], payload["channel"]), ("main", "stable"))
         self.assertEqual(payload["latest_version"], "9.0.0")
         self.assertTrue(payload["update_available"])
         self.assertEqual((payload["update"]["state"], payload["update"]["step"]), ("running", "download"))
@@ -125,7 +123,7 @@ class LocalUpdateTests(UpdateTestCase):
         status, payload = call_handler("POST", "/api/update/start")
         self.assertEqual((status, payload["code"]), (409, "already_running"))
 
-    def test_start_launches_detached_unit_with_channel_and_records_queued(self):
+    def test_start_launches_detached_unit_on_main_and_records_queued(self):
         os.environ["XRAYMESH_BRANCH"] = "beta"
         calls = []
 
@@ -142,10 +140,10 @@ class LocalUpdateTests(UpdateTestCase):
 
         self.assertEqual((status, payload["code"]), (200, "queued"))
         launch = next(c for c in calls if c[0] == "systemd-run")
-        self.assertIn("--setenv=XRAYMESH_BRANCH=beta", launch)
+        self.assertIn("--setenv=XRAYMESH_BRANCH=main", launch)
         self.assertEqual(launch[-2:], [str(SERVER_PATH), "node-update"])
         job = json.loads(self.status_file.read_text(encoding="utf-8"))
-        self.assertEqual((job["state"], job["target_version"], job["branch"]), ("queued", "9.0.0", "beta"))
+        self.assertEqual((job["state"], job["target_version"], job["branch"]), ("queued", "9.0.0", "main"))
 
 
 class ClusterProxyTests(UpdateTestCase):
@@ -179,14 +177,29 @@ class ClusterProxyTests(UpdateTestCase):
             status, payload = call_handler("POST", "/api/cluster/update/status", {"target_ip": "10.144.144.7"})
         self.assertEqual((status, payload["ok"], payload["reachable"]), (200, True, False))
 
-    def test_channel_change_is_forwarded_and_validated(self):
-        status, payload = call_handler("POST", "/api/cluster/channel", {"target_ip": "10.144.144.7", "channel": "x"})
-        self.assertEqual((status, payload["code"]), (400, "invalid_channel"))
+    def test_beta_peer_is_moved_to_main_before_its_update(self):
+        server.PEER_VERSION_CACHE["10.144.144.7"] = {"version": "3.0.0-beta.16", "branch": "beta", "channel": "beta"}
+        replies = [(True, {"ok": True, "status": {}}, 200), (True, {"ok": True, "code": "queued", "status": {}}, 200)]
+        with mock.patch.object(server, "cluster_request", side_effect=replies) as req:
+            status, payload = call_handler("POST", "/api/cluster/update", {"target_ip": "10.144.144.7"})
+        self.assertEqual((status, payload["code"]), (200, "queued"))
+        self.assertEqual([c[0][2:5] for c in req.call_args_list], [
+            ("/api/cluster/node/channel", "4f1c9e02b7d35a68", {"channel": "stable"}),
+            ("/api/cluster/node/update", "4f1c9e02b7d35a68", {}),
+        ])
 
-        with mock.patch.object(server, "cluster_request", return_value=(True, {"ok": True, "status": {"channel": "beta"}}, 200)) as req:
-            status, payload = call_handler("POST", "/api/cluster/channel", {"target_ip": "10.144.144.7", "channel": "beta"})
-        self.assertEqual((status, payload["status"]["channel"]), (200, "beta"))
-        self.assertEqual(req.call_args[0][2:5], ("/api/cluster/node/channel", "4f1c9e02b7d35a68", {"channel": "beta"}))
+    def test_beta_peer_is_not_updated_when_the_move_to_main_fails(self):
+        server.PEER_VERSION_CACHE["10.144.144.7"] = {"version": "3.0.0-beta.16", "branch": "beta", "channel": "beta"}
+        with mock.patch.object(server, "cluster_request", return_value=(False, "timed out", None)) as req:
+            status, payload = call_handler("POST", "/api/cluster/update", {"target_ip": "10.144.144.7"})
+        self.assertEqual((status, payload["code"]), (502, "unreachable"))
+        req.assert_called_once()
+
+    def test_main_peer_update_skips_the_move(self):
+        server.PEER_VERSION_CACHE["10.144.144.7"] = {"version": "3.0.1", "branch": "main", "channel": "stable"}
+        with mock.patch.object(server, "cluster_request", return_value=(True, {"ok": True, "code": "queued"}, 200)) as req:
+            call_handler("POST", "/api/cluster/update", {"target_ip": "10.144.144.7"})
+        self.assertEqual([c[0][2] for c in req.call_args_list], ["/api/cluster/node/update"])
 
     def test_local_target_is_handled_without_the_network(self):
         with mock.patch.object(server, "spawn_detached_node_update", return_value=(True, "ok", "queued")) as spawn, \
@@ -202,19 +215,26 @@ class ClusterProxyTests(UpdateTestCase):
 
 
 class PeersListTests(UpdateTestCase):
-    def test_peer_update_state_comes_from_the_peer_itself(self):
+    def test_peer_update_state_is_judged_against_main(self):
         peers = [
             {"ipv4": "10.144.144.7", "hostname": "new-peer", "cost": "p2p"},
-            {"ipv4": "10.144.144.8", "hostname": "old-peer-other-branch", "cost": "relay(2)"},
+            {"ipv4": "10.144.144.8", "hostname": "old-peer", "cost": "relay(2)"},
+            {"ipv4": "10.144.144.9", "hostname": "beta-peer", "cost": "p2p"},
+            {"ipv4": "10.144.144.10", "hostname": "old-peer-other-branch", "cost": "p2p"},
         ]
+        cache = {
+            "10.144.144.7": {"version": "3.0.1", "branch": "main", "channel": "stable",
+                             "latest_version": "3.0.2", "update_available": True, "update": {"state": "idle"}},
+            "10.144.144.8": {"version": "2.2.5", "branch": "main"},
+            # Checked the removed beta channel and found nothing newer there.
+            "10.144.144.9": {"version": "3.0.0-beta.16", "branch": "beta", "channel": "beta",
+                             "latest_version": "3.0.0-beta.16", "update_available": False},
+            "10.144.144.10": {"version": "2.2.5", "branch": "feature-x"},
+        }
 
         def fake_probe(ip, *args, **kwargs):
-            if ip == "10.144.144.7":
-                server.PEER_VERSION_CACHE[ip] = {"version": "2.2.6-beta.4", "branch": "main", "channel": "stable",
-                                                 "latest_version": "2.2.7", "update_available": True, "update": {"state": "idle"}}
-                return "2.2.6-beta.4"
-            server.PEER_VERSION_CACHE[ip] = {"version": "2.2.5", "branch": "main"}
-            return "2.2.5"
+            server.PEER_VERSION_CACHE[ip] = dict(cache[ip])
+            return cache[ip]["version"]
 
         os.environ["XRAYMESH_BRANCH"] = "beta"
         with mock.patch.object(server, "get_easytier_peers", return_value=peers), \
@@ -226,14 +246,20 @@ class PeersListTests(UpdateTestCase):
 
         self.assertEqual(status, 200)
         by_ip = {p["ipv4"]: p for p in payload["data"]}
-        new_peer, old_peer, local = by_ip["10.144.144.7"], by_ip["10.144.144.8"], by_ip["10.144.144.1"]
-        self.assertEqual((new_peer["channel"], new_peer["latest_version"], new_peer["update_available"]), ("stable", "2.2.7", True))
+        new_peer, old_peer = by_ip["10.144.144.7"], by_ip["10.144.144.8"]
+        beta_peer, other_peer, local = by_ip["10.144.144.9"], by_ip["10.144.144.10"], by_ip["10.144.144.1"]
+        # A peer on main reports its own check.
+        self.assertEqual((new_peer["latest_version"], new_peer["update_available"]), ("3.0.2", True))
         self.assertEqual(new_peer["connection"], "direct")
-        # An older peer on another branch cannot be judged against this server's beta release.
-        self.assertEqual((old_peer["update_available"], old_peer["connection"]), (False, "relay"))
-        # Only the peer that does not report a channel runs the untracked legacy updater.
-        self.assertEqual((new_peer["legacy"], old_peer["legacy"]), (False, True))
-        self.assertEqual((local["is_current"], local["channel"], local["update_available"]), (True, "beta", True))
+        # Older peers on main and peers left on beta are offered main's release.
+        self.assertEqual((old_peer["latest_version"], old_peer["update_available"], old_peer["connection"]), ("9.9.9", True, "relay"))
+        self.assertEqual((beta_peer["latest_version"], beta_peer["update_available"]), ("9.9.9", True))
+        # A legacy peer on another branch cannot be moved to main from here.
+        self.assertFalse(other_peer["update_available"])
+        # Only peers that do not report a channel run the untracked legacy updater.
+        self.assertEqual((new_peer["legacy"], old_peer["legacy"], beta_peer["legacy"]), (False, True, False))
+        self.assertEqual((local["is_current"], local["xraymesh_branch"], local["update_available"]), (True, "main", True))
+        self.assertNotIn("channel", local)
 
 
 if __name__ == "__main__":

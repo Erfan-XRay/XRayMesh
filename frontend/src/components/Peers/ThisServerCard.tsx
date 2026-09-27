@@ -4,37 +4,29 @@ import { Peer } from '../../types';
 import type { Translate } from '../../i18n/translations';
 import { formatText } from '../../i18n/fillTemplate';
 import { UpdateRun } from '../../hooks/useNodeUpdates';
-import { SwitchField } from '../NodeConfig/FormControls';
 import { cardClass, CopyButton, Pill } from '../ui';
-import { channelOf } from './peerDisplay';
-import { ChannelButton } from './PeerRow';
 import { UpdateCell, UpdateFailure } from './UpdateStatus';
 
 interface ThisServerCardProps {
   peer: Peer;
   run?: UpdateRun;
-  channelBusy: boolean;
   onUpdate: (peer: Peer) => void;
   onDismissUpdate: (ip: string) => void;
-  onChangeChannel: (peer: Peer) => void;
   onCopy: (text: string) => void;
   copiedKey: string | null;
   t: Translate;
 }
 
-/** The server whose panel is open: its version, update and the beta opt-in live here. */
+/** The server whose panel is open: its version and update live here. */
 export const ThisServerCard: React.FC<ThisServerCardProps> = ({
   peer,
   run,
-  channelBusy,
   onUpdate,
   onDismissUpdate,
-  onChangeChannel,
   onCopy,
   copiedKey,
   t,
 }) => {
-  const channel = channelOf(peer);
   const copyLabel = formatText(t('peer_copy_ip'), { ip: peer.ipv4 });
   return (
     <section aria-labelledby="this-server-heading" className={`${cardClass} p-4 sm:p-5`}>
@@ -57,11 +49,8 @@ export const ThisServerCard: React.FC<ThisServerCardProps> = ({
                 </span>
                 <CopyButton value={peer.ipv4} copied={copiedKey === peer.ipv4} onCopy={onCopy} label={copyLabel} className="w-6 h-6" />
               </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="font-mono text-text-secondary" dir="ltr">
-                  {peer.xraymesh_version}
-                </span>
-                <ChannelButton peer={peer} onClick={() => onChangeChannel(peer)} t={t} />
+              <span className="font-mono text-text-secondary" dir="ltr">
+                {peer.xraymesh_version}
               </span>
             </div>
             <p className="mt-1 text-xs text-text-subtle">{t('this_server_desc')}</p>
@@ -77,16 +66,6 @@ export const ThisServerCard: React.FC<ThisServerCardProps> = ({
           <UpdateFailure peer={peer} run={run} onDismiss={onDismissUpdate} onCopy={onCopy} copiedKey={copiedKey} t={t} />
         </div>
       )}
-
-      <div className="mt-4 pt-4 border-t border-card-border">
-        <SwitchField
-          label={t('beta_switch_label')}
-          hint={t('beta_switch_hint')}
-          checked={channel === 'beta'}
-          disabled={channelBusy}
-          onChange={() => onChangeChannel(peer)}
-        />
-      </div>
     </section>
   );
 };

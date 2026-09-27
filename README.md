@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Erfan-XRay/XRayMesh/releases/tag/v3.0.1"><img src="https://img.shields.io/badge/version-3.0.1-2dd4bf.svg?style=flat-square" alt="Version 3.0.1" /></a>
+  <a href="https://github.com/Erfan-XRay/XRayMesh/releases/tag/v3.0.2"><img src="https://img.shields.io/badge/version-3.0.2-2dd4bf.svg?style=flat-square" alt="Version 3.0.2" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Source--Available-red.svg?style=flat-square" alt="Source-Available License" /></a>
   <img src="https://img.shields.io/badge/EasyTier-v2.6.4-cyan.svg?style=flat-square" alt="EasyTier core" />
   <img src="https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-orange.svg?style=flat-square" alt="Supported OS" />
@@ -49,7 +49,7 @@ Developed with passion by **ErfanXRay**.
 - **Interactive Ping Diagnostics:** Real-time multi-packet ping diagnostics directly between mesh peers.
 - **Firouzeh Design & Mobile-Optimized:** Several color palettes with light and dark modes, an animated ambient background, a phone bottom bar, and full English/Persian RTL support.
 - **Installable Web App:** Add the dashboard to your home screen (iOS Safari or Android Chrome) and it opens full-screen with its own icon.
-- **Updates From the Panel:** Update any server in the mesh from the dashboard, with verification and automatic rollback. Choose the stable or beta update channel per server.
+- **Updates From the Panel:** Update any server in the mesh from the dashboard, with verification and automatic rollback. Updates always come from the stable `main` branch.
 
 ### 🛡️ Multi-Backend Port Forwarding Tunnels
 - **HAProxy Tunnels:** High-throughput TCP proxying with connection pooling and health checks.

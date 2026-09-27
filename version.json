@@ -1,8 +1,8 @@
 {
-  "version": "3.0.1",
+  "version": "3.0.2",
   "branch": "main",
-  "release_name": "XRayMesh v3.0.1 (Stable 3.0: ICMP/PCK Transports, Private Mesh & New Terminal Menu)",
+  "release_name": "XRayMesh v3.0.2 (Stable-only updates)",
   "release_date": "2026-09-27",
-  "changelog": "First stable release of the 3.0 line. The mesh can now run over ICMP (inside ping packets) and PCK (raw TCP segments) links powered by BackPack. Mesh nodes only accept servers that share your network secret, multi-thread mode uses more CPU cores, and the redesigned Firouzeh panel adds live speed tests, update channels (stable/beta), per-server updates with rollback, and an installable web app. The terminal menu was redesigned with arrow-key navigation, and Ctrl+C no longer freezes the terminal.",
+  "changelog": "The beta update channel was removed. Every server now checks for and installs updates only from the main branch, and the panel no longer has the beta switch or channel badges. Servers that had beta updates turned on move to main on their next update, and the panel moves a mesh server still on beta to main before updating it.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh) update"
 }

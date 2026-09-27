@@ -2,6 +2,15 @@
 
 All notable XRayMesh changes are documented here.
 
+## [3.0.2] - 2026-09-27
+
+### Removed
+- The beta update channel. Every server now checks for and installs updates only from the `main` branch, and the panel no longer has the "Receive beta updates" switch or channel badges.
+
+### Changed
+- Servers that had beta updates turned on move to `main` on their next update. When the panel updates a mesh server that is still on beta, it first moves that server to `main`, so the update is the stable release.
+- `install.sh` downloads the script from `main` instead of `beta`.
+
 ## [3.0.1] - 2026-09-27
 
 The first stable release of the 3.0 line, published on the `main` branch. It includes everything from 3.0.0-beta.1 to 3.0.0-beta.16 below, plus the changes in this section. Servers on 2.2.x get it through the normal update (`xraymesh update` or the panel).

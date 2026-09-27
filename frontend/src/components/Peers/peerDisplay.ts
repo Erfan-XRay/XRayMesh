@@ -1,4 +1,4 @@
-import { Peer, UpdateChannel } from '../../types';
+import { Peer } from '../../types';
 import type { Translate, TranslationKey } from '../../i18n/translations';
 import { formatText } from '../../i18n/fillTemplate';
 import { UpdatePhase, UpdateRun } from '../../hooks/useNodeUpdates';
@@ -27,15 +27,6 @@ export function formatProtocol(proto?: string): string {
   if (lower.includes('udp') && lower.includes('tcp')) return 'TCP + UDP';
   return lower.toUpperCase();
 }
-
-export const CHANNEL_TEXT: Record<UpdateChannel, TranslationKey> = {
-  stable: 'channel_stable',
-  beta: 'channel_beta',
-  custom: 'channel_custom',
-};
-
-export const channelOf = (peer: Peer): UpdateChannel =>
-  peer.channel || (peer.xraymesh_branch === 'main' ? 'stable' : peer.xraymesh_branch === 'beta' ? 'beta' : 'custom');
 
 /** Servers older than 2.2.6-beta.5 do not report their channel and use the untracked updater. */
 export const isLegacyPeer = (peer: Peer) => !peer.is_current && Boolean(peer.legacy);
@@ -70,11 +61,8 @@ export function updateErrorText(code: string | undefined, host: string, t: Trans
   return formatText(t(ERROR_TEXT[code || ''] || 'update_err_generic'), { host });
 }
 
-/** When the panel cannot reach or drive a server, its own terminal still can. */
-export function cliUpdateCommand(branch: string): string {
-  const b = branch === 'main' || branch === 'beta' ? branch : 'main';
-  return `bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/${b}/xraymesh.sh) update`;
-}
+/** When the panel cannot reach or drive a server, its own terminal still can. Updates come only from main. */
+export const CLI_UPDATE_COMMAND = 'bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh) update';
 
 /** Remote failures the CLI command can still fix. */
 export const needsCliFallback = (run?: UpdateRun) =>

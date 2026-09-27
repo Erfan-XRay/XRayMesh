@@ -6,7 +6,7 @@ import { formatText } from '../../i18n/fillTemplate';
 import { formatNumber, localizeDigits } from '../../i18n/format';
 import { UpdateRun } from '../../hooks/useNodeUpdates';
 import { btnGhostSm, CopyButton, iconBtn } from '../ui';
-import { CHANNEL_TEXT, channelOf, formatProtocol, isLegacyPeer, LATENCY_TEXT, latencyOf, versionLabel } from './peerDisplay';
+import { formatProtocol, LATENCY_TEXT, latencyOf, versionLabel } from './peerDisplay';
 import { UpdateCell, UpdateFailure } from './UpdateStatus';
 
 /** Shared column template so the header and every row line up on large screens. */
@@ -20,40 +20,12 @@ interface PeerRowProps {
   run?: UpdateRun;
   onUpdate: (peer: Peer) => void;
   onDismissUpdate: (ip: string) => void;
-  onChangeChannel: (peer: Peer) => void;
   onPing: (ip: string) => void;
   onSpeedtest: (ip: string) => void;
   onCopy: (text: string) => void;
   copiedKey: string | null;
   t: Translate;
 }
-
-export const ChannelButton: React.FC<{ peer: Peer; onClick: () => void; t: Translate }> = ({ peer, onClick, t }) => {
-  if (!peer.channel && !peer.xraymesh_branch) return null; // unreachable: channel unknown
-  const channel = channelOf(peer);
-  const label = t(CHANNEL_TEXT[channel]);
-  const base = 'inline-flex items-center h-6 px-2 rounded-md border text-xs font-medium';
-  if (isLegacyPeer(peer)) {
-    // Old servers cannot switch channel remotely; a button would only lead to an error.
-    return <span className={`${base} border-card-border text-text-subtle`}>{label}</span>;
-  }
-  const action = formatText(t('channel_change_label'), { host: peer.hostname || peer.ipv4, channel: label });
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={action}
-      title={action}
-      className={`${base} transition-colors cursor-pointer ${
-        channel === 'beta'
-          ? 'border-warning-border bg-warning-subtle text-warning hover:bg-warning/20'
-          : 'border-card-border bg-surface text-text-muted hover:text-text-primary hover:border-border-strong'
-      }`}
-    >
-      {label}
-    </button>
-  );
-};
 
 const Traffic: React.FC<{ peer: Peer; t: Translate; className?: string }> = ({ peer, t, className = '' }) => (
   <span className={`inline-flex items-center gap-3 font-mono text-xs text-text-muted tabular-nums ${className}`}>
@@ -73,7 +45,6 @@ export const PeerRow: React.FC<PeerRowProps> = ({
   run,
   onUpdate,
   onDismissUpdate,
-  onChangeChannel,
   onPing,
   onSpeedtest,
   onCopy,
@@ -138,7 +109,6 @@ export const PeerRow: React.FC<PeerRowProps> = ({
             <span className="font-mono text-xs text-text-secondary" dir="ltr">
               {versionLabel(peer)}
             </span>
-            <ChannelButton peer={peer} onClick={() => onChangeChannel(peer)} t={t} />
             <UpdateCell peer={peer} run={run} onUpdate={onUpdate} onDismiss={onDismissUpdate} t={t} />
           </div>
           <div className="flex items-center shrink-0 -me-2">
@@ -191,7 +161,6 @@ export const PeerRow: React.FC<PeerRowProps> = ({
             <span className="font-mono text-xs text-text-secondary" dir="ltr">
               {versionLabel(peer)}
             </span>
-            <ChannelButton peer={peer} onClick={() => onChangeChannel(peer)} t={t} />
           </div>
           <UpdateCell peer={peer} run={run} onUpdate={onUpdate} onDismiss={onDismissUpdate} t={t} />
         </div>

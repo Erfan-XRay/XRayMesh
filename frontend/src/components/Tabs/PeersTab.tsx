@@ -3,14 +3,13 @@ import { Check, Search, Server, X } from 'lucide-react';
 import { formatCount } from '../../i18n/format';
 import { Peer } from '../../types';
 import type { Translate, TranslationKey } from '../../i18n/translations';
-import { fillTemplate, formatText } from '../../i18n/fillTemplate';
-import { NodeActionError, setNodeUpdateChannel } from '../../services/api';
+import { fillTemplate } from '../../i18n/fillTemplate';
 import { UpdateRun } from '../../hooks/useNodeUpdates';
 import { cardClass, EmptyState, inputClass, SectionHeader, Segmented } from '../ui';
 import { ConfirmModal } from '../Modals/ConfirmModal';
 import { PEER_GRID, PeerRow } from '../Peers/PeerRow';
 import { ThisServerCard } from '../Peers/ThisServerCard';
-import { CHANNEL_TEXT, channelOf, isLegacyPeer, updateErrorText, versionLabel } from '../Peers/peerDisplay';
+import { isLegacyPeer, versionLabel } from '../Peers/peerDisplay';
 
 type Filter = 'all' | 'updates' | 'relayed';
 
@@ -19,11 +18,8 @@ interface PeersTabProps {
   updateRuns: Record<string, UpdateRun>;
   onStartUpdate: (peer: Peer) => void;
   onDismissUpdate: (ip: string) => void;
-  /** Silent dashboard refresh after a channel change. */
-  onRefresh: () => void;
   onQuickPing: (ip: string) => void;
   onQuickSpeedtest: (ip: string) => void;
-  onNotify: (msg: string, type: 'success' | 'error' | 'info') => void;
   onCopy: (text: string) => void;
   copiedKey: string | null;
   t: Translate;
@@ -41,10 +37,8 @@ export const PeersTab: React.FC<PeersTabProps> = ({
   updateRuns,
   onStartUpdate,
   onDismissUpdate,
-  onRefresh,
   onQuickPing,
   onQuickSpeedtest,
-  onNotify,
   onCopy,
   copiedKey,
   t,
@@ -52,8 +46,6 @@ export const PeersTab: React.FC<PeersTabProps> = ({
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [pendingUpdate, setPendingUpdate] = useState<Peer | null>(null);
-  const [pendingChannel, setPendingChannel] = useState<Peer | null>(null);
-  const [channelBusy, setChannelBusy] = useState(false);
 
   const current = peers.find((p) => p.is_current);
   const others = useMemo(
@@ -88,41 +80,20 @@ export const PeersTab: React.FC<PeersTabProps> = ({
     setPendingUpdate(null);
   };
 
-  const confirmChannel = async () => {
-    if (!pendingChannel) return;
-    const peer = pendingChannel;
-    const next = channelOf(peer) === 'beta' ? 'stable' : 'beta';
-    const host = peer.hostname || peer.ipv4;
-    setChannelBusy(true);
-    try {
-      await setNodeUpdateChannel(peer.ipv4, next);
-      onNotify(formatText(t('channel_changed'), { host, channel: t(CHANNEL_TEXT[next]) }), 'success');
-      onRefresh();
-    } catch (err) {
-      onNotify(updateErrorText(err instanceof NodeActionError ? err.code : 'unreachable', host, t), 'error');
-    } finally {
-      setChannelBusy(false);
-      setPendingChannel(null);
-    }
-  };
-
   const rowHandlers = {
     onUpdate: setPendingUpdate,
     onDismissUpdate,
-    onChangeChannel: setPendingChannel,
     onCopy,
     copiedKey,
     t,
   };
 
   const updateHost = pendingUpdate ? pendingUpdate.hostname || pendingUpdate.ipv4 : '';
-  const channelHost = pendingChannel ? pendingChannel.hostname || pendingChannel.ipv4 : '';
-  const enablingBeta = pendingChannel ? channelOf(pendingChannel) !== 'beta' : false;
 
   return (
     <div className="space-y-4">
       {current && (
-        <ThisServerCard peer={current} run={updateRuns[current.ipv4]} channelBusy={channelBusy} {...rowHandlers} />
+        <ThisServerCard peer={current} run={updateRuns[current.ipv4]} {...rowHandlers} />
       )}
 
       <section aria-labelledby="peers-heading" className={`${cardClass} overflow-hidden`}>
@@ -208,7 +179,6 @@ export const PeersTab: React.FC<PeersTabProps> = ({
         })}
         description={fillTemplate(t('update_confirm_desc'), {
           from: <bdi dir="ltr">{pendingUpdate ? versionLabel(pendingUpdate) : ''}</bdi>,
-          channel: pendingUpdate ? t(CHANNEL_TEXT[channelOf(pendingUpdate)]) : '',
         })}
         confirmLabel={t('update_confirm_btn')}
         cancelLabel={t('btn_cancel')}
@@ -229,28 +199,6 @@ export const PeersTab: React.FC<PeersTabProps> = ({
         </ul>
       </ConfirmModal>
 
-      <ConfirmModal
-        isOpen={Boolean(pendingChannel)}
-        tone={enablingBeta ? 'warning' : 'primary'}
-        busy={channelBusy}
-        title={fillTemplate(t(enablingBeta ? 'channel_beta_title' : 'channel_stable_title'), { host: <bdi>{channelHost}</bdi> })}
-        description={
-          enablingBeta
-            ? t('channel_beta_desc')
-            : fillTemplate(t('channel_stable_desc'), { version: <bdi dir="ltr">{pendingChannel ? versionLabel(pendingChannel) : ''}</bdi> })
-        }
-        confirmLabel={t(enablingBeta ? 'channel_beta_confirm' : 'channel_stable_confirm')}
-        cancelLabel={t('btn_cancel')}
-        onConfirm={confirmChannel}
-        onCancel={() => setPendingChannel(null)}
-      >
-        {enablingBeta && (
-          <ul className="space-y-2">
-            <Bullet>{t('channel_beta_point_checks')}</Bullet>
-            <Bullet>{t('channel_beta_point_manual')}</Bullet>
-          </ul>
-        )}
-      </ConfirmModal>
     </div>
   );
 };

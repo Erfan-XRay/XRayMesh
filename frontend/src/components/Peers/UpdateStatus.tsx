@@ -6,7 +6,7 @@ import { fillTemplate, formatText } from '../../i18n/fillTemplate';
 import { isRunActive, UpdateRun } from '../../hooks/useNodeUpdates';
 import { ErrorPanel } from '../NodeConfig/FormControls';
 import { btnGhostSm, btnPrimarySm, btnSecondarySm, iconBtnSm } from '../ui';
-import { CHANNEL_TEXT, channelOf, cliUpdateCommand, needsCliFallback, PHASE_TEXT, updateErrorText } from './peerDisplay';
+import { CLI_UPDATE_COMMAND, needsCliFallback, PHASE_TEXT, updateErrorText } from './peerDisplay';
 
 interface UpdateCellProps {
   peer: Peer;
@@ -33,7 +33,7 @@ export const UpdateCell: React.FC<UpdateCellProps> = ({ peer, run, onUpdate, onD
     const text =
       run.phase === 'success'
         ? fillTemplate(t(run.isLocal ? 'update_done_reload' : 'update_done'), { version: <bdi dir="ltr">{run.targetVersion}</bdi> })
-        : formatText(t('update_result_up_to_date'), { channel: t(CHANNEL_TEXT[channelOf(peer)]) });
+        : t('update_result_up_to_date');
     return (
       <span role="status" className="inline-flex items-center gap-1.5 text-xs font-medium text-success">
         <CircleCheck className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
@@ -101,7 +101,7 @@ interface UpdateFailureProps {
 
 /** Full explanation of a failed update, with the terminal command as a last resort. */
 export const UpdateFailure: React.FC<UpdateFailureProps> = ({ peer, run, onDismiss, onCopy, copiedKey, t }) => {
-  const command = cliUpdateCommand(peer.xraymesh_branch || run.branch);
+  const command = CLI_UPDATE_COMMAND;
   return (
     <div className="space-y-2">
       <ErrorPanel message={updateErrorText(run.errorCode, run.hostname, t)} details={run.errorDetail || undefined} t={t} />

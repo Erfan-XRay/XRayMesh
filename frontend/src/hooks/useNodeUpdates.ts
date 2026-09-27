@@ -21,7 +21,6 @@ export interface UpdateRun {
   ip: string;
   hostname: string;
   isLocal: boolean;
-  branch: string;
   phase: UpdatePhase;
   fromVersion: string;
   targetVersion: string;
@@ -195,7 +194,6 @@ export function useNodeUpdates(onFinished: () => void) {
         ip,
         hostname: peer.hostname || ip,
         isLocal: Boolean(peer.is_current),
-        branch: peer.xraymesh_branch || '',
         phase: 'starting',
         fromVersion: peer.xraymesh_version || '',
         targetVersion: peer.latest_version || '',

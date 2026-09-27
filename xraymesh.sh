@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="3.0.1"
+readonly VERSION="3.0.2"
 readonly DEFAULT_BRANCH="main"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
@@ -64,16 +64,10 @@ readonly DEFAULT_WEB_PORT="11080"
 readonly LOG_TAG="xraymesh"
 readonly FALLBACK_EASYTIER_VERSION="v2.6.4"
 
+# Releases and updates come only from main; the beta channel was removed. An
+# XRAYMESH_BRANCH left by a beta install is ignored and rewritten to main on update.
 get_active_branch() {
-  if [[ -n "${XRAYMESH_BRANCH:-}" ]]; then
-    echo "$XRAYMESH_BRANCH"
-  elif [[ -f "$WEB_CONFIG_FILE" ]] && grep -q '^XRAYMESH_BRANCH=' "$WEB_CONFIG_FILE" 2>/dev/null; then
-    grep '^XRAYMESH_BRANCH=' "$WEB_CONFIG_FILE" | head -n1 | cut -d= -f2- | tr -d '"'\'' '
-  elif [[ -f "$CONFIG_FILE" ]] && grep -q '^XRAYMESH_BRANCH=' "$CONFIG_FILE" 2>/dev/null; then
-    grep '^XRAYMESH_BRANCH=' "$CONFIG_FILE" | head -n1 | cut -d= -f2- | tr -d '"'\'' '
-  else
-    echo "$DEFAULT_BRANCH"
-  fi
+  echo "$DEFAULT_BRANCH"
 }
 
 if [[ -t 1 ]]; then
@@ -3913,8 +3907,8 @@ os.replace(tmp, path)
 PY
 }
 
-# Highest release version any mirror reports for the channel (mirrors can lag).
-fetch_channel_version() {
+# Highest release version any mirror reports for the branch (mirrors can lag).
+fetch_release_version() {
   local branch="$1" url tmp v best=""
   local -a urls
   mapfile -t urls < <(release_mirror_urls "version.json" "$branch")
@@ -4085,9 +4079,9 @@ update_app_safe() {
   UPDATE_FROM="$(installed_version)"
   UPDATE_TARGET=""
   update_status running download
-  info "Checking the '${UPDATE_BRANCH}' channel for a newer release..."
+  info "Checking for a newer release..."
 
-  if ! UPDATE_TARGET="$(fetch_channel_version "$UPDATE_BRANCH")"; then
+  if ! UPDATE_TARGET="$(fetch_release_version "$UPDATE_BRANCH")"; then
     UPDATE_TARGET=""
     update_status failed download "Could not read the latest version from any mirror. Check this server's internet access."
     fail "Could not read the latest version from any mirror."
@@ -4098,7 +4092,7 @@ update_app_safe() {
 
   if [[ "${XRAYMESH_FORCE_UPDATE:-0}" != "1" ]] && ! version_is_newer "$UPDATE_TARGET" "$UPDATE_FROM"; then
     update_status up_to_date complete
-    ok "Already up to date (${UPDATE_FROM}; latest on '${UPDATE_BRANCH}': ${UPDATE_TARGET})."
+    ok "Already up to date (${UPDATE_FROM}; latest release: ${UPDATE_TARGET})."
     UPDATE_CANCELLABLE=0
     exec {lock_fd}>&-
     return 0
@@ -4261,7 +4255,7 @@ update_node_full() {
   require_root
   require_linux
   local rc=0
-  info "Starting node update (channel: $(get_active_branch))..."
+  info "Starting node update..."
   # Without systemd-run the updater shares the web unit's cgroup, and the
   # delayed web restart at the end of update_app_safe would cut the core update short.
   if inside_web_service; then
@@ -4898,7 +4892,6 @@ update_core() {
   before_core="$(cat "${INSTALL_DIR}/easytier.version" 2>/dev/null || echo "not installed")"
   header
   section "UPDATE XRAYMESH"
-  ui_kv "Channel" "$(get_active_branch)"
   ui_kv "XRayMesh" "$before_app"
   ui_kv "EasyTier" "$before_core"
   printf '\n'

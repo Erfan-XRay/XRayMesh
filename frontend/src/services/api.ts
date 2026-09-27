@@ -570,9 +570,4 @@ export async function fetchNodeUpdateStatus(
   return { reachable: d.reachable !== false, legacy: Boolean(d.legacy), status: d.status || {} };
 }
 
-export async function setNodeUpdateChannel(targetIp: string, channel: 'stable' | 'beta'): Promise<UpdateSummary> {
-  const d = await postNodeAction('/api/cluster/channel', { target_ip: targetIp, channel });
-  return d.status || {};
-}
-
 

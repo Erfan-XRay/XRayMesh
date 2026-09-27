@@ -47,19 +47,15 @@ export interface Peer {
   update_checked?: boolean;
   version_drift?: boolean;
   is_current?: boolean;
-  /** Reported by each server for its own update channel (2.2.6-beta.5+). */
-  channel?: UpdateChannel;
   latest_version?: string;
   update?: UpdateJob;
   connection?: 'direct' | 'relay' | 'local';
   /** Set when the direct connection runs across a BackPack link; `tunnel_proto` then only says "udp". */
   transport?: 'icmp' | 'pck';
-  /** Runs the pre-2.2.6-beta.5 updater: no step reports, no remote channel change. */
+  /** Runs the pre-2.2.6-beta.5 updater: no step reports. */
   legacy?: boolean;
   loss_rate?: string | number;
 }
-
-export type UpdateChannel = 'stable' | 'beta' | 'custom';
 
 /** Self-update job recorded by xraymesh.sh node-update. */
 export interface UpdateJob {
@@ -75,7 +71,6 @@ export interface UpdateJob {
 export interface UpdateSummary {
   version?: string;
   branch?: string;
-  channel?: UpdateChannel;
   latest_version?: string;
   update_available?: boolean;
   update?: UpdateJob;
@@ -162,7 +157,6 @@ export interface VersionInfo {
   current_version: string;
   latest_version: string;
   branch?: string;
-  channel?: UpdateChannel;
   update_available: boolean;
   changelog?: string[];
   release_notes?: string;

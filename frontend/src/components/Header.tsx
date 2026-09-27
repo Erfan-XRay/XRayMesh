@@ -4,7 +4,7 @@ import { NodeInfo, TabId } from '../types';
 import type { Translate } from '../i18n/translations';
 import { XRayMeshLogo } from './XRayMeshLogo';
 import { PreferencesPanel, PreferencesProps } from './PreferencesPanel';
-import { iconBtn, Pill, StatusDot } from './ui';
+import { iconBtn, StatusDot } from './ui';
 
 export interface NavTab {
   id: TabId;
@@ -134,9 +134,8 @@ export const Header: React.FC<HeaderProps> = ({
   t,
   ...prefs
 }) => {
-  const version = node.xraymesh_version || '3.0.1';
+  const version = node.xraymesh_version || '3.0.2';
   const { listRef, box } = useTabIndicator(activeTab, [tabs.length, showTabs]);
-  const isBeta = node.branch === 'beta';
 
   const onTabKeyDown = (e: React.KeyboardEvent) => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
@@ -164,11 +163,6 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="hidden sm:inline font-mono text-2xs text-text-subtle" dir="ltr">
                   v{version}
                 </span>
-                {isBeta && (
-                  <Pill tone="warning" className="hidden sm:inline-flex h-5 px-1.5 text-2xs">
-                    {t('channel_beta')}
-                  </Pill>
-                )}
               </div>
               <div className="flex items-center gap-1.5 min-w-0 mt-0.5 text-xs text-text-muted">
                 {node.configured ? (
