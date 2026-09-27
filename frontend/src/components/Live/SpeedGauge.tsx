@@ -169,8 +169,8 @@ export const SpeedGauge: React.FC<SpeedGaugeProps> = ({ value, peak, phase, form
         <circle cx={CX} cy={CY} r={2.5} fill="rgb(var(--primary-rgb))" />
       </svg>
 
-      {/* Readout tucked into the open bottom of the dial */}
-      <div className="-mt-9 flex flex-col items-center text-center">{children}</div>
+      {/* Readout below the dial, so long values never run into the arc or its labels */}
+      <div className="mt-1 flex flex-col items-center text-center">{children}</div>
     </div>
   );
 };

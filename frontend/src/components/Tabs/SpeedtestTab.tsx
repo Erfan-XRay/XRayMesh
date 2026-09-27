@@ -146,7 +146,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({ peers, targetIp, onT
   const liveBytes = liveSamples.reduce((sum, i) => sum + (i.bytes || 0), 0);
   const liveRetransmits = liveSamples.reduce((sum, i) => sum + (i.retransmits || 0), 0);
   const shownSpeed = useAnimatedNumber(speed, { tau: 380 });
-  const speedDecimals = shownSpeed >= 1000 ? 0 : shownSpeed >= 100 ? 1 : 2;
+  const speedText = formatNumber(shownSpeed, t, shownSpeed >= 1000 ? 0 : shownSpeed >= 100 ? 1 : 2);
   const mbpsText = (v: number) => `${formatNumber(v, t, v >= 1000 ? 0 : 1)} Mbps`;
 
   const transferred = isRunning
@@ -334,8 +334,12 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({ peers, targetIp, onT
         <div className="flex-1 flex flex-col items-center justify-center pt-6 pb-4">
           <SpeedGauge value={speed} peak={peak} phase={phase} formatTick={num}>
             <p className="text-xs font-medium text-text-muted">{t(resultProto === 'udp' ? 'speed_unit_udp' : 'speed_unit_tcp')}</p>
-            <p className={`font-mono text-4xl sm:text-5xl font-bold tabular-nums leading-tight ${phase === 'idle' ? 'text-text-subtle' : 'text-primary'}`}>
-              {formatNumber(shownSpeed, t, speedDecimals)}
+            <p
+              className={`font-mono font-bold tabular-nums leading-tight whitespace-nowrap ${
+                speedText.length > 5 ? 'text-3xl sm:text-4xl' : 'text-4xl sm:text-5xl'
+              } ${phase === 'idle' ? 'text-text-subtle' : 'text-primary'}`}
+            >
+              {speedText}
               <span className="ms-1.5 text-base sm:text-lg font-semibold text-text-muted">Mbps</span>
             </p>
           </SpeedGauge>
