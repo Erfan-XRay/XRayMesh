@@ -2,6 +2,11 @@
 
 All notable XRayMesh changes are documented here.
 
+## [3.0.0-beta.11] - 2026-09-27
+
+### Fixed
+- The speed test's live number no longer runs into the speedometer's arc and tick labels: it sits below the dial, and values longer than five characters use a smaller size so they fit on phones.
+
 ## [3.0.0-beta.10] - 2026-09-27
 
 ### Added
