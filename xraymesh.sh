@@ -82,74 +82,336 @@ if [[ -t 1 ]]; then
   readonly PURPLE=$'\033[38;5;141m' PINK=$'\033[38;5;213m'
   readonly GREEN=$'\033[38;5;84m' YELLOW=$'\033[38;5;220m'
   readonly RED=$'\033[38;5;203m' GRAY=$'\033[38;5;245m'
+  # Background of the highlighted row in menus and pickers.
+  readonly SEL_BG=$'\033[48;5;237m'
 else
-  readonly RESET="" BOLD="" DIM="" CYAN="" BLUE="" PURPLE="" PINK="" GREEN="" YELLOW="" RED="" GRAY=""
+  readonly RESET="" BOLD="" DIM="" CYAN="" BLUE="" PURPLE="" PINK="" GREEN="" YELLOW="" RED="" GRAY="" SEL_BG=""
 fi
 
-IN_MAIN_MENU=0
+# ---------------------------------------------------------------------------
+# Terminal UI and Ctrl+C
+# Every screen opened from the menu runs in its own subshell (run_screen), so
+# Ctrl+C ends that screen and the menu redraws. Anywhere else Ctrl+C cancels
+# the command. The handler must always exit: when it returned, "read" went on
+# waiting and the terminal looked frozen until the SSH session was closed.
+# ---------------------------------------------------------------------------
+MENU_PID=0       # PID of the menu loop while it runs
+MENU_IDLE=0      # 1 while the menu itself, not a screen, owns the terminal
+UI_PAUSED=1      # 0 once a screen printed something the user has not dismissed
+UI_ROWS=24
+UI_COLS=80
+UI_KEY=""
+CANCEL_NOTE="Cancelled."
+CANCEL_HOOKS=()  # commands a cancelled screen runs before it exits
 
 trap 'printf "\n%bError on line %s. Check the logs for details.%b\n" "$RED" "$LINENO" "$RESET" >&2' ERR
 
+ui_interactive() { [[ -t 0 && -t 1 ]]; }
+
+# Undo what menus and pickers change: hidden cursor, line wrap, key echo.
+ui_restore_terminal() {
+  if [[ -t 1 ]]; then printf '\033[?25h\033[?7h'; fi
+  if [[ -t 0 ]]; then stty echo icanon 2>/dev/null || true; fi
+}
+
+# on_cancel <command>: run <command> if Ctrl+C cancels the current screen or command.
+on_cancel() { CANCEL_HOOKS+=("$1"); }
+
 handle_interrupt() {
-  if (( IN_MAIN_MENU )); then
-    printf '\n%b  XRayMesh closed.%b\n' "$CYAN" "$RESET"
+  if (( MENU_PID && BASHPID == MENU_PID )); then
+    # A screen is running: its own subshell handles Ctrl+C and the menu redraws.
+    (( MENU_IDLE )) || return 0
+    ui_restore_terminal
+    printf '\033[H\033[2J'
+    printf '\n%b  XRayMesh closed. Run %bxraymesh%b%b to open the menu again.%b\n\n' "$CYAN" "$BOLD" "$RESET" "$CYAN" "$RESET"
     exit 0
-  else
-    printf '\n%b  Interrupted — returning to the main menu...%b\n' "$YELLOW" "$RESET"
   fi
+  local hook
+  trap '' INT  # a second Ctrl+C must not cut the cleanup short
+  for hook in "${CANCEL_HOOKS[@]}"; do
+    eval "$hook" >/dev/null 2>&1 || true
+  done
+  ui_restore_terminal
+  [[ -n "$CANCEL_NOTE" ]] && printf '\n%b  ✗ %s%b\n' "$YELLOW" "$CANCEL_NOTE" "$RESET" >&2
+  exit 130
 }
 
 trap 'handle_interrupt' INT
 
-say() { printf '%b%s%b\n' "$2" "$1" "$RESET"; }
-ok() { say "  [OK] $*" "$GREEN"; }
+say() { printf '%b%s%b\n' "$2" "$1" "$RESET"; UI_PAUSED=0; }
+ok() { say "  ✓ $*" "$GREEN"; }
 warn() { say "  ! $*" "$YELLOW"; }
-fail() { say "  [ERROR] $*" "$RED" >&2; }
-info() { say "  > $*" "$BLUE"; }
-pause() { read -r -p "  Press Enter to continue..." _ || true; }
+fail() { say "  ✗ $*" "$RED" >&2; }
+info() { say "  › $*" "$BLUE"; }
 
-section() {
-  printf '\n%b  %s%b\n' "$BOLD$CYAN" "$1" "$RESET"
-  printf '%b  ────────────────────────────────────────────────────────────%b\n' "$DIM$BLUE" "$RESET"
-}
-
-run_screen() {
-  # Run each screen in its own signal boundary. Ctrl+C exits only this screen,
-  # while the parent menu remains alive and redraws immediately.
-  local status=0
-  (
-    trap 'exit 130' INT
-    "$@"
-  ) || status=$?
-  if (( status == 130 )); then
-    printf '\n%b  Returned to the main menu.%b\n' "$YELLOW" "$RESET"
-    sleep 0.5
-  elif (( status != 0 )); then
-    warn "The operation ended with status ${status}."
-    pause
-  fi
+pause() {
+  UI_PAUSED=1
+  [[ -t 0 ]] || return 0
+  printf '\n  %b╰─ Press any key to continue%b ' "$DIM$GRAY" "$RESET"
+  IFS= read -rsn1 _ || true
+  # Drop the rest of a multi-byte key (arrows) so the next prompt does not receive it.
+  while IFS= read -rsn1 -t 0.02 _; do :; done
+  printf '\n'
   return 0
 }
 
-header() {
-  clear 2>/dev/null || true
-  printf '%b' "$BOLD$CYAN"
-  if command -v figlet >/dev/null 2>&1; then
-    figlet -f slant -w 120 "$APP" 2>/dev/null || figlet "$APP"
-  else
-    cat <<'ART'
- __  __ ____              __  __           _
- \ \/ // __ \____ ___  __/  |/  /___  _____/ /_
-  \  // /_/ / __ `/ / / / /|_/ / __ \/ ___/ __ \
-  / // _, _/ /_/ / /_/ / /  / / /_/ (__  ) / / /
- /_//_/ |_|\__,_/\__, /_/  /_/\____/____/_/ /_/
-                /____/
-ART
-  fi
-  printf '%b' "$RESET"
-  printf '%b  EasyTier Mesh Manager%b  %b│%b  v%s  %b│%b  Developed by %s\n' \
+# ui_line <width> [char]: print a horizontal line.
+ui_line() {
+  local line
+  printf -v line '%*s' "$1" ''
+  printf '%s' "${line// /${2:-─}}"
+}
+
+ui_term_size() {
+  local size=""
+  [[ -t 0 ]] && size="$(stty size 2>/dev/null || true)"
+  UI_ROWS="${size%% *}"
+  UI_COLS="${size##* }"
+  [[ "$UI_ROWS" =~ ^[0-9]+$ ]] && (( UI_ROWS > 0 )) || UI_ROWS="${LINES:-24}"
+  [[ "$UI_COLS" =~ ^[0-9]+$ ]] && (( UI_COLS > 0 )) || UI_COLS="${COLUMNS:-80}"
+}
+
+# Width of boxes and rules: the terminal minus margins, between 40 and 72 columns.
+ui_width() {
+  local w=$(( UI_COLS - 4 ))
+  (( w > 72 )) && w=72
+  (( w < 40 )) && w=40
+  printf '%d' "$w"
+}
+
+section() {
+  local w
+  w="$(ui_width)"
+  printf '\n  %b◆ %s%b\n' "$BOLD$CYAN" "$1" "$RESET"
+  printf '  %b%s%b\n' "$DIM$BLUE" "$(ui_line "$w")" "$RESET"
+  UI_PAUSED=0
+}
+
+# ui_kv <label> <value> [colour]: one "label  value" row inside a card.
+ui_kv() {
+  printf '  %b│%b  %b%-16s%b %b%s%b\n' "$DIM$BLUE" "$RESET" "$GRAY" "$1" "$RESET" "${3:-}" "$2" "$RESET"
+  UI_PAUSED=0
+}
+
+# Compact title bar at the top of every screen.
+ui_title_bar() {
+  local w inner title="XRayMesh" tagline="EasyTier Mesh Manager" version="v${VERSION}" pad
+  w="$(ui_width)"
+  inner=$(( w - 2 ))
+  # The row is "  ◆ " + title + "  " + tagline + padding + version + "  ".
+  pad=$(( inner - 4 - ${#title} - 2 - ${#tagline} - ${#version} - 2 ))
+  (( pad < 1 )) && pad=1
+  printf '  %b╭%s╮%b\n' "$DIM$BLUE" "$(ui_line "$inner")" "$RESET"
+  printf '  %b│%b  %b◆ %s%b  %b%s%b%*s%b%s%b  %b│%b\n' \
+    "$DIM$BLUE" "$RESET" "$BOLD$CYAN" "$title" "$RESET" "$PINK" "$tagline" "$RESET" \
+    "$pad" "" "$GRAY" "$version" "$RESET" "$DIM$BLUE" "$RESET"
+  printf '  %b╰%s╯%b\n' "$DIM$BLUE" "$(ui_line "$inner")" "$RESET"
+}
+
+# Large logo for the main menu when the terminal is tall enough.
+ui_logo() {
+  # shellcheck disable=SC1003  # the backslashes are part of the art
+  local -a art=(
+    ' __  __ ____              __  __           _'
+    ' \ \/ // __ \____ ___  __/  |/  /___  _____/ /_'
+    '  \  // /_/ / __ `/ / / / /|_/ / __ \/ ___/ __ \'
+    '  / // _, _/ /_/ / /_/ / /  / / /_/ (__  ) / / /'
+    ' /_//_/ |_|\__,_/\__, /_/  /_/\____/____/_/ /_/'
+    '                /____/'
+  )
+  local -a tint=("$CYAN" "$CYAN" "$BLUE" "$BLUE" "$PURPLE" "$PURPLE")
+  local i
+  for i in "${!art[@]}"; do
+    printf '  %b%s%b\n' "$BOLD${tint[i]}" "${art[i]}" "$RESET"
+  done
+  printf '  %bEasyTier Mesh Manager%b  %b·%b  v%s  %b·%b  by %s\n' \
     "$BOLD$PINK" "$RESET" "$GRAY" "$RESET" "$VERSION" "$GRAY" "$RESET" "$OWNER"
-  printf '%b  ────────────────────────────────────────────────────────────%b\n\n' "$DIM$BLUE" "$RESET"
+}
+
+header() {
+  # Screens also run from the web panel, which reads their output; only draw for a terminal.
+  [[ -t 1 ]] || return 0
+  printf '\033[H\033[2J\033[3J'
+  ui_term_size
+  ui_title_bar
+  UI_PAUSED=0
+}
+
+# ui_read_key: wait up to a second for one key and store it in UI_KEY as
+# up, down, home, end, pgup, pgdn, enter, esc, backspace, other, or the character.
+# Returns 1 at the end of input and 2 when no key was pressed.
+ui_read_key() {
+  local key="" rest="" status
+  UI_KEY=""
+  IFS= read -rsn1 -t 1 key
+  status=$?
+  (( status > 128 )) && return 2
+  (( status == 0 )) || return 1
+  case "$key" in
+    "") UI_KEY="enter"; return 0 ;;
+    $'\177'|$'\b') UI_KEY="backspace"; return 0 ;;
+    $'\033') ;;
+    *) UI_KEY="$key"; return 0 ;;
+  esac
+  IFS= read -rsn2 -t 0.05 rest || true
+  case "$rest" in
+    '[A'|'OA') UI_KEY="up" ;;
+    '[B'|'OB') UI_KEY="down" ;;
+    '[H'|'OH') UI_KEY="home" ;;
+    '[F'|'OF') UI_KEY="end" ;;
+    '[1'|'[7') UI_KEY="home" ;;
+    '[4'|'[8') UI_KEY="end" ;;
+    '[5') UI_KEY="pgup" ;;
+    '[6') UI_KEY="pgdn" ;;
+    '') UI_KEY="esc" ;;
+    *) UI_KEY="other" ;;
+  esac
+  # Drop the rest of a longer sequence, such as the "~" of Home or Page Up.
+  while IFS= read -rsn1 -t 0.01 _; do :; done
+  return 0
+}
+
+# ui_choose <var> <default index> <option>...: arrow-key picker drawn in place.
+# Stores the chosen index (0-based) in <var>; returns 1 when the user backs out.
+ui_choose() {
+  local -n _uc_out="$1"
+  local _uc_sel="$2" _uc_i _uc_n _uc_drawn=0 _uc_w _uc_pad _uc_line _uc_frame _uc_answer _uc_status
+  shift 2
+  local -a _uc_opts=("$@")
+  _uc_n=${#_uc_opts[@]}
+  (( _uc_sel >= 0 && _uc_sel < _uc_n )) || _uc_sel=0
+
+  if ! ui_interactive; then
+    for _uc_i in "${!_uc_opts[@]}"; do
+      printf '  [%d] %s\n' $(( _uc_i + 1 )) "${_uc_opts[_uc_i]}"
+    done
+    read -r -p "  Select [1-${_uc_n}, default: $(( _uc_sel + 1 ))]: " _uc_answer || return 1
+    _uc_answer="${_uc_answer:-$(( _uc_sel + 1 ))}"
+    [[ "$_uc_answer" =~ ^[0-9]+$ ]] && (( _uc_answer >= 1 && _uc_answer <= _uc_n )) || return 1
+    _uc_out=$(( _uc_answer - 1 ))
+    return 0
+  fi
+
+  ui_term_size
+  _uc_w="$(ui_width)"
+  # Hide the cursor and turn off line wrap, so every option is exactly one line to redraw.
+  printf '\033[?25l\033[?7l'
+  while :; do
+    _uc_frame=""
+    (( _uc_drawn )) && _uc_frame+=$'\033'"[${_uc_drawn}A"$'\r'
+    for _uc_i in "${!_uc_opts[@]}"; do
+      if (( _uc_i == _uc_sel )); then
+        _uc_pad=$(( _uc_w - 8 - ${#_uc_opts[_uc_i]} ))
+        (( _uc_pad < 1 )) && _uc_pad=1
+        printf -v _uc_line '  %s❯%s %s %d  %s%*s%s' "$CYAN" "$RESET" "$SEL_BG$BOLD" \
+          $(( _uc_i + 1 )) "${_uc_opts[_uc_i]}" "$_uc_pad" "" "$RESET"
+      else
+        printf -v _uc_line '     %s%d%s  %s' "$GRAY" $(( _uc_i + 1 )) "$RESET" "${_uc_opts[_uc_i]}"
+      fi
+      _uc_frame+="${_uc_line}"$'\033[K\n'
+    done
+    _uc_frame+="  ${DIM}${GRAY}↑/↓ move · Enter select · q back${RESET}"$'\033[K\n'
+    printf '%s' "$_uc_frame"
+    _uc_drawn=$(( _uc_n + 1 ))
+
+    _uc_status=0
+    ui_read_key || _uc_status=$?
+    case $_uc_status in
+      1) UI_KEY="esc" ;;
+      2) continue ;;
+    esac
+    case "$UI_KEY" in
+      up|k) (( _uc_sel = (_uc_sel - 1 + _uc_n) % _uc_n )) ;;
+      down|j|$'\t') (( _uc_sel = (_uc_sel + 1) % _uc_n )) ;;
+      home|pgup) _uc_sel=0 ;;
+      end|pgdn) _uc_sel=$(( _uc_n - 1 )) ;;
+      [1-9]) (( UI_KEY <= _uc_n )) && _uc_sel=$(( UI_KEY - 1 )) ;;
+      enter) break ;;
+      esc|q|Q)
+        printf '\033[%dA\r\033[J\033[?7h\033[?25h' "$_uc_drawn"
+        printf '  %b‹ Back%b\n' "$DIM$GRAY" "$RESET"
+        return 1
+        ;;
+    esac
+  done
+  printf '\033[%dA\r\033[J\033[?7h\033[?25h' "$_uc_drawn"
+  printf '  %b✓%b %s\n' "$GREEN" "$RESET" "${_uc_opts[_uc_sel]}"
+  _uc_out="$_uc_sel"
+  return 0
+}
+
+# ask <var> <question> [default]: read one line with line editing (arrows,
+# Home/End) into <var>; an empty answer takes the default.
+ask() {
+  local -n _ask_out="$1"
+  local _ask_q="$2" _ask_default="${3-}" _ask_line="" _ask_prompt _ask_so=$'\001' _ask_sc=$'\002'
+  if [[ -t 0 ]]; then
+    # \001 and \002 mark the colour codes so readline measures the prompt correctly.
+    _ask_prompt="  ${_ask_so}${BOLD}${CYAN}${_ask_sc}?${_ask_so}${RESET}${_ask_sc} ${_ask_q}"
+    [[ -n "$_ask_default" ]] && _ask_prompt+=" ${_ask_so}${GRAY}${_ask_sc}[${_ask_default}]${_ask_so}${RESET}${_ask_sc}"
+    read -e -r -p "${_ask_prompt}: " _ask_line || _ask_line=""
+  else
+    read -r _ask_line || _ask_line=""
+  fi
+  _ask_out="${_ask_line:-$_ask_default}"
+}
+
+# ask_secret <var> <question>: read without echo.
+ask_secret() {
+  local -n _secret_out="$1"
+  local _secret_line=""
+  read -r -s -p "  ${BOLD}${CYAN}?${RESET} $2: " _secret_line || _secret_line=""
+  printf '\n'
+  _secret_out="$_secret_line"
+}
+
+# ask_yes_no <question> <default yes|no>: returns 0 for yes.
+ask_yes_no() {
+  local question="$1" default="${2:-no}" answer hint="y/N"
+  default="${default,,}"
+  [[ "$default" == y ]] && default="yes"
+  [[ "$default" == yes ]] && hint="Y/n"
+  while :; do
+    ask answer "${question} (${hint})"
+    answer="${answer,,}"
+    [[ -z "$answer" ]] && answer="$default"
+    case "$answer" in
+      y|yes) return 0 ;;
+      n|no) return 1 ;;
+    esac
+    warn "Answer yes or no."
+  done
+}
+
+# ask_yes_no_into <var> <question> <default yes|no>: store "yes" or "no" in <var>.
+ask_yes_no_into() {
+  if ask_yes_no "$2" "$3"; then
+    printf -v "$1" '%s' yes
+  else
+    printf -v "$1" '%s' no
+  fi
+}
+
+# Run one menu screen in its own subshell, so Ctrl+C or a failure inside it
+# ends only that screen. A screen that printed something and returned
+# without waiting gets a "press any key" before the menu redraws.
+run_screen() {
+  local status=0
+  MENU_IDLE=0
+  ui_restore_terminal
+  (
+    trap 'handle_interrupt' INT
+    CANCEL_HOOKS=()
+    UI_PAUSED=1
+    screen_status=0
+    "$@" || screen_status=$?
+    (( UI_PAUSED )) || pause
+    exit "$screen_status"
+  ) || status=$?
+  MENU_IDLE=1
+  # Leave the "Cancelled" line on screen for a moment before the menu redraws.
+  (( status == 130 )) && sleep 0.4
+  return "$status"
 }
 
 require_root() {
@@ -248,25 +510,6 @@ valid_ip() {
 }
 
 valid_port() { [[ "$1" =~ ^[0-9]+$ ]] && (( "$1" >= 1 && "$1" <= 65535 )); }
-
-prompt_default() {
-  local prompt="$1" default="$2" value
-  read -r -p "  ${prompt} [${default}]: " value
-  printf '%s' "${value:-$default}"
-}
-
-# Ask a yes/no question until the answer is one, and print it as "yes" or "no".
-prompt_yes_no() {
-  local prompt="$1" default="$2" value
-  while :; do
-    value="$(prompt_default "$prompt (yes/no)" "$default")"
-    case "${value,,}" in
-      y|yes) printf 'yes'; return 0 ;;
-      n|no) printf 'no'; return 0 ;;
-    esac
-    warn "Answer yes or no." >&2
-  done
-}
 
 valid_mtu() { [[ "$1" =~ ^[0-9]+$ ]] && (( "$1" >= 576 && "$1" <= 9000 )); }
 
@@ -655,17 +898,15 @@ setup_node() {
   require_root
   [[ -x "${BIN_DIR}/easytier-core" ]] || install_core
   header
-  say "  Configure Mesh Node" "$BOLD$CYAN"
-  printf '\n'
+  section "CONFIGURE MESH NODE"
 
   if [[ ! -f "$CONFIG_FILE" ]]; then
-    say "  Choose setup method:" "$BOLD$YELLOW"
-    printf '  %b[ 1 ]%b  Join Existing Mesh Network via Invite Code (xrmesh://)\n' "$BOLD$CYAN" "$RESET"
-    printf '  %b[ 2 ]%b  Create New Mesh Network Manually\n\n' "$BOLD$GREEN" "$RESET"
-    local s_mode="1"
-    read -r -p "  Select an option [1-2, default: 1]: " s_mode
-    s_mode="${s_mode:-1}"
-    if [[ "$s_mode" == "1" ]]; then
+    say "  How should this server join a mesh?" "$BOLD"
+    local s_mode=0
+    ui_choose s_mode 0 \
+      "Join an existing mesh with an invite code (xrmesh://)" \
+      "Create a new mesh network on this server" || return 0
+    if (( s_mode == 0 )); then
       join_mesh_invite
       return $?
     fi
@@ -707,32 +948,55 @@ setup_node() {
     info "Editing the existing node. Press Enter to keep each current value."
   fi
 
-  name="$(prompt_default "Network name" "$default_name")"
+  local _secret=""
+  ask name "Network name" "$default_name"
   secret="${default_secret:-$(openssl rand -hex 16)}"
   warn "All nodes MUST use exactly the same network name and network secret."
   info "On the first node, keep the generated secret. Copy it to every other node."
   if [[ -n "$default_secret" ]]; then
-    read -r -p "  Shared network secret [keep current]: " _secret
+    ask _secret "Shared network secret (Enter keeps the current one)"
   else
-    read -r -p "  Shared network secret [auto-generated]: " _secret
+    ask _secret "Shared network secret (Enter generates one)"
   fi
   secret="${_secret:-$secret}"
   if [[ -z "$default_secret" && -z "$_secret" ]]; then
     printf '\n'
-    say "  ┌── GENERATED NETWORK SECRET ─────────────────────────────────" "$YELLOW"
-    printf '  │  %b%s%b\n' "$BOLD$CYAN" "$secret" "$RESET"
-    say "  └─────────────────────────────────────────────────────────────" "$YELLOW"
+    say "  ╭─ GENERATED NETWORK SECRET ──────────────────────────────────" "$YELLOW"
+    printf '  %b│%b  %b%s%b\n' "$YELLOW" "$RESET" "$BOLD$CYAN" "$secret" "$RESET"
+    say "  ╰─────────────────────────────────────────────────────────────" "$YELLOW"
     warn "You must enter this exact secret on every other mesh node."
-    read -r -p "  Press Enter after you have saved the secret..." _
+    if [[ -t 0 ]]; then
+      printf '  %b╰─ Press Enter after you have saved the secret%b ' "$DIM$GRAY" "$RESET"
+      IFS= read -rs _ || true
+      printf '\n'
+    fi
   fi
-  hostname="$(prompt_default "Node hostname" "$default_hostname")"
+  ask hostname "Node hostname" "$default_hostname"
   while :; do
-    ipv4="$(prompt_default "Virtual IPv4 address" "$default_ipv4")"
+    ask ipv4 "Virtual IPv4 address" "$default_ipv4"
     valid_ip "$ipv4" && break
     warn "Enter a valid address from the 10.x.x.x range."
   done
-  protocol="$(prompt_default "Preferred protocol (dual/udp/tcp/ws/wss/quic/faketcp/icmp/pck)" "$default_protocol")"
-  [[ "$protocol" =~ ^(dual|udp|tcp|ws|wss|quic|faketcp|icmp|pck)$ ]] || protocol="dual"
+  local -a proto_ids=(dual udp tcp ws wss quic faketcp icmp pck)
+  local -a proto_labels=(
+    "dual      TCP + UDP listeners (recommended)"
+    "udp       UDP only"
+    "tcp       TCP only"
+    "ws        WebSocket"
+    "wss       WebSocket over TLS"
+    "quic      QUIC with TCP fallback"
+    "faketcp   FakeTCP (UDP disguised as TCP)"
+    "icmp      ICMP tunnel (BackPack xDi)"
+    "pck       Raw TCP tunnel (BackPack pck)"
+  )
+  local proto_pick=0 i
+  for i in "${!proto_ids[@]}"; do
+    [[ "${proto_ids[i]}" == "$default_protocol" ]] && proto_pick=$i
+  done
+  say "  Preferred protocol:" "$BOLD"
+  # Backing out of the picker keeps the current protocol.
+  ui_choose proto_pick "$proto_pick" "${proto_labels[@]}" || true
+  protocol="${proto_ids[proto_pick]}"
   if is_backpack_proto "$protocol"; then
     info "${protocol^^} links are created per server: run 'xraymesh invite' here and join from the other server."
     [[ "$protocol" == "pck" ]] && info "PCK: create the invite on the server abroad and join from the server in Iran (Iran dials out)."
@@ -744,22 +1008,26 @@ setup_node() {
   fi
 
   while :; do
-    port="$(prompt_default "Mesh port" "$default_port")"
+    ask port "Mesh port" "$default_port"
     valid_port "$port" && break
     warn "The port must be between 1 and 65535."
   done
-  peers="$(prompt_default "Peer addresses, comma-separated (empty for first node)" "$default_peers")"
-  encryption="$(prompt_yes_no "Enable encryption?" "$default_encryption")"
-  ipv6="$(prompt_yes_no "Enable IPv6?" "$default_ipv6")"
+  ask peers "Peer addresses, comma-separated (empty for the first node)" "$default_peers"
+  ask_yes_no_into encryption "Enable encryption?" "$default_encryption"
+  ask_yes_no_into ipv6 "Enable IPv6?" "$default_ipv6"
   while :; do
-    mtu="$(prompt_default "MTU" "$default_mtu")"
+    ask mtu "MTU" "$default_mtu"
     valid_mtu "$mtu" && break
     warn "The MTU must be between 576 and 9000."
   done
 
-  enable_kcp="$(prompt_yes_no "Enable KCP loss-resistance proxy?" "$default_enable_kcp")"
-  multi_thread="$(prompt_yes_no "Enable multi-thread mode (uses more than one CPU core)?" "$default_multi_thread")"
+  ask_yes_no_into enable_kcp "Enable KCP loss-resistance proxy?" "$default_enable_kcp"
+  ask_yes_no_into multi_thread "Enable multi-thread mode (uses more than one CPU core)?" "$default_multi_thread"
 
+  # Applying the config, and restoring the previous one if it fails, must not be cut short.
+  printf '\n'
+  info "Applying the configuration. Ctrl+C is paused until this finishes."
+  trap '' INT
   write_config "$name" "$secret" "$hostname" "$ipv4" "$protocol" "$port" "$peers" "$encryption" "$ipv6" "$mtu" "$enable_kcp" "$multi_thread"
 
   if apply_node_config; then
@@ -811,6 +1079,7 @@ setup_node() {
       systemctl daemon-reload
     fi
     [[ -z "$config_backup" ]] || rm -f "$config_backup"
+    trap 'handle_interrupt' INT
     return 1
   fi
   [[ -z "$config_backup" ]] || rm -f "$config_backup"
@@ -830,6 +1099,7 @@ setup_node() {
     info "Re-enabling the existing Realm TCP/UDP tunnels."
     apply_realm_config || warn "The mesh is online, but Realm tunnels need attention."
   fi
+  trap 'handle_interrupt' INT
 }
 
 # Print this server's stable public IPv6, if it has one.
@@ -887,10 +1157,11 @@ show_mesh_invite() {
     if [[ "$family_arg" == "--ipv6" || -z "$pub_ip" ]]; then
       pick="2"
     elif [[ -z "$family_arg" && -t 0 ]]; then
-      say "  Which address should other servers use to reach this one?" "$BOLD$YELLOW"
-      printf '  %b[ 1 ]%b  IPv4  %s\n' "$BOLD$CYAN" "$RESET" "$pub_ip"
-      printf '  %b[ 2 ]%b  IPv6  %s\n\n' "$BOLD$CYAN" "$RESET" "$pub_ip6"
-      read -r -p "  Select [1-2, default: 1]: " pick
+      say "  Which address should other servers use to reach this one?" "$BOLD"
+      local family_pick=0
+      ui_choose family_pick 0 "IPv4  ${pub_ip}" "IPv6  ${pub_ip6}" || return 0
+      pick=$(( family_pick + 1 ))
+      printf '\n'
     fi
     if [[ "$pick" == "2" ]]; then
       endpoint="[${pub_ip6}]:${port}"
@@ -905,10 +1176,7 @@ show_mesh_invite() {
       warn "This server joined the mesh over a ${proto^^} link through ${joined_via}."
       warn "Create the code for the next server there: run 'xraymesh invite' on ${joined_via}."
       if [[ -t 0 ]]; then
-        local here
-        read -r -p "  Create a code on this server anyway? The next server would connect through this one. [y/N]: " here
-        if [[ ! "$here" =~ ^[Yy]$ ]]; then
-          pause
+        if ! ask_yes_no "Create a code on this server anyway? The next server would connect through this one." no; then
           return 0
         fi
       fi
@@ -943,22 +1211,24 @@ token = base64.b64encode(json.dumps(d).encode('utf-8')).decode('utf-8')
 print(f'xrmesh://{token}')
 " "$net" "$secret" "$endpoint" "$proto" "$port" "$enc" "$kcp" "$ipv6" "$mtu" "$icmp_link" "$link_key" 2>/dev/null || true)"
 
-  ok "Generated mesh invite code for this server."
+  ok "Generated a mesh invite code for this server."
   printf '\n'
-  say "  ┌── Mesh Invite Code ─────────────────────────────────────────" "$DIM$BLUE"
-  printf '  │  %b%s%b\n' "$BOLD$GREEN" "$invite_code" "$RESET"
-  say "  ├── Settings this code applies on the joining server ─────────" "$DIM$BLUE"
-  printf '  │  • %-16s : %s\n' "Network Name" "$net"
-  printf '  │  • %-16s : %s\n' "Protocol" "$proto"
-  printf '  │  • %-16s : %s (%s)\n' "Peer Endpoint" "$endpoint" "$family"
-  printf '  │  • %-16s : %s\n' "Mesh Port" "$port"
-  printf '  │  • %-16s : %s\n' "MTU" "$mtu"
-  printf '  │  • %-16s : %s\n' "KCP" "$kcp"
-  printf '  │  • %-16s : %s\n' "Encryption" "$enc"
-  printf '  │  • %-16s : %s\n' "IPv6" "$ipv6"
-  say "  └─────────────────────────────────────────────────────────────" "$DIM$BLUE"
+  say "  ╭─ INVITE CODE (copy the whole line) ─────────────────────────" "$DIM$BLUE"
+  # The code sits on its own line, without box characters, so it copies cleanly.
+  printf '\n  %b%s%b\n\n' "$BOLD$GREEN" "$invite_code" "$RESET"
+  say "  ├─ Settings this code applies on the joining server ──────────" "$DIM$BLUE"
+  ui_kv "Network name" "$net"
+  ui_kv "Protocol" "$proto"
+  ui_kv "Peer endpoint" "${endpoint} (${family})"
+  ui_kv "Mesh port" "$port"
+  ui_kv "MTU" "$mtu"
+  ui_kv "KCP" "$kcp"
+  ui_kv "Encryption" "$enc"
+  ui_kv "IPv6" "$ipv6"
+  say "  ╰─────────────────────────────────────────────────────────────" "$DIM$BLUE"
   printf '\n'
   info "On another server, run 'xraymesh join' and paste this code to connect instantly."
+
   if is_backpack_proto "$proto"; then
     say "  How ${proto^^} links work:" "$BOLD$YELLOW"
     [[ -z "$joined_via" ]] && say "   • This server is the main server; every other server joins with a code from here." "$YELLOW"
@@ -1043,7 +1313,7 @@ join_mesh_invite() {
 
   local raw_invite="${1:-}"
   if [[ -z "$raw_invite" ]]; then
-    read -r -p "  Enter Mesh Invite Code (xrmesh://...): " raw_invite
+    ask raw_invite "Paste the invite code (xrmesh://...)"
   fi
   raw_invite="${raw_invite#"${raw_invite%%[![:space:]]*}"}"
   raw_invite="${raw_invite%"${raw_invite##*[![:space:]]}"}"
@@ -1077,16 +1347,16 @@ join_mesh_invite() {
   fi
 
   printf '\n'
-  say "  ┌── Decoded Mesh Network Details ─────────────────────────────" "$DIM$BLUE"
-  printf '  │  • %-16s : %b%s%b\n' "Network Name" "$BOLD$CYAN" "$net" "$RESET"
-  printf '  │  • %-16s : %b%s%b\n' "Protocol" "$BOLD$CYAN" "$proto" "$RESET"
-  printf '  │  • %-16s : %b%s%b\n' "Peer Endpoint" "$BOLD$GREEN" "${endpoint:-Relayed Peer}" "$RESET"
-  printf '  │  • %-16s : %s\n' "Mesh Port" "$invite_port"
-  printf '  │  • %-16s : %s\n' "MTU" "$mtu_val"
-  printf '  │  • %-16s : %s\n' "KCP" "$kcp_val"
-  printf '  │  • %-16s : %s\n' "Encryption" "$enc_val"
-  printf '  │  • %-16s : %s\n' "IPv6" "$ipv6_val"
-  say "  └─────────────────────────────────────────────────────────────" "$DIM$BLUE"
+  say "  ╭─ MESH FROM THIS INVITE ─────────────────────────────────────" "$DIM$BLUE"
+  ui_kv "Network name" "$net" "$BOLD$CYAN"
+  ui_kv "Protocol" "$proto" "$BOLD$CYAN"
+  ui_kv "Peer endpoint" "${endpoint:-Relayed Peer}" "$BOLD$GREEN"
+  ui_kv "Mesh port" "$invite_port"
+  ui_kv "MTU" "$mtu_val"
+  ui_kv "KCP" "$kcp_val"
+  ui_kv "Encryption" "$enc_val"
+  ui_kv "IPv6" "$ipv6_val"
+  say "  ╰─────────────────────────────────────────────────────────────" "$DIM$BLUE"
   if is_backpack_proto "$proto"; then
     info "This code creates a ${proto^^} link to ${peer_host:-the other server} and works for this server only."
   fi
@@ -1109,17 +1379,17 @@ join_mesh_invite() {
   fi
 
   local hostname ipv4 port
-  hostname="$(prompt_default "Server Node Hostname" "$default_hostname")"
+  ask hostname "Node hostname" "$default_hostname"
 
   while :; do
-    ipv4="$(prompt_default "Virtual IPv4 in Mesh Overlay" "$default_ipv4")"
+    ask ipv4 "Virtual IPv4 in the mesh" "$default_ipv4"
     valid_ip "$ipv4" && break
     warn "Enter a valid address from the private IP range (e.g. 10.144.144.x)."
   done
 
   # The invite carries the mesh port, so every server listens on the same one by default.
   while :; do
-    port="$(prompt_default "Mesh Listen Port" "$invite_port")"
+    ask port "Mesh listen port" "$invite_port"
     valid_port "$port" && break
     warn "The port must be between 1 and 65535."
   done
@@ -1145,19 +1415,28 @@ join_mesh_invite() {
     peers_val="udp://${peer_ip}:${peer_port}"
   fi
 
-  info "Applying configuration and connecting to mesh network '${net}'..."
+  info "Connecting to mesh '${net}'. Ctrl+C is paused until this finishes."
+  # Writing the config and starting the node must not be cut short halfway.
+  trap '' INT
   write_config "$net" "$secret" "$hostname" "$ipv4" "$proto" "$port" "$peers_val" "$enc_val" "$ipv6_val" "$mtu_val" "$kcp_val" "$multi_thread"
 
+  local joined=0
   if apply_node_config; then
     prune_icmp_links
     systemctl restart xraymesh-web.service >/dev/null 2>&1 || true
-    ok "Successfully joined mesh '${net}' as ${hostname} (${ipv4})!"
-    info "Run 'xraymesh peers' anytime to see connected nodes and live latency."
+    joined=1
+  fi
+  trap 'handle_interrupt' INT
+  if (( joined )); then
+    ok "Joined mesh '${net}' as ${hostname} (${ipv4})."
+    info "Open 'Live status & peers' in the menu, or run 'xraymesh peers', to see the other servers."
   else
-    fail "Failed to start mesh service. Please check logs: journalctl -u xraymesh.service -n 30"
+    fail "The mesh service did not start. Check the logs: journalctl -u xraymesh.service -n 30"
   fi
   pause
+  (( joined ))
 }
+
 
 delete_mesh_noninteractive() {
   require_root
@@ -1188,11 +1467,11 @@ delete_mesh() {
 
   warn "This will stop the node and delete its mesh configuration."
   info "XRayMesh and EasyTier binaries will remain installed."
-  read -r -p "  Type DELETE to confirm: " confirm
+  local confirm
+  ask confirm "Type DELETE to confirm"
   if [[ "$confirm" != "DELETE" ]]; then
-    info "Delete operation cancelled."
-    sleep 1
-    return
+    info "Delete cancelled. Nothing was changed."
+    return 0
   fi
 
   compgen -G "${HAPROXY_TUNNEL_DIR}/*.env" >/dev/null &&
@@ -1369,27 +1648,27 @@ dashboard() {
 }
 
 restore_live_terminal() {
-  # Restore cursor visibility and the screen that was active before Live Status.
-  printf '\033[?25h\033[?1049l'
+  # Line wrap, the cursor, and the screen that was active before Live Status.
+  printf '\033[?7h\033[?25h\033[?1049l'
 }
 
 live_status() {
   [[ -x "${BIN_DIR}/easytier-cli" ]] || { warn "EasyTier is not installed."; pause; return; }
-  if [[ ! -t 1 ]]; then
+  if ! ui_interactive; then
     dashboard
     return
   fi
 
-  local frame key=""
-  # Use the alternate screen so Live Status never damages terminal history.
-  printf '\033[?1049h\033[?25l'
-  trap 'restore_live_terminal' EXIT
-  trap 'exit 130' INT TERM
+  local frame key_status
+  # The alternate screen keeps Live Status out of the terminal history, and with
+  # line wrap off a wide peer table is cut at the edge instead of breaking the redraw.
+  printf '\033[?1049h\033[?25l\033[?7l'
+  on_cancel restore_live_terminal
+  CANCEL_NOTE=""
 
   header
-  say "  LIVE STATUS" "$BOLD$PINK"
-  printf '%b  Updating every second without redrawing the full screen.%b\n' "$DIM$GRAY" "$RESET"
-  printf '%b  Press q or Ctrl+C to return to the main menu.%b\n\n' "$DIM$GRAY" "$RESET"
+  section "LIVE STATUS"
+  printf '%b  Refreshes every second · press q, Esc or Ctrl+C to go back%b\n' "$DIM$GRAY" "$RESET"
   # Save the beginning of the dynamic area. It can be restored repeatedly.
   printf '\033[s'
 
@@ -1397,23 +1676,29 @@ live_status() {
     frame="$(
       render_network_overview
       render_connected_peers
-      printf '\n%b  LIVE%b  %s  %b|%b  q: back  %b|%b  Ctrl+C: back\n' \
-        "$GREEN" "$RESET" "$(date '+%Y-%m-%d %H:%M:%S')" \
-        "$GRAY" "$RESET" "$GRAY" "$RESET"
+      printf '\n  %b● LIVE%b  %s\n' "$GREEN" "$RESET" "$(date '+%H:%M:%S')"
     )"
 
     # Restore the dynamic origin, write the complete frame in one operation,
     # then remove stale lines left by a previously larger peer table.
     printf '\033[u%s\n\033[J' "$frame"
 
-    key=""
-    read -rsn1 -t 1 key || true
-    [[ "${key,,}" == "q" ]] && break
+    key_status=0
+    ui_read_key || key_status=$?
+    case $key_status in
+      1) break ;;
+      2) continue ;;
+    esac
+    case "$UI_KEY" in
+      q|Q|esc) break ;;
+    esac
   done
 
-  trap - INT TERM EXIT
   restore_live_terminal
+  # Everything was drawn on the alternate screen, so there is nothing left to read.
+  UI_PAUSED=1
 }
+
 
 show_routes() {
   header
@@ -3200,7 +3485,8 @@ pck_port_available() {
       local spec
       spec="$(bash -c 'source "$1" >/dev/null 2>&1; printf "%s" "${PORT_SPEC:-}"' _ "$env")"
       [[ -n "$spec" ]] || continue
-      expand_port_spec "$spec" 2>/dev/null | grep -qx "$port" && return 1
+      # grep reads every line (no -q): exiting early would SIGPIPE the writer and fail under pipefail.
+      expand_port_spec "$spec" 2>/dev/null | grep -x "$port" >/dev/null && return 1
     done
   done
   return 0
@@ -3494,9 +3780,12 @@ update_web_assets() {
   rm -rf -- "$stage"
 
   # 3. Always regenerate runner and services
+  local runner_before runner_after
+  runner_before="$(cat "${INSTALL_DIR}/xraymesh-runner" 2>/dev/null | sha256sum)"
   write_runner
   write_iperf_service
   systemctl daemon-reload 2>/dev/null || true
+  runner_after="$(cat "${INSTALL_DIR}/xraymesh-runner" 2>/dev/null | sha256sum)"
 
   if [[ -f "$WEB_CONFIG_FILE" ]]; then
     if grep -q '^XRAYMESH_BRANCH=' "$WEB_CONFIG_FILE" 2>/dev/null; then
@@ -3514,10 +3803,12 @@ update_web_assets() {
     ok "Core CLI, runner, and Web UI assets updated successfully."
   fi
 
-  # 4. Restart mesh service asynchronously if active to execute updated runner
-  if systemctl is-active --quiet xraymesh.service 2>/dev/null; then
+  # 4. Restart the mesh asynchronously, only when the runner changed, so the new
+  # runner takes effect. Opening the menu or a login link must not drop the mesh.
+  if [[ "$runner_before" != "$runner_after" ]] && systemctl is-active --quiet xraymesh.service 2>/dev/null; then
     ( sleep 1 && systemctl restart xraymesh.service ) >/dev/null 2>&1 &
   fi
+
 
   # 5. Restart web service asynchronously to avoid killing the updater process mid-execution (prevents deadlock)
   if (( updated )) && systemctl is-active --quiet xraymesh-web.service 2>/dev/null; then
@@ -3786,6 +4077,9 @@ update_app_safe() {
     fail "Another update is already running on this server."
     return 3
   fi
+  # Ctrl+C while the files are still downloading changes nothing; the hook records that.
+  UPDATE_CANCELLABLE=1
+  on_cancel update_cancel_cleanup
 
   UPDATE_BRANCH="$(get_active_branch)"
   UPDATE_FROM="$(installed_version)"
@@ -3797,6 +4091,7 @@ update_app_safe() {
     UPDATE_TARGET=""
     update_status failed download "Could not read the latest version from any mirror. Check this server's internet access."
     fail "Could not read the latest version from any mirror."
+    UPDATE_CANCELLABLE=0
     exec {lock_fd}>&-
     return 1
   fi
@@ -3804,17 +4099,21 @@ update_app_safe() {
   if [[ "${XRAYMESH_FORCE_UPDATE:-0}" != "1" ]] && ! version_is_newer "$UPDATE_TARGET" "$UPDATE_FROM"; then
     update_status up_to_date complete
     ok "Already up to date (${UPDATE_FROM}; latest on '${UPDATE_BRANCH}': ${UPDATE_TARGET})."
+    UPDATE_CANCELLABLE=0
     exec {lock_fd}>&-
     return 0
   fi
 
   stage="$(mktemp -d)"
+  UPDATE_STAGE_DIR="$stage"
   for rel in xraymesh.sh web/server.py web/static/index.html; do
     info "Downloading ${rel} (${UPDATE_TARGET})..."
     if ! fetch_release_file "${stage}/${rel}" "$rel" "$UPDATE_BRANCH" "$UPDATE_TARGET"; then
       update_status failed verify "Could not download a verified copy of ${rel} for ${UPDATE_TARGET}. Mirrors may still be syncing; try again in a few minutes."
       fail "No mirror served a valid ${rel} for ${UPDATE_TARGET}. Nothing was changed."
       rm -rf -- "$stage"
+      UPDATE_CANCELLABLE=0
+      UPDATE_STAGE_DIR=""
       exec {lock_fd}>&-
       return 1
     fi
@@ -3822,6 +4121,30 @@ update_app_safe() {
   update_status running verify
   ok "All files for ${UPDATE_TARGET} downloaded and verified."
 
+  UPDATE_CANCELLABLE=0
+  UPDATE_STAGE_DIR=""
+  # From the backup to the health check the update has to finish or roll back,
+  # so Ctrl+C is ignored (by the commands it runs too) until then.
+  info "Installing ${UPDATE_TARGET}. Ctrl+C is paused until the update finishes or rolls back."
+  local install_rc=0
+  trap '' INT
+  update_app_install || install_rc=$?
+  trap 'handle_interrupt' INT
+  return "$install_rc"
+}
+
+UPDATE_CANCELLABLE=0
+UPDATE_STAGE_DIR=""
+
+update_cancel_cleanup() {
+  (( UPDATE_CANCELLABLE )) || return 0
+  [[ -n "$UPDATE_STAGE_DIR" ]] && rm -rf -- "$UPDATE_STAGE_DIR"
+  update_status failed download "The update was cancelled before anything was changed."
+}
+
+# Second half of update_app_safe: backup, install, restart, health check and rollback.
+# It runs with Ctrl+C ignored and uses update_app_safe's local variables.
+update_app_install() {
   # set -e is off inside "update_app_safe || ...", so every step below is checked explicitly.
   update_status running backup
   backup="${UPDATE_BACKUP_DIR}/$(date +%Y%m%d-%H%M%S)-${UPDATE_FROM}"
@@ -3903,7 +4226,9 @@ update_easytier_core_safe() {
   fi
   [[ -n "$latest_et" && "$latest_et" != "$current_et" ]] || return 0
 
-  info "Updating EasyTier core (${current_et} -> ${latest_et})..."
+  info "Updating EasyTier core (${current_et} -> ${latest_et}). Ctrl+C is paused until it finishes."
+  # Swapping the binaries and restoring them on failure must not be cut short.
+  trap '' INT
   systemctl is-active --quiet xraymesh.service 2>/dev/null && mesh_was_active=1
   tmp="$(mktemp -d)"
   cp -p "${BIN_DIR}/easytier-core" "${BIN_DIR}/easytier-cli" "${INSTALL_DIR}/easytier.version" "$tmp/" 2>/dev/null || true
@@ -3920,7 +4245,9 @@ update_easytier_core_safe() {
     fi
   fi
   rm -rf -- "$tmp"
+  trap 'handle_interrupt' INT
 }
+
 
 restore_easytier_binaries() {
   local saved="$1"
@@ -4155,23 +4482,32 @@ ensure_certbot() {
   command -v certbot >/dev/null 2>&1
 }
 
+# The web server stopped to free port 80 for the Let's Encrypt check, until it is started again.
+SSL_PAUSED_SERVICE=""
+
+resume_ssl_paused_service() {
+  [[ -n "$SSL_PAUSED_SERVICE" ]] || return 0
+  systemctl start "$SSL_PAUSED_SERVICE" 2>/dev/null || true
+  SSL_PAUSED_SERVICE=""
+}
+
 configure_web_ssl() {
   install_web_runtime
   header
-  section "CONFIGURE DOMAIN & FREE SSL (HTTPS)"
-  info "This will obtain a Let's Encrypt SSL certificate with automatic background renewal."
+  section "DOMAIN & FREE SSL (HTTPS)"
+  info "Gets a free Let's Encrypt certificate that renews itself in the background."
   printf '\n'
 
   local domain pub_ip
   pub_ip="$(get_server_ip)"
-  read -r -p "  Enter your domain name pointed to this server (e.g. panel.example.com): " domain
+  ask domain "Domain pointed to this server (e.g. panel.example.com)"
   domain="${domain//[[:space:]]/}"
   if [[ -z "$domain" ]]; then
-    fail "Domain cannot be empty."
+    fail "No domain was entered; nothing was changed."
     return 1
   fi
 
-  info "Verifying DNS records for ${domain}..."
+  info "Checking the DNS records of ${domain}..."
   local resolved_ip=""
   if command -v getent >/dev/null 2>&1; then
     resolved_ip="$(getent ahosts "$domain" 2>/dev/null | awk '{print $1; exit}' || true)"
@@ -4180,10 +4516,8 @@ configure_web_ssl() {
   fi
 
   if [[ -n "$resolved_ip" && "$resolved_ip" != "$pub_ip" ]]; then
-    warn "Domain resolves to ${resolved_ip}, but server public IP is ${pub_ip}."
-    local cont="n"
-    read -r -p "  Proceed anyway? [y/N]: " cont
-    [[ "$cont" =~ ^[Yy]$ ]] || return 1
+    warn "${domain} points to ${resolved_ip}, but this server's public IP is ${pub_ip}."
+    ask_yes_no "Continue anyway?" no || return 1
   fi
 
   ensure_certbot || {
@@ -4191,30 +4525,37 @@ configure_web_ssl() {
     return 1
   }
 
-  local paused_service=""
   if is_port_80_busy; then
-    paused_service="$(get_port_80_service)"
-    warn "Port 80 is currently occupied by: ${paused_service}"
-    local stop_perm="y"
-    read -r -p "  Temporarily pause ${paused_service} for 10s to issue SSL and restart it immediately after? [Y/n]: " stop_perm
-    if [[ "$stop_perm" =~ ^[Nn]$ ]]; then
-      fail "Port 80 is required for Let's Encrypt verification. Aborting SSL setup."
+    local busy_service
+    busy_service="$(get_port_80_service)"
+    warn "Port 80 is in use by: ${busy_service}"
+    if ! ask_yes_no "Stop ${busy_service} for a few seconds to get the certificate? It starts again right after." yes; then
+      fail "Let's Encrypt needs port 80 for its check. SSL setup stopped."
       return 1
     fi
-    info "Temporarily pausing ${paused_service}..."
-    systemctl stop "$paused_service" 2>/dev/null || true
+    info "Pausing ${busy_service}..."
+    SSL_PAUSED_SERVICE="$busy_service"
+    # Ctrl+C during the request must not leave that web server stopped.
+    on_cancel resume_ssl_paused_service
+    systemctl stop "$busy_service" 2>/dev/null || true
   fi
 
-  # Guaranteed trap to restart paused service regardless of outcome
-  trap '[[ -n "$paused_service" ]] && systemctl start "$paused_service" 2>/dev/null || true' RETURN
-
-  info "Requesting SSL certificate from Let's Encrypt for ${domain}..."
+  info "Requesting a certificate for ${domain} from Let's Encrypt..."
+  local issued=0
   if certbot certonly --standalone -d "$domain" --non-interactive --agree-tos --register-unsafely-without-email; then
-    ok "SSL certificate obtained successfully!"
+    issued=1
+  fi
+  resume_ssl_paused_service
+
+  if (( issued )); then
+    ok "SSL certificate obtained."
     local cert_file="/etc/letsencrypt/live/${domain}/fullchain.pem"
     local key_file="/etc/letsencrypt/live/${domain}/privkey.pem"
 
-    if [[ -f "$cert_file" && -f "$key_file" ]]; then
+    if [[ ! -f "$cert_file" || ! -f "$key_file" ]]; then
+      fail "certbot finished, but ${cert_file} or ${key_file} is missing."
+      return 1
+    else
       # Setup automatic renewal hook
       mkdir -p /etc/letsencrypt/renewal-hooks/deploy
       cat > /etc/letsencrypt/renewal-hooks/deploy/xraymesh-web.sh <<'EOF_RENEW'
@@ -4234,15 +4575,14 @@ EOF_RENEW
       } >> "$WEB_CONFIG_FILE"
 
       systemctl restart xraymesh-web.service 2>/dev/null || true
-      ok "Web Dashboard SSL active: https://${domain}:$(get_web_port)"
+      ok "HTTPS is on: https://${domain}:$(get_web_port)"
       return 0
     fi
   else
-    fail "Failed to obtain SSL certificate from Let's Encrypt."
+    fail "Let's Encrypt did not issue a certificate. Check that ${domain} points to this server and port 80 is reachable."
     return 1
   fi
 }
-
 remove_web_ssl() {
   install_web_runtime
   header
@@ -4260,15 +4600,15 @@ remove_web_ssl() {
 configure_web_ui_interactive() {
   install_web_runtime
   header
-  say "  ┌── Web Dashboard & Remote Setup (v${VERSION}) ────────────────" "$DIM$BLUE"
-  printf '  │  All tunnels, routing & cluster sync are managed here.\n'
-  say "  └─────────────────────────────────────────────────────────────" "$DIM$BLUE"
+  section "WEB DASHBOARD SETUP"
+  info "Tunnels, routing and cluster sync are all managed from the web dashboard."
   printf '\n'
 
   local current_port
   current_port="$(get_web_port)"
   local custom_port
-  read -r -p "  Web Dashboard port [default: ${current_port}]: " custom_port
+  ask custom_port "Web dashboard port" "$current_port"
+  [[ "$custom_port" == "$current_port" ]] && custom_port=""
   if [[ -n "$custom_port" ]]; then
     if valid_port "$custom_port"; then
       if grep -q '^WEB_PORT=' "$WEB_CONFIG_FILE" 2>/dev/null; then
@@ -4283,18 +4623,14 @@ configure_web_ui_interactive() {
   fi
 
   printf '\n'
-  local want_ssl="n"
-  read -r -p "  Do you have a domain pointing to this server and want free SSL (HTTPS)? [y/N]: " want_ssl
-  if [[ "$want_ssl" =~ ^[Yy]$ ]]; then
+  if ask_yes_no "Do you have a domain pointing to this server and want free SSL (HTTPS)?" no; then
     configure_web_ssl || warn "SSL configuration skipped or failed. Web Dashboard will run over HTTP."
   fi
 
   printf '\n'
-  local want_static_pw="y"
-  read -r -p "  Do you want to set a fixed Web Admin Password? [y/N]: " want_static_pw
   local admin_pw=""
-  if [[ "$want_static_pw" =~ ^[Yy]$ ]]; then
-    read -r -p "  Set Web Admin Password [Press Enter to auto-generate]: " admin_pw
+  if ask_yes_no "Set a fixed web admin password? (No = one-time login links only)" no; then
+    ask admin_pw "Web admin password (Enter generates one)"
     if [[ -z "$admin_pw" ]]; then
       admin_pw="$(openssl rand -base64 9 | tr -dc 'a-zA-Z0-9' | head -c 10)"
     fi
@@ -4371,38 +4707,37 @@ except Exception: pass
   fi
 
   printf '\n'
-  say "  ┌── XRayMesh v${VERSION} — Setup Completed Successfully! ───────────" "$GREEN"
-  printf '  │  • %bWeb Dashboard URL%b : %b%s%b\n' "$BOLD$CYAN" "$RESET" "$BOLD$CYAN" "$web_url" "$RESET"
+  say "  ╭─ SETUP COMPLETE · XRayMesh v${VERSION} ─────────────────────────" "$GREEN"
+  ui_kv "Dashboard" "$web_url" "$BOLD$CYAN"
   if [[ -n "$admin_pw" ]]; then
-    printf '  │  • %bAdmin Password%b    : %b%s%b\n' "$BOLD$YELLOW" "$RESET" "$BOLD$YELLOW" "$admin_pw" "$RESET"
+    ui_kv "Admin password" "$admin_pw" "$BOLD$YELLOW"
   else
-    printf '  │  • %bAdmin Auth%b        : %bToken-Only Mode (Highest Security)%b\n' "$BOLD$GREEN" "$RESET" "$GREEN" "$RESET"
+    ui_kv "Sign-in" "One-time login links only (no password to guess)" "$GREEN"
   fi
-  printf '  │  • %bOne-Click Login%b   : %b%s/?token=%s%b\n' "$BOLD$GREEN" "$RESET" "$BOLD$GREEN" "$web_url" "$token" "$RESET"
-  printf '  │  • %bNew Token Command%b : %bsudo xraymesh token%b\n' "$GRAY" "$RESET" "$BOLD$CYAN" "$RESET"
-  say "  ├── Quick Guide ──────────────────────────────────────────────" "$DIM$BLUE"
-  printf '  │  • All tunnels (HAProxy, Realm, Gost, iptables), SafeSync\n'
-  printf '  │    and cluster updates are managed 100%% in the Web Dashboard.\n'
-  printf '  │  • Run %bxraymesh%b at any time in terminal to open the menu.\n' "$BOLD$CYAN" "$RESET"
-  say "  └─────────────────────────────────────────────────────────────" "$DIM$BLUE"
+  say "  ├─ One-click login link (valid for 60 minutes) ───────────────" "$DIM$BLUE"
+  printf '\n  %b%s/?token=%s%b\n\n' "$BOLD$GREEN" "$web_url" "$token" "$RESET"
+  say "  ├─ Quick guide ───────────────────────────────────────────────" "$DIM$BLUE"
+  printf '  %b│%b  New login link any time: %bsudo xraymesh token%b\n' "$DIM$BLUE" "$RESET" "$BOLD$CYAN" "$RESET"
+  printf '  %b│%b  Tunnels, SafeSync and cluster updates live in the web dashboard.\n' "$DIM$BLUE" "$RESET"
+  printf '  %b│%b  Run %bxraymesh%b at any time to open this menu.\n' "$DIM$BLUE" "$RESET" "$BOLD$CYAN" "$RESET"
+  say "  ╰─────────────────────────────────────────────────────────────" "$DIM$BLUE"
   printf '\n'
 
-  printf '  %b[ 1 ]%b  Open XRayMesh Control Panel Menu\n' "$BOLD$GREEN" "$RESET"
-  printf '  %b[ 2 ]%b  Join an Existing Mesh Network (Invite Code)\n' "$BOLD$CYAN" "$RESET"
-  printf '  %b[ 3 ]%b  Exit to Terminal\n\n' "$GRAY" "$RESET"
-  local post_choice="1"
-  read -r -p "  Select an option [1-3, default: 1]: " post_choice
-  post_choice="${post_choice:-1}"
-  if [[ "$post_choice" == "2" ]]; then
+  say "  What next?" "$BOLD"
+  local post_choice=0
+  ui_choose post_choice 0 \
+    "Open the XRayMesh menu" \
+    "Join an existing mesh with an invite code" \
+    "Exit to the terminal" || post_choice=2
+  if (( post_choice == 1 )); then
     join_mesh_invite
     return 0
-  elif [[ "$post_choice" == "3" || "$post_choice" =~ ^[Qq]$ ]]; then
-    printf '\n%b  ✓ Installation finished. Run %bxraymesh%b at any time to open the menu.%b\n\n' "$GREEN" "$BOLD$CYAN" "$GREEN" "$RESET"
+  elif (( post_choice == 2 )); then
+    printf '\n%b  ✓ Installation finished. Run %bxraymesh%b%b at any time to open the menu.%b\n\n' "$GREEN" "$BOLD$CYAN" "$RESET" "$GREEN" "$RESET"
     return 1
   fi
   return 0
 }
-
 generate_web_token() {
   install_web_runtime
   local token now expiry_ts pub_ip port mesh_ip proto domain
@@ -4438,25 +4773,27 @@ except Exception: pass
     systemctl enable --now xraymesh-iperf.service >/dev/null 2>&1 || true
   fi
 
+  local link
+  if [[ "$proto" == "https" && -n "$domain" ]]; then
+    link="https://${domain}:${port}/?token=${token}"
+  else
+    link="http://${pub_ip}:${port}/?token=${token}"
+  fi
+
   header
   section "ONE-CLICK WEB DASHBOARD LOGIN"
-  ok "A temporary login token was generated (valid for 60 minutes)."
+  ok "A one-time login link was created. It works once, within the next 60 minutes."
   printf '\n'
-  say "  ┌── Web Dashboard Access ─────────────────────────────────────" "$DIM$BLUE"
-  if [[ "$proto" == "https" && -n "$domain" ]]; then
-    printf '  │  • %bDirect Browser Link (SSL)%b : %bhttps://%s:%s/?token=%s%b\n' "$BOLD$CYAN" "$RESET" "$BOLD$GREEN" "$domain" "$port" "$token" "$RESET"
-  else
-    printf '  │  • %bDirect Browser Link (IP)%b  : %bhttp://%s:%s/?token=%s%b\n' "$BOLD$CYAN" "$RESET" "$BOLD$GREEN" "$pub_ip" "$port" "$token" "$RESET"
-  fi
-
+  # Each link sits on its own line, without box characters, so it copies cleanly.
+  say "  ╭─ Open this link in your browser ────────────────────────────" "$DIM$BLUE"
+  printf '\n  %b%s%b\n\n' "$BOLD$GREEN" "$link" "$RESET"
   if [[ -n "$mesh_ip" ]]; then
-    printf '  │  • %bMesh Virtual IP Link%b     : %bhttp://%s:%s/?token=%s%b\n' "$BOLD$PURPLE" "$RESET" "$BLUE" "$mesh_ip" "$port" "$token" "$RESET"
+    say "  ├─ From inside the mesh (virtual IP) ─────────────────────────" "$DIM$BLUE"
+    printf '\n  %b%s%b\n\n' "$BLUE" "http://${mesh_ip}:${port}/?token=${token}" "$RESET"
   fi
-
-  printf '  │  • %bToken String%b             : %b%s%b\n' "$BOLD$YELLOW" "$RESET" "$BOLD$YELLOW" "$token" "$RESET"
-  say "  └─────────────────────────────────────────────────────────────" "$DIM$BLUE"
-  printf '\n'
-  info "Opening the URL in your browser logs you in instantly."
+  say "  ├─ Token only ────────────────────────────────────────────────" "$DIM$BLUE"
+  printf '\n  %b%s%b\n\n' "$BOLD$YELLOW" "$token" "$RESET"
+  say "  ╰─────────────────────────────────────────────────────────────" "$DIM$BLUE"
   pause
 }
 
@@ -4470,41 +4807,36 @@ set_web_password() {
     current_hash="$(grep -E '^WEB_PASSWORD_HASH=' "$WEB_CONFIG_FILE" | cut -d= -f2- | tr -d '"'\'' ')"
   fi
 
+  local pw_choice=0
   if [[ -n "$current_hash" ]]; then
-    printf '  Current Status: %bFixed Password Enabled%b\n\n' "$GREEN" "$RESET"
-    printf '  %b[1]%b  Change Fixed Admin Password\n' "$GREEN" "$RESET"
-    printf '  %b[2]%b  Remove Password (Switch to Token-Only Mode — Highest Security)\n' "$YELLOW" "$RESET"
-    printf '  %b[0]%b  Back\n\n' "$GRAY" "$RESET"
-    local pw_choice="1"
-    read -r -p "  Choice [0-2, default: 1]: " pw_choice
-    pw_choice="${pw_choice:-1}"
-    if [[ "$pw_choice" == "0" ]]; then
+    printf '  Sign-in now: %bfixed password + one-time login links%b\n\n' "$GREEN" "$RESET"
+    ui_choose pw_choice 0 \
+      "Change the admin password" \
+      "Remove the password (one-time login links only, nothing to brute-force)" \
+      "Back" || return 0
+    if (( pw_choice == 2 )); then
       return 0
-    elif [[ "$pw_choice" == "2" ]]; then
+    elif (( pw_choice == 1 )); then
       sed -i '/^WEB_PASSWORD_HASH=/d' "$WEB_CONFIG_FILE"
       systemctl restart xraymesh-web.service 2>/dev/null || true
-      ok "Password removed. Web UI is now in Token-Only mode."
+      ok "Password removed. The web panel now accepts one-time login links only."
       pause
       return 0
     fi
   else
-    printf '  Current Status: %bToken-Only Mode (No Fixed Password)%b\n\n' "$YELLOW" "$RESET"
-    printf '  %b[1]%b  Set a Fixed Admin Password\n' "$GREEN" "$RESET"
-    printf '  %b[0]%b  Keep Token-Only Mode (Back)\n\n' "$GRAY" "$RESET"
-    local pw_choice="1"
-    read -r -p "  Choice [0-1, default: 1]: " pw_choice
-    pw_choice="${pw_choice:-1}"
-    if [[ "$pw_choice" == "0" ]]; then
+    printf '  Sign-in now: %bone-time login links only (no password)%b\n\n' "$YELLOW" "$RESET"
+    ui_choose pw_choice 0 \
+      "Set an admin password" \
+      "Back (keep login links only)" || return 0
+    if (( pw_choice == 1 )); then
       return 0
     fi
   fi
 
   printf '\n'
   local pass1 pass2 hash
-  read -r -s -p "  Enter new admin password: " pass1
-  printf '\n'
-  read -r -s -p "  Confirm admin password: " pass2
-  printf '\n'
+  ask_secret pass1 "New admin password"
+  ask_secret pass2 "Repeat the password"
   if [[ "$pass1" != "$pass2" ]]; then
     fail "Passwords do not match."
     pause
@@ -4541,8 +4873,7 @@ configure_web_port() {
   section "CHANGE WEB PORT"
   local current_port new_port
   current_port="$(get_web_port)"
-  read -r -p "  Enter web port [${current_port}]: " new_port
-  new_port="${new_port:-$current_port}"
+  ask new_port "Web panel port" "$current_port"
   if ! valid_port "$new_port"; then
     fail "Invalid port number."
     pause
@@ -4561,40 +4892,54 @@ configure_web_port() {
 }
 
 update_core() {
-  local before after
-  before="$(cat "${INSTALL_DIR}/easytier.version" 2>/dev/null || echo "not installed")"
-  install_core
-  after="$(cat "${INSTALL_DIR}/easytier.version")"
-  [[ -f "$SERVICE_FILE" ]] && ( sleep 1 && systemctl restart xraymesh.service ) >/dev/null 2>&1 &
-  if [[ -d "$WEB_DIR" || -f "$WEB_SERVICE_FILE" ]]; then
-    update_app_safe || warn "The XRayMesh update did not complete; see the messages above."
-  fi
-  ok "EasyTier: ${before} → ${after}"
-  if [[ -t 0 ]]; then
-    pause || true
-  fi
-}
-
-control_service() {
+  require_root
+  local rc=0 before_app before_core after_core
+  before_app="$(installed_version)"
+  before_core="$(cat "${INSTALL_DIR}/easytier.version" 2>/dev/null || echo "not installed")"
   header
-  say "  Service Control" "$BOLD$CYAN"
-  printf '\n  1) Start\n  2) Stop\n  3) Restart\n  4) Back\n\n'
-  read -r -p "  Select an option: " choice
-  case "$choice" in
-    1) systemctl start xraymesh ;;
-    2) systemctl stop xraymesh ;;
-    3) systemctl restart xraymesh ;;
-    *) return ;;
-  esac
-  ok "Operation completed: $(service_state)"
-  pause
+  section "UPDATE XRAYMESH"
+  ui_kv "Channel" "$(get_active_branch)"
+  ui_kv "XRayMesh" "$before_app"
+  ui_kv "EasyTier" "$before_core"
+  printf '\n'
+
+  if [[ ! -x "${BIN_DIR}/easytier-core" ]]; then
+    install_core || rc=1
+  fi
+  if (( rc == 0 )); then
+    if [[ -d "$WEB_DIR" || -f "$WEB_SERVICE_FILE" ]]; then
+      # Verified download, backup, health check and rollback; EasyTier only moves to a newer release.
+      update_node_full || rc=$?
+    else
+      update_easytier_core_safe || rc=$?
+    fi
+  fi
+
+  after_core="$(cat "${INSTALL_DIR}/easytier.version" 2>/dev/null || echo "not installed")"
+  printf '\n'
+  if (( rc == 0 )); then
+    ok "XRayMesh ${before_app} → $(installed_version)   ·   EasyTier ${before_core} → ${after_core}"
+  elif (( rc == 3 )); then
+    warn "Another update is already running on this server; try again when it finishes."
+  else
+    fail "The update did not complete; see the messages above."
+  fi
+  if [[ -t 0 ]]; then
+    pause
+  fi
+  return "$rc"
 }
 
 uninstall_app() {
   header
-  warn "This removes the XRayMesh service, configuration, and installed binaries."
-  read -r -p "  Type REMOVE to confirm: " confirm
-  [[ "$confirm" == "REMOVE" ]] || { info "Uninstall cancelled."; sleep 1; return; }
+  section "UNINSTALL XRAYMESH"
+  warn "This removes every XRayMesh service, tunnel, configuration file and binary."
+  warn "This server leaves the mesh, and the web panel stops working."
+  printf '\n'
+  local confirm
+  ask confirm "Type REMOVE to confirm"
+  [[ "$confirm" == "REMOVE" ]] || { info "Uninstall cancelled. Nothing was changed."; return 0; }
+  trap '' INT
   systemctl disable --now xraymesh.service 2>/dev/null || true
   systemctl disable --now xraymesh-haproxy.service 2>/dev/null || true
   systemctl disable --now xraymesh-iptables.service 2>/dev/null || true
@@ -4727,10 +5072,15 @@ bootstrap_web_first() {
   trap - ERR
 
   header
-  say "  ┌── XRayMesh v${VERSION} — Fast Web Setup ─────────────────────────" "$GREEN"
-  printf '  │  Installing system dependencies, EasyTier core, and Web Dashboard...\n'
-  say "  └─────────────────────────────────────────────────────────────" "$DIM$BLUE"
+  if [[ -t 1 ]]; then
+    printf '\n'
+    ui_logo
+  fi
+  section "FIRST-TIME SETUP"
+  info "Installing system packages, the EasyTier core and the web dashboard."
+  info "Press Ctrl+C at any time to stop; run the installer again to continue."
   printf '\n'
+
 
   install_dependencies
   install_core
@@ -4741,6 +5091,464 @@ bootstrap_web_first() {
   else
     return 1
   fi
+}
+
+# ---------------------------------------------------------------------------
+# Services
+# ---------------------------------------------------------------------------
+
+# Tunnel units set up on this server; they start and stop with everything else.
+enabled_tunnel_units() {
+  local unit
+  for unit in xraymesh-haproxy.service xraymesh-iptables.service xraymesh-gost.service xraymesh-realm.service; do
+    systemctl is-enabled --quiet "$unit" 2>/dev/null && printf '%s\n' "$unit"
+  done
+  return 0
+}
+
+stop_all_services() {
+  systemctl stop xraymesh.service xraymesh-web.service xraymesh-haproxy.service xraymesh-iptables.service \
+    xraymesh-gost.service xraymesh-realm.service xraymesh-iperf.service 2>/dev/null || true
+  systemctl stop 'xraymesh-icmp@*' 2>/dev/null || true
+}
+
+# start_all_services <start|restart>: the mesh node (with its links), the web
+# panel, the speedtest server and every enabled tunnel. Returns 1 if one failed.
+start_all_services() {
+  local verb="$1" unit rc=0
+  if [[ -f "$CONFIG_FILE" ]]; then
+    apply_node_config || rc=1
+  fi
+  if [[ -f "$WEB_SERVICE_FILE" ]]; then
+    systemctl "$verb" xraymesh-web.service 2>/dev/null || rc=1
+  fi
+  if [[ -f "$IPERF_SERVICE_FILE" ]]; then
+    systemctl "$verb" xraymesh-iperf.service 2>/dev/null || true
+  fi
+  while IFS= read -r unit; do
+    systemctl "$verb" "$unit" 2>/dev/null || rc=1
+  done < <(enabled_tunnel_units)
+  return "$rc"
+}
+
+# ui_state_row <systemd state> <label> [detail]: a coloured status row.
+ui_state_row() {
+  local dot word colour
+  case "$1" in
+    active) dot="●"; word="online"; colour="$GREEN" ;;
+    activating|reloading) dot="◐"; word="starting"; colour="$YELLOW" ;;
+    failed) dot="●"; word="failed"; colour="$RED" ;;
+    *) dot="○"; word="offline"; colour="$RED" ;;
+  esac
+  printf '  %b%s%b %-12s %b%-9s%b %s\n' "$colour" "$dot" "$RESET" "$2" "$colour" "$word" "$RESET" "${3:-}"
+}
+
+service_status_table() {
+  local entry unit label state
+  local -a units=("xraymesh.service|Mesh node" "xraymesh-web.service|Web panel" "xraymesh-iperf.service|Speedtest")
+  for entry in "haproxy|HAProxy" "iptables|iptables" "gost|GOST" "realm|Realm"; do
+    [[ -f "/etc/systemd/system/xraymesh-${entry%%|*}.service" ]] && units+=("xraymesh-${entry%%|*}.service|${entry#*|} tunnels")
+  done
+  section "SERVICE STATUS"
+  for entry in "${units[@]}"; do
+    unit="${entry%%|*}"
+    label="${entry#*|}"
+    state="$(systemctl is-active "$unit" 2>/dev/null || true)"
+    ui_state_row "${state:-inactive}" "$label"
+  done
+}
+
+# services_screen <start|restart|stop>
+services_screen() {
+  local action="$1"
+  header
+  case "$action" in
+    stop)
+      section "STOP ALL SERVICES"
+      warn "The mesh node, web panel, speedtest server and tunnels will stop."
+      warn "The web panel stays unreachable until the services are started again."
+      printf '\n'
+      if ! ask_yes_no "Stop all XRayMesh services?" no; then
+        info "Nothing was stopped."
+        return 0
+      fi
+      info "Stopping services..."
+      stop_all_services
+      ;;
+    start|restart)
+      section "${action^^} ALL SERVICES"
+      if [[ ! -f "$CONFIG_FILE" ]]; then
+        info "No mesh node is set up yet; starting the web panel and tunnels only."
+      fi
+      info "${action^}ing services. Ctrl+C is paused until this finishes."
+      trap '' INT
+      start_all_services "$action" || warn "Some services did not start; see the table below."
+      trap 'handle_interrupt' INT
+      ;;
+  esac
+  service_status_table
+}
+
+logs_screen() {
+  header
+  section "LIVE LOGS"
+  local pick=0
+  ui_choose pick 0 \
+    "Mesh node" \
+    "Web panel" \
+    "Tunnels (HAProxy, GOST, Realm, iptables)" \
+    "ICMP / PCK links" || return 0
+  printf '\n'
+  info "Following the logs. Press Ctrl+C to return to the menu."
+  printf '\n'
+  CANCEL_NOTE="Stopped following the logs."
+  case "$pick" in
+    0) journalctl -u xraymesh.service -f -n 50 ;;
+    1) journalctl -u xraymesh-web.service -f -n 50 ;;
+    2) journalctl -u xraymesh-haproxy.service -u xraymesh-gost.service -u xraymesh-realm.service -u xraymesh-iptables.service -f -n 50 ;;
+    3) journalctl -u 'xraymesh-icmp@*' -f -n 50 ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# Main menu
+# Arrow keys (or j/k) move, Enter opens, digits jump to an item, q quits.
+# ---------------------------------------------------------------------------
+
+# One row per line: "id|number|label|hint", "#Section", or "" for a gap.
+# Labels and hints are plain ASCII, so their length is their width on screen.
+MENU_ROWS=(
+  "#WEB PANEL"
+  "login|1|Login link & panel address|A one-time login link for the web panel, valid for 60 minutes."
+  "password|2|Admin password & sign-in|Set, change or remove the fixed admin password."
+  "port|3|Change panel port|Move the web panel to another TCP port."
+  "ssl|4|Domain & free SSL (HTTPS)|A free Let's Encrypt certificate for your own domain."
+  "nossl|5|Remove SSL|Serve the panel over plain HTTP again."
+  ""
+  "#MESH NETWORK"
+  "join|6|Join a mesh with an invite code|Paste an xrmesh:// code from a server that is already in the mesh."
+  "setup|7|Configure this node|Wizard for the network name, secret, virtual IP, protocol and ports."
+  "invite|8|Invite code for another server|The code another server pastes to join this mesh."
+  "live|9|Live status & peers|Connected servers, latency and traffic, refreshed every second."
+  "diag|10|Connection diagnostics|Listeners, the peer center and recent connection messages."
+  ""
+  "#SERVICES"
+  "restart|11|Restart all services|Restart the mesh node, web panel, speedtest server and tunnels."
+  "start|12|Start all services|Start everything that is set up on this server."
+  "stop|13|Stop all services|Stop the mesh, the web panel and the tunnels. Asks first."
+  "logs|14|Live logs|Follow the mesh, panel, tunnel or link logs. Ctrl+C comes back here."
+  ""
+  "#SYSTEM"
+  "doctor|15|Health check|Checks the binaries, config permissions and every service."
+  "update|16|Update XRayMesh|Verified download of the newest release, with automatic rollback."
+  "uninstall|17|Uninstall XRayMesh|Removes XRayMesh and everything it set up. Asks first."
+  "exit|0|Exit|Close the menu. Run 'xraymesh' to open it again."
+)
+# Items whose number is drawn in red.
+MENU_DANGER=" stop uninstall "
+
+MENU_SEL=1          # index in MENU_ROWS of the highlighted item
+MENU_TOP=0          # first list row on screen when the list scrolls
+MENU_CHOICE=""
+MENU_STATUS=""      # status lines, rebuilt each time the menu is shown
+MENU_PUBLIC_IP=""   # looked up once; the lookup can take seconds behind NAT
+MENU_RESIZED=0
+MENU_HEAD=()        # logo or title bar plus the status lines, for the current size
+
+menu_is_item() {
+  local row="${MENU_ROWS[$1]}"
+  [[ -n "$row" && "$row" != \#* ]]
+}
+
+# menu_move <-1|1>: move the highlight to the previous or next item, wrapping around.
+menu_move() {
+  local n=${#MENU_ROWS[@]} i=$MENU_SEL step
+  for (( step = 0; step < n; step++ )); do
+    i=$(( (i + $1 + n) % n ))
+    if menu_is_item "$i"; then
+      MENU_SEL=$i
+      return 0
+    fi
+  done
+}
+
+# menu_jump <number>: highlight the item with that number; returns 1 if there is none.
+menu_jump() {
+  local i row num
+  for i in "${!MENU_ROWS[@]}"; do
+    menu_is_item "$i" || continue
+    row="${MENU_ROWS[i]#*|}"
+    num="${row%%|*}"
+    if [[ "$num" == "$1" ]]; then
+      MENU_SEL=$i
+      return 0
+    fi
+  done
+  return 1
+}
+
+# True when some item number starts with <digits> and is longer than it (1 → 10..17).
+menu_has_longer() {
+  local i row num
+  for i in "${!MENU_ROWS[@]}"; do
+    menu_is_item "$i" || continue
+    row="${MENU_ROWS[i]#*|}"
+    num="${row%%|*}"
+    [[ "$num" == "$1"?* ]] && return 0
+  done
+  return 1
+}
+
+menu_status_lines() {
+  local mesh_state web_state iperf_state port proto domain url tls auth node
+  mesh_state="$(systemctl is-active xraymesh.service 2>/dev/null || true)"
+  web_state="$(systemctl is-active xraymesh-web.service 2>/dev/null || true)"
+  iperf_state="$(systemctl is-active xraymesh-iperf.service 2>/dev/null || true)"
+  port="$(get_web_port 2>/dev/null || echo "$DEFAULT_WEB_PORT")"
+  proto="$(get_web_proto 2>/dev/null || echo "http")"
+  domain="$(get_web_domain 2>/dev/null || true)"
+  [[ -n "$MENU_PUBLIC_IP" ]] || MENU_PUBLIC_IP="$(get_server_ip 2>/dev/null || echo "127.0.0.1")"
+
+  if [[ "$proto" == "https" && -n "$domain" ]]; then
+    url="https://${domain}:${port}"
+    tls="HTTPS"
+  else
+    url="http://${MENU_PUBLIC_IP}:${port}"
+    tls="HTTP (no SSL)"
+  fi
+  if grep -q '^WEB_PASSWORD_HASH=' "$WEB_CONFIG_FILE" 2>/dev/null; then
+    auth="password + login links"
+  else
+    auth="login links only"
+  fi
+
+  if [[ -f "$CONFIG_FILE" ]]; then
+    # A subshell, so the config's variables (HOSTNAME, PORT, ...) do not leak into the menu.
+    node="$(
+      # shellcheck disable=SC1090
+      source "$CONFIG_FILE" 2>/dev/null
+      printf '%s  %s  %s' "${HOSTNAME:-node}" "${IPV4:-?}" "${PROTOCOL:-dual}"
+    )"
+    ui_state_row "${mesh_state:-inactive}" "Mesh node" "$node"
+  else
+    printf '  %b○%b %-12s %b%-9s%b %s\n' "$GRAY" "$RESET" "Mesh node" "$YELLOW" "not set" "$RESET" \
+      "choose 6 to join a mesh or 7 to create one"
+  fi
+  ui_state_row "${web_state:-inactive}" "Web panel" "$url"
+  ui_state_row "${iperf_state:-inactive}" "Speedtest" "iperf3, port 5201 inside the mesh"
+  printf '  %b◆%b %-12s %s · %s\n' "$PURPLE" "$RESET" "Sign-in" "$auth" "$tls"
+}
+
+# Build the part above the list for the current terminal size: the large logo
+# when everything fits under it, the compact title bar otherwise.
+menu_prepare() {
+  local -a brand status
+  mapfile -t status <<< "$MENU_STATUS"
+  if (( UI_ROWS >= 7 + 1 + ${#status[@]} + 1 + ${#MENU_ROWS[@]} + 4 && UI_COLS >= 56 )); then
+    mapfile -t brand < <(ui_logo)
+  else
+    mapfile -t brand < <(ui_title_bar)
+  fi
+  MENU_HEAD=("${brand[@]}" "" "${status[@]}" "")
+}
+
+# menu_draw [typed digits]: draw the whole menu in one write, from the top-left corner.
+menu_draw() {
+  local digits="${1:-}" w n list_h cap top i row id num label hint title pad colour fill frame=""
+  local -a lines=()
+  w="$(ui_width)"
+  n=${#MENU_ROWS[@]}
+
+  lines=("${MENU_HEAD[@]}")
+
+  # The list gets the rows left over; it scrolls, with ▲/▼ markers, when that is too few.
+  list_h=$(( UI_ROWS - ${#MENU_HEAD[@]} - 4 ))
+  (( list_h < 5 )) && list_h=5
+  if (( n <= list_h )); then
+    top=0
+    cap=$n
+  else
+    cap=$(( list_h - 2 ))
+    top=$MENU_TOP
+    (( MENU_SEL < top )) && top=$MENU_SEL
+    (( MENU_SEL >= top + cap )) && top=$(( MENU_SEL - cap + 1 ))
+    # Keep a section title visible above its first item.
+    if (( top > 0 && top == MENU_SEL )) && [[ "${MENU_ROWS[top - 1]}" == \#* ]]; then
+      top=$(( top - 1 ))
+    fi
+    (( top > n - cap )) && top=$(( n - cap ))
+    (( top < 0 )) && top=0
+    MENU_TOP=$top
+    if (( top > 0 )); then
+      lines+=("  ${DIM}${GRAY}▲ more${RESET}")
+    else
+      lines+=("")
+    fi
+  fi
+
+  for (( i = top; i < top + cap && i < n; i++ )); do
+    row="${MENU_ROWS[i]}"
+    if [[ -z "$row" ]]; then
+      lines+=("")
+    elif [[ "$row" == \#* ]]; then
+      title="${row#\#}"
+      pad=$(( w - ${#title} - 1 ))
+      (( pad < 1 )) && pad=1
+      printf -v fill '%*s' "$pad" ''
+      lines+=("  ${BOLD}${PURPLE}${title}${RESET} ${DIM}${BLUE}${fill// /─}${RESET}")
+    else
+      IFS='|' read -r id num label hint <<< "$row"
+      colour="$CYAN"
+      [[ "$MENU_DANGER" == *" ${id} "* ]] && colour="$RED"
+      [[ "$id" == "exit" ]] && colour="$GRAY"
+      (( ${#num} < 2 )) && num=" ${num}"
+      if (( i == MENU_SEL )); then
+        # "  ❯ " then the highlight bar: " NN  label" padded to the box width.
+        pad=$(( w - 7 - ${#label} ))
+        (( pad < 1 )) && pad=1
+        printf -v fill '%*s' "$pad" ''
+        lines+=("  ${BOLD}${CYAN}❯${RESET} ${SEL_BG}${BOLD}${colour} ${num}${RESET}${SEL_BG}${BOLD}  ${label}${fill}${RESET}")
+      else
+        lines+=("     ${colour}${num}${RESET}  ${label}")
+      fi
+    fi
+  done
+
+  if (( n > list_h )); then
+    if (( top + cap < n )); then
+      lines+=("  ${DIM}${GRAY}▼ more${RESET}")
+    else
+      lines+=("")
+    fi
+  fi
+
+  IFS='|' read -r _ _ _ hint <<< "${MENU_ROWS[MENU_SEL]}"
+  printf -v fill '%*s' "$w" ''
+  lines+=("  ${DIM}${BLUE}${fill// /─}${RESET}")
+  lines+=("  ${CYAN}›${RESET} ${hint}")
+  if [[ -n "$digits" ]]; then
+    lines+=("  ${DIM}${GRAY}↑/↓ move · Enter open · q quit${RESET}   ${BOLD}${YELLOW}#${digits}${RESET}")
+  else
+    lines+=("  ${DIM}${GRAY}↑/↓ move · Enter open · 0-17 jump · q quit${RESET}")
+  fi
+
+  for row in "${lines[@]}"; do
+    frame+="${row}"$'\033[K\n'
+  done
+  printf '\033[H%s\033[J' "$frame"
+}
+
+# Let the user pick an item; its id goes to MENU_CHOICE.
+menu_select() {
+  local digits="" last_digit=0 now status
+
+  if ! ui_interactive; then
+    menu_select_plain
+    return
+  fi
+
+  ui_term_size
+  menu_prepare
+  # No cursor, no line wrap (each row stays one line), no echo of keys typed while drawing.
+  printf '\033[?25l\033[?7l\033[H\033[2J'
+  stty -echo 2>/dev/null || true
+  while :; do
+    menu_draw "$digits"
+    status=0
+    ui_read_key || status=$?
+    if (( status == 1 )); then
+      MENU_CHOICE="exit"
+      break
+    fi
+    now="${EPOCHREALTIME//[!0-9]/}"
+    [[ -n "$now" ]] || now=$(( SECONDS * 1000000 ))
+    if (( status == 2 )); then
+      if (( MENU_RESIZED )); then
+        MENU_RESIZED=0
+        ui_term_size
+        menu_prepare
+        printf '\033[H\033[2J'
+      fi
+      # Forget half-typed digits after a pause.
+      if [[ -n "$digits" ]] && (( now - last_digit > 1500000 )); then
+        digits=""
+      fi
+      continue
+    fi
+    case "$UI_KEY" in
+      up|k) menu_move -1 ;;
+      down|j|$'\t') menu_move 1 ;;
+      home) MENU_SEL=0; menu_move 1 ;;
+      end) MENU_SEL=$(( ${#MENU_ROWS[@]} - 1 )) ;;
+      pgup) for _ in 1 2 3 4 5; do menu_move -1; done ;;
+      pgdn) for _ in 1 2 3 4 5; do menu_move 1; done ;;
+      [0-9])
+        # "1" then "3" within a moment reaches item 13, as typing "13" did before.
+        if [[ -n "$digits" ]] && (( now - last_digit < 1500000 )) && menu_jump "${digits}${UI_KEY}"; then
+          digits+="$UI_KEY"
+        else
+          digits="$UI_KEY"
+          menu_jump "$digits" || digits=""
+        fi
+        last_digit=$now
+        # Nothing longer can follow (e.g. "5" or "13"): drop the buffer.
+        if [[ -n "$digits" ]] && ! menu_has_longer "$digits"; then
+          digits=""
+        fi
+        ;;
+
+      backspace) digits="" ;;
+      enter|' ')
+        IFS='|' read -r MENU_CHOICE _ <<< "${MENU_ROWS[MENU_SEL]}"
+        break
+        ;;
+      q|Q|esc)
+        MENU_CHOICE="exit"
+        break
+        ;;
+    esac
+  done
+  printf '\033[?7h\033[?25h'
+  stty echo 2>/dev/null || true
+}
+
+# Numbered menu for input that is not a terminal (piped or redirected).
+menu_select_plain() {
+  local row id num label answer
+  printf '%s\n' "$MENU_STATUS"
+  for row in "${MENU_ROWS[@]}"; do
+    if [[ "$row" == \#* ]]; then
+      printf '\n  %s\n' "${row#\#}"
+    elif [[ -n "$row" ]]; then
+      IFS='|' read -r id num label _ <<< "$row"
+      printf '  [%2s] %s\n' "$num" "$label"
+    fi
+  done
+  if ! read -r -p "  Select an option [0-17]: " answer; then
+    MENU_CHOICE="exit"
+    return
+  fi
+  MENU_CHOICE=""
+  if menu_jump "$answer"; then
+    IFS='|' read -r MENU_CHOICE _ <<< "${MENU_ROWS[MENU_SEL]}"
+  fi
+}
+
+menu_goodbye() {
+  ui_restore_terminal
+  if [[ -t 1 ]]; then printf '\033[H\033[2J'; fi
+  printf '\n%b  XRayMesh closed. Run %bxraymesh%b%b to open the menu again.%b\n\n' "$CYAN" "$BOLD" "$RESET" "$CYAN" "$RESET"
+  exit 0
+}
+
+# After an update, reopen the menu from the new script instead of running old code.
+menu_reload_if_updated() {
+  [[ -f "${INSTALL_DIR}/xraymesh.sh" ]] || return 0
+  installed_script_is_newer || return 0
+  ui_restore_terminal
+  info "Reopening the menu with XRayMesh $(installed_version)..."
+  sleep 1
+  exec bash "${INSTALL_DIR}/xraymesh.sh" menu
 }
 
 menu() {
@@ -4759,160 +5567,45 @@ menu() {
   fi
 
   if [[ -d "$WEB_DIR" || -f "$WEB_SERVICE_FILE" ]]; then
+    [[ -t 1 ]] && printf '\n  %b› Checking the installed files...%b\n' "$BLUE" "$RESET"
     update_web_assets >/dev/null 2>&1 || true
   fi
 
-  IN_MAIN_MENU=1
+  MENU_PID=$BASHPID
+  MENU_IDLE=1
+  MENU_SEL=1
+  trap 'MENU_RESIZED=1' WINCH
+  trap 'ui_restore_terminal' EXIT
   while true; do
-    header
+    [[ -t 1 ]] && printf '\033[H\033[2J\n  %b› Loading...%b' "$BLUE" "$RESET"
+    [[ -n "$MENU_PUBLIC_IP" ]] || MENU_PUBLIC_IP="$(get_server_ip 2>/dev/null || echo "127.0.0.1")"
+    MENU_STATUS="$(menu_status_lines)"
 
-    local mesh_state web_state iperf_state port pub_ip proto domain ssl_info v_ip host_name web_url
-    mesh_state="$(systemctl is-active xraymesh.service 2>/dev/null || true)"
-    [[ -z "$mesh_state" ]] && mesh_state="inactive"
-    web_state="$(systemctl is-active xraymesh-web.service 2>/dev/null || true)"
-    [[ -z "$web_state" ]] && web_state="inactive"
-    iperf_state="$(systemctl is-active xraymesh-iperf.service 2>/dev/null || true)"
-    [[ -z "$iperf_state" ]] && iperf_state="inactive"
-    port="$(get_web_port 2>/dev/null || echo "$DEFAULT_WEB_PORT")"
-    pub_ip="$(get_server_ip 2>/dev/null || echo "127.0.0.1")"
-    proto="$(get_web_proto 2>/dev/null || echo "http")"
-    domain="$(get_web_domain 2>/dev/null || true)"
-
-    if [[ -f "$CONFIG_FILE" ]]; then
-      # shellcheck disable=SC1090
-      source "$CONFIG_FILE" 2>/dev/null || true
-      v_ip="${IPV4:-unknown}"
-      host_name="${HOSTNAME:-$(hostname -s 2>/dev/null || echo node)}"
-    else
-      v_ip="Not Configured"
-      host_name="$(hostname -s 2>/dev/null || echo node)"
-    fi
-
-    if [[ "$proto" == "https" && -n "$domain" ]]; then
-      ssl_info="Enabled (HTTPS — ${domain})"
-      web_url="https://${domain}:${port}"
-    else
-      ssl_info="Disabled (HTTP)"
-      web_url="http://${pub_ip}:${port}"
-    fi
-
-    local auth_info="Password + Token"
-    if ! grep -q '^WEB_PASSWORD_HASH=' "$WEB_CONFIG_FILE" 2>/dev/null; then
-      auth_info="Token-Only (Highest Security)"
-    fi
-
-    local mesh_badge web_badge iperf_badge
-    if [[ "$mesh_state" == "active" ]]; then
-      mesh_badge="${GREEN}● Active${RESET}"
-    else
-      mesh_badge="${RED}○ Inactive${RESET}"
-    fi
-
-    if [[ "$web_state" == "active" ]]; then
-      web_badge="${GREEN}● Active${RESET}"
-    else
-      web_badge="${RED}○ Inactive${RESET}"
-    fi
-
-    if [[ "$iperf_state" == "active" ]]; then
-      iperf_badge="${GREEN}● Active${RESET}"
-    else
-      iperf_badge="${GRAY}○ Inactive${RESET}"
-    fi
-
-    say "  ┌── System Status ──────────────────────────────────────────" "$DIM$BLUE"
-    if [[ ! -f "$CONFIG_FILE" ]]; then
-      printf '  │  • %-16s : %bNot Configured%b (Open Web Dashboard to initialize)\n' "Mesh Node" "$YELLOW" "$RESET"
-    else
-      printf '  │  • %-16s : %b%s%b (%s) — %b\n' "Mesh Node" "$BOLD$CYAN" "$host_name" "$RESET" "$v_ip" "$mesh_badge"
-    fi
-    printf '  │  • %-16s : %b%s%b — %b\n' "Web Dashboard" "$BOLD$CYAN" "$web_url" "$RESET" "$web_badge"
-    printf '  │  • %-16s : %s\n' "Auth Mode" "$auth_info"
-    printf '  │  • %-16s : %s\n' "SSL / HTTPS" "$ssl_info"
-    printf '  │  • %-16s : Port 5201 (In-Mesh) — %b\n' "Speedtest Server" "$iperf_badge"
-    say "  └───────────────────────────────────────────────────────────" "$DIM$BLUE"
-    printf '\n'
-
-    say "  ── Web Dashboard & Security ────────────────────────────────" "$BOLD$CYAN"
-    printf '  %b[%b 1%b]%b  Show Web Dashboard URL & One-Click Login Link\n' "$DIM$GRAY" "$BOLD$CYAN" "$DIM$GRAY" "$RESET"
-    printf '  %b[%b 2%b]%b  Admin Password & Authentication Settings\n' "$DIM$GRAY" "$BOLD$CYAN" "$DIM$GRAY" "$RESET"
-    printf '  %b[%b 3%b]%b  Change Web Dashboard Port\n' "$DIM$GRAY" "$BOLD$CYAN" "$DIM$GRAY" "$RESET"
-    printf '  %b[%b 4%b]%b  Configure Custom Domain & Free SSL (Let'\''s Encrypt HTTPS)\n' "$DIM$GRAY" "$BOLD$CYAN" "$DIM$GRAY" "$RESET"
-    printf '  %b[%b 5%b]%b  Remove SSL (Revert to HTTP)\n' "$DIM$GRAY" "$BOLD$CYAN" "$DIM$GRAY" "$RESET"
-    printf '\n'
-
-    say "  ── Mesh & Node Management ──────────────────────────────────" "$BOLD$CYAN"
-    printf '  %b[%b 6%b]%b  Join Mesh Network via Invite Code (xrmesh://)\n' "$DIM$GRAY" "$BOLD$CYAN" "$DIM$GRAY" "$RESET"
-    printf '  %b[%b 7%b]%b  Configure Mesh Node (CLI Wizard)\n' "$DIM$GRAY" "$BOLD$YELLOW" "$DIM$GRAY" "$RESET"
-    printf '  %b[%b 8%b]%b  Show Mesh Invite Code (for connecting other servers)\n' "$DIM$GRAY" "$BOLD$GREEN" "$DIM$GRAY" "$RESET"
-    printf '  %b[%b 9%b]%b  Restart All Services (Mesh, Web, Tunnels)\n' "$DIM$GRAY" "$BOLD$BLUE" "$DIM$GRAY" "$RESET"
-    printf '  %b[%b10%b]%b  Stop All Services\n' "$DIM$GRAY" "$BOLD$RED" "$DIM$GRAY" "$RESET"
-    printf '  %b[%b11%b]%b  Start All Services\n' "$DIM$GRAY" "$BOLD$GREEN" "$DIM$GRAY" "$RESET"
-    printf '  %b[%b12%b]%b  View Live Logs\n' "$DIM$GRAY" "$BOLD$CYAN" "$DIM$GRAY" "$RESET"
-    printf '\n'
-
-    say "  ── System & Maintenance ────────────────────────────────────" "$BOLD$CYAN"
-    printf '  %b[%b13%b]%b  Update XRayMesh to Latest Version\n' "$DIM$GRAY" "$BOLD$GREEN" "$DIM$GRAY" "$RESET"
-    printf '  %b[%b14%b]%b  Completely Uninstall XRayMesh\n' "$DIM$GRAY" "$BOLD$RED" "$DIM$GRAY" "$RESET"
-    printf '  %b[%b 0%b]%b  Exit\n' "$DIM$GRAY" "$GRAY" "$DIM$GRAY" "$RESET"
-    printf '\n'
-    printf '%b  Tip: All tunnels (HAProxy, Realm, Gost, iptables), SafeSync, and diagnostics\n' "$DIM$GRAY"
-    printf '       are managed 100%% from the modern Web Dashboard.%b\n\n' "$RESET"
-
-    read -r -p "  Select an option [0-14]: " choice || { choice=""; continue; }
-    case "$choice" in
-      1) run_screen generate_web_token ;;
-      2) run_screen set_web_password ;;
-      3) run_screen configure_web_port ;;
-      4) run_screen configure_web_ssl; pause ;;
-      5) run_screen remove_web_ssl ;;
-      6) run_screen join_mesh_invite ;;
-      7)
-        IN_MAIN_MENU=0
-        run_screen setup_node
-        IN_MAIN_MENU=1
+    menu_select
+    case "$MENU_CHOICE" in
+      login) run_screen generate_web_token ;;
+      password) run_screen set_web_password ;;
+      port) run_screen configure_web_port ;;
+      ssl) run_screen configure_web_ssl ;;
+      nossl) run_screen remove_web_ssl ;;
+      join) run_screen join_mesh_invite ;;
+      setup) run_screen setup_node ;;
+      invite) run_screen show_mesh_invite ;;
+      live) run_screen live_status ;;
+      diag) run_screen diagnostics ;;
+      restart|start|stop) run_screen services_screen "$MENU_CHOICE" ;;
+      logs) run_screen logs_screen ;;
+      doctor) run_screen self_test ;;
+      update)
+        run_screen update_core
+        menu_reload_if_updated
         ;;
-      8) run_screen show_mesh_invite ;;
-      9)
-        info "Restarting all XRayMesh services..."
-        apply_node_config >/dev/null 2>&1 || true
-        systemctl restart xraymesh-web.service 2>/dev/null || true
-        systemctl restart xraymesh-iperf.service 2>/dev/null || true
-        ok "Services restarted."
-        pause
-        ;;
-      10)
-        info "Stopping all XRayMesh services..."
-        systemctl stop xraymesh.service xraymesh-web.service xraymesh-haproxy.service xraymesh-iptables.service xraymesh-gost.service xraymesh-realm.service xraymesh-iperf.service 2>/dev/null || true
-        warn "All services stopped."
-        pause
-        ;;
-      11)
-        info "Starting all XRayMesh services..."
-        apply_node_config >/dev/null 2>&1 || true
-        systemctl start xraymesh-web.service 2>/dev/null || true
-        systemctl start xraymesh-iperf.service 2>/dev/null || true
-        ok "Services started."
-        pause
-        ;;
-      12)
-        printf '\n  [1] Mesh Logs  [2] Web Logs  [3] Tunnel Logs\n'
-        read -r -p "  Choice [1-3]: " l_choice
-        case "$l_choice" in
-          1) journalctl -u xraymesh.service -f -n 50 ;;
-          2) journalctl -u xraymesh-web.service -f -n 50 ;;
-          3) journalctl -u xraymesh-haproxy.service -u xraymesh-gost.service -u xraymesh-realm.service -u xraymesh-iptables.service -f -n 50 ;;
-        esac
-        ;;
-      13) IN_MAIN_MENU=0; run_screen update_core; IN_MAIN_MENU=1 ;;
-      14)
-        IN_MAIN_MENU=0
+      uninstall)
         run_screen uninstall_app
-        IN_MAIN_MENU=1
         [[ ! -d "$INSTALL_DIR" && ! -f "$SERVICE_FILE" ]] && exit 0
         ;;
-      0) printf '\n%b  Goodbye!%b\n' "$CYAN" "$RESET"; exit 0 ;;
-      *) warn "Invalid option"; sleep 1 ;;
+      exit) menu_goodbye ;;
+      *) [[ -t 0 ]] || { warn "Invalid option"; sleep 1; } ;;
     esac
   done
 }
@@ -4939,49 +5632,10 @@ main() {
   join|join-mesh) shift; require_root; require_linux; join_mesh_invite "$@" ;;
   invite|invite-code) shift; require_root; require_linux; show_mesh_invite "$@" ;;
   status)
-    local mesh_state web_state iperf_state port pub_ip proto domain v_ip host_name url
-    mesh_state="$(systemctl is-active xraymesh.service 2>/dev/null || echo inactive)"
-    web_state="$(systemctl is-active xraymesh-web.service 2>/dev/null || echo inactive)"
-    iperf_state="$(systemctl is-active xraymesh-iperf.service 2>/dev/null || echo inactive)"
-    port="$(get_web_port 2>/dev/null || echo "$DEFAULT_WEB_PORT")"
-    pub_ip="$(get_server_ip 2>/dev/null || echo "127.0.0.1")"
-    proto="$(get_web_proto 2>/dev/null || echo "http")"
-    domain="$(get_web_domain 2>/dev/null || true)"
-    if [[ -f "$CONFIG_FILE" ]]; then
-      # shellcheck disable=SC1090
-      source "$CONFIG_FILE" 2>/dev/null || true
-      v_ip="${IPV4:-unknown}"
-      host_name="${HOSTNAME:-$(hostname -s 2>/dev/null || echo node)}"
-    else
-      v_ip="Not Configured"
-      host_name="$(hostname -s 2>/dev/null || echo node)"
-    fi
-    url="http://${pub_ip}:${port}"
-    [[ "$proto" == "https" && -n "$domain" ]] && url="https://${domain}:${port}"
-
-    local mesh_badge web_badge iperf_badge
-    if [[ "$mesh_state" == "active" ]]; then
-      mesh_badge="${GREEN}● Active${RESET}"
-    else
-      mesh_badge="${RED}○ Inactive${RESET}"
-    fi
-    if [[ "$web_state" == "active" ]]; then
-      web_badge="${GREEN}● Active${RESET}"
-    else
-      web_badge="${RED}○ Inactive${RESET}"
-    fi
-    if [[ "$iperf_state" == "active" ]]; then
-      iperf_badge="${GREEN}● Active${RESET}"
-    else
-      iperf_badge="${GRAY}○ Inactive${RESET}"
-    fi
-
-    printf '\n'
-    say "  ┌── XRayMesh Status Summary ──────────────────────────────────" "$DIM$BLUE"
-    printf '  │  • %-16s : %b%s%b (%s) — %b\n' "Mesh Node" "$BOLD$CYAN" "$host_name" "$RESET" "$v_ip" "$mesh_badge"
-    printf '  │  • %-16s : %b%s%b — %b\n' "Web Dashboard" "$BOLD$CYAN" "$url" "$RESET" "$web_badge"
-    printf '  │  • %-16s : Port 5201 (In-Mesh) — %b\n' "Speedtest Server" "$iperf_badge"
-    say "  └─────────────────────────────────────────────────────────────" "$DIM$BLUE"
+    MENU_PUBLIC_IP="$(get_server_ip 2>/dev/null || echo "127.0.0.1")"
+    ui_term_size
+    section "XRAYMESH STATUS"
+    menu_status_lines
     printf '\n'
     ;;
   peers) "${BIN_DIR}/easytier-cli" peer ;;
@@ -5052,17 +5706,19 @@ main() {
   self-test|doctor) require_linux; self_test ;;
   start|restart)
     require_root; require_linux
-    apply_node_config
-    systemctl restart xraymesh-web.service 2>/dev/null || true
-    systemctl restart xraymesh-iperf.service 2>/dev/null || true
-    ok "All services started."
+    trap '' INT
+    if start_all_services restart; then
+      ok "All services started."
+    else
+      warn "Some services did not start; run 'xraymesh self-test' for details."
+    fi
     ;;
   stop)
     require_root; require_linux
-    systemctl stop xraymesh.service xraymesh-web.service xraymesh-haproxy.service xraymesh-iptables.service xraymesh-gost.service xraymesh-realm.service xraymesh-iperf.service 2>/dev/null || true
-    systemctl stop 'xraymesh-icmp@*' 2>/dev/null || true
+    stop_all_services
     warn "All services stopped."
     ;;
+
   version|-v|--version) echo "${APP} ${VERSION} (${DEFAULT_BRANCH}) - © ${OWNER}" ;;
   help|-h|--help)
     printf '\n'

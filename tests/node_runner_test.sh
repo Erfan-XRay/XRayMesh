@@ -74,9 +74,16 @@ has "$(run_runner "MTU='1360'")" "--mtu 1360"
 # The terminal setup only accepts yes or no answers.
 # shellcheck source=../xraymesh.sh
 source "${ROOT_DIR}/xraymesh.sh"
-[[ "$(prompt_yes_no "Enable KCP?" "no" <<< "y" 2>/dev/null)" == "yes" ]]
-[[ "$(prompt_yes_no "Enable KCP?" "no" <<< "" 2>/dev/null)" == "no" ]]
-[[ "$(printf 'maybe\nNO\n' | prompt_yes_no "Enable KCP?" "yes" 2>/dev/null)" == "no" ]]
+answer=""
+ask_yes_no_into answer "Enable KCP?" "no" <<< "y" >/dev/null 2>&1
+[[ "$answer" == "yes" ]]
+ask_yes_no_into answer "Enable KCP?" "no" <<< "" >/dev/null 2>&1
+[[ "$answer" == "no" ]]
+ask_yes_no_into answer "Enable KCP?" "yes" < <(printf 'maybe\nNO\n') >/dev/null 2>&1
+[[ "$answer" == "no" ]]
+# Input that ends without an answer takes the default instead of asking forever.
+ask_yes_no_into answer "Enable KCP?" "yes" < /dev/null >/dev/null 2>&1
+[[ "$answer" == "yes" ]]
 valid_mtu 1360
 valid_mtu 576
 for bad in 575 9001 abc ""; do

@@ -2,6 +2,28 @@
 
 All notable XRayMesh changes are documented here.
 
+## [Unreleased]
+
+### Changed
+- The terminal menu was redesigned. Move with the arrow keys (or j/k) and open with Enter; typing an item's number still jumps to it. A status panel at the top shows the mesh node, web panel, speedtest server and sign-in mode, a hint line describes the highlighted item, and the list scrolls on short terminals and redraws when the window is resized.
+- The menu has new items: Live status & peers, Connection diagnostics and Health check. Menu numbers changed: Update is now 16 and Uninstall is 17.
+- Choices inside screens (setup method, protocol, IPv4 or IPv6, password options, log source) use the same arrow-key picker. Text questions support editing with the arrow keys, Home and End.
+- Invite codes and login links are printed on their own line so they copy cleanly.
+- Update (menu and `xraymesh update`) now uses the verified update path with rollback, and only moves EasyTier to a newer release instead of downloading it again and restarting the mesh every time.
+
+### Fixed
+- Ctrl+C at "Press Enter to continue" (for example after `xraymesh update`) or at any other prompt outside the menu printed "returning to the main menu" and then kept waiting, so the terminal looked frozen until the SSH session was closed. Ctrl+C now cancels the command.
+- Ctrl+C inside most menu screens (login link, password, port, SSL, join, invite) closed the whole menu. It now returns to the menu, and Ctrl+C in the menu itself closes it cleanly.
+- Ctrl+C in Live logs closed the whole menu; it now returns to the menu.
+- Ctrl+C while getting an SSL certificate could leave the web server that was paused for port 80 stopped. It is started again.
+- Ctrl+C during an update could stop it halfway between installing files and the health check, with no rollback. The download can still be cancelled (nothing is changed); the install, restart and rollback steps now finish first.
+- Ctrl+C while a node configuration or an invite join was being applied could leave a half-applied config. Those steps now finish first.
+- "Start all services" and "Restart all services" did not bring the tunnels (HAProxy, GOST, Realm, iptables) back after "Stop all services". They now start every enabled tunnel, and "Stop all services" also stops ICMP/PCK links and asks first.
+- Opening the menu or a login link restarted the mesh node every time. It now restarts only when its runner actually changed.
+- The menu looked up the public IP on every redraw, which could take seconds behind NAT; it is looked up once.
+- Ctrl+D (end of input) at the menu redrew it in an endless loop; it now closes the menu.
+- Screens that ended with an error (SSL, self-test) showed an extra "operation ended with status 1" and asked to press Enter twice.
+
 ## [3.0.0-beta.16] - 2026-09-27
 
 ### Security
