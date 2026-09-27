@@ -89,7 +89,13 @@ export default defineConfig({
 						{ slug: 'guides/safesync' },
 						{ slug: 'guides/updates' },
 						{ slug: 'guides/security' },
+						{ slug: 'guides/ping-speedtest' },
 					],
+				},
+				{
+					label: 'Help',
+					translations: { fa: 'کمک' },
+					items: [{ slug: 'troubleshooting' }],
 				},
 				{
 					label: 'Reference',

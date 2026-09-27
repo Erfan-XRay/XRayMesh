@@ -416,6 +416,11 @@ site-search button[data-open-modal]:hover {
 	content: counter(steps-counter, persian);
 }
 
+/* Plain numbered lists count in Persian digits on Persian pages too. */
+:root[dir='rtl'] .sl-markdown-content ol:not(.sl-steps) {
+	list-style-type: persian;
+}
+
 .sl-steps > li::after {
 	background: linear-gradient(to bottom, rgb(var(--xr-accent-rgb) / 0.35), var(--xr-border));
 }

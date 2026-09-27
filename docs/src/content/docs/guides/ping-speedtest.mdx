@@ -1,0 +1,81 @@
+---
+title: Ping and speed test
+description: Measure latency, packet loss and throughput between any two servers in the mesh.
+---
+
+import { LinkCard, Steps } from '@astrojs/starlight/components';
+
+The panel can test the link between **any two servers** in the mesh, not only the one you're signed
+in to. Both tests run over the private mesh, so they measure what your tunnels and services actually
+get.
+
+## Ping
+
+Use **Ping** to check latency and packet loss.
+
+<Steps>
+
+1. Open the **Ping** tab.
+2. Choose **From (sends the ping)** and **To**. Instead of a server, you can type any **Destination
+   IP**. **Swap source and destination** flips the two.
+3. Choose how many **Packets** to send: 4, 8 or 10.
+4. Press **Send ping**. Each reply appears as it arrives.
+
+</Steps>
+
+| Result | What it tells you |
+| :--- | :--- |
+| Minimum, Average, Maximum | Round-trip time in ms. |
+| Jitter | How much the time varies between packets. Low jitter matters for calls, games and UDP tunnels. |
+| Packet loss | The share of packets with no reply. Anything above 0% on a steady link is worth a look. |
+
+**Raw output** shows the full `ping` output from the sending server.
+
+## Speed test
+
+The **Speed test** tab measures throughput with [iperf3](https://iperf.fr).
+
+<Steps>
+
+1. Open the **Speed test** tab.
+2. Choose **From (runs the test)** and **To**.
+3. Pick one of the **Quick profiles**, or set the options yourself:
+
+   | Profile | Test |
+   | :--- | :--- |
+   | **Quick** | TCP, 3 seconds |
+   | **Max** | TCP, 10 seconds |
+   | **Jitter** | UDP, 5 seconds |
+
+4. Press **Start speed test**. The chart shows the throughput for every second of the test.
+
+</Steps>
+
+### TCP or UDP
+
+- **TCP** measures the maximum transfer rate between the two servers. You get the average and peak
+  speed, the data transferred and the number of **retransmits**. Many retransmits point to a lossy
+  link.
+- **UDP** sends at a fixed **UDP sending rate** (20, 50, 100 or 300 Mbps) and measures **jitter** and
+  **packet loss** at that rate. Raise the rate step by step to find where loss starts.
+
+The duration can be 3, 5, 10 or 15 seconds. Longer tests smooth out short spikes.
+
+:::note[Mesh only]
+The test server listens only inside the mesh. Port `5201` stays closed to the internet. The
+destination doesn't need its web panel running, because every configured server keeps the iperf3
+service up. Only a few tests can run at once. If the panel says too many tests are running, wait
+for one to finish.
+:::
+
+## Reading the results
+
+- **High latency but no loss.** Usually the physical distance or the route between the servers. Try
+  another transport only if it changed suddenly.
+- **Loss on UDP but not on TCP.** The network is dropping or throttling UDP. Try `tcp`, `faketcp` or
+  turn on **KCP loss resistance**. See [Mesh transports](../transports/).
+- **Speed far below the servers' bandwidth.** Check the CPU on both servers. **Multi-thread mode**
+  helps on servers with more than one core, and turning encryption off saves CPU in a two-server
+  mesh over ICMP or PCK.
+
+<LinkCard title="Next: Troubleshooting" href="../../troubleshooting/" description="What to do when something doesn't connect." />

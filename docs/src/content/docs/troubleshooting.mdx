@@ -1,0 +1,152 @@
+---
+title: Troubleshooting
+description: Find and fix the most common problems, from a panel that won't open to servers that won't connect.
+---
+
+import { Steps } from '@astrojs/starlight/components';
+import UiPath from '../../components/UiPath.astro';
+
+Find your symptom below. Most fixes start with the same two commands on the affected server.
+
+## Start here
+
+```bash
+sudo xraymesh self-test
+```
+
+`self-test` checks the installed programs, config permissions and every service: the mesh, the web
+panel, each tunnel engine and the speed-test server. It prints what failed.
+
+For connection problems, open the menu with `sudo xraymesh` and choose **Connection diagnostics**.
+It shows whether the mesh port is listening, which peers EasyTier sees, and the latest connection
+messages, with a hint for your transport.
+
+Logs, when you need more detail:
+
+| Command | Shows |
+| :--- | :--- |
+| `xraymesh logs` | The mesh and the web panel, live. |
+| `journalctl -u 'xraymesh-icmp@*' -n 30` | ICMP and PCK links. |
+| `journalctl -u xraymesh-updater-temp` | The last update started from the panel. |
+
+## The panel won't open
+
+<Steps>
+
+1. **Is the service running?** `sudo xraymesh self-test` should list **Web Dashboard service is
+   active**. If not, run `sudo xraymesh restart`.
+
+2. **Is the port open?** The panel uses TCP `11080` unless you changed it. Open it in the hosting
+   provider's firewall, and in UFW if you use it. `sudo xraymesh status` shows the panel address.
+
+3. **Did a tunnel take the panel's port?** If you created a tunnel on the same port as the panel,
+   stop all tunnels, then fix or remove that tunnel in the panel:
+
+   ```bash
+   sudo xraymesh tunnels-stop
+   ```
+
+   Once it's fixed, `sudo xraymesh tunnels-apply` starts the others again.
+
+4. **HTTPS errors?** The domain must still point to this server. Run `sudo xraymesh ssl` again for a
+   new certificate, or `sudo xraymesh remove-ssl` to go back to HTTP.
+
+</Steps>
+
+## I can't sign in
+
+- **The login link doesn't work.** Each link works once, within 60 minutes. Get a new one with
+  `sudo xraymesh token`.
+- **Too many attempts.** After 5 wrong passwords in a minute, sign-in from your IP is blocked until
+  the minute is up.
+- **Forgot the password.** Use a login link, or set a new password with `sudo xraymesh password`.
+- **Signed out after an update.** That's expected when the panel restarts. Sign in again.
+
+## A server doesn't appear under Servers
+
+Work through these on **both** servers.
+
+1. **Same network name and secret.** Joining with an invite code sets both. If you typed them by
+   hand, compare them under <UiPath items={['Node', 'Settings']} />.
+
+2. **The mesh port is open.** Open the listen port (default `11010`) in the provider's firewall on
+   the server that others connect to:
+
+   | Transport | Open |
+   | :--- | :--- |
+   | `dual`, `udp`, `tcp`, `ws`, `faketcp` | TCP and UDP |
+   | `wss` | TCP |
+   | `quic` | UDP |
+   | `icmp` | Ping (ICMP) must reach the main server |
+   | `pck` | The link's TCP port (`20000`–`32767`), shown next to the invite code |
+
+3. **The invite code has the right address.** If the panel said the public IP wasn't detected, set
+   the address under <UiPath items={['Node', 'Peers & invite']} /> and create the code again.
+
+4. **The network lets the transport through.** If the port is open and the servers still don't
+   meet, the route may block that protocol. Try another transport. See
+   [Mesh transports](../guides/transports/).
+
+5. **ICMP or PCK: one code per server.** A code that already connected a server can't connect
+   another one. Press **New code** on the main server.
+
+## My settings changed back by themselves
+
+That's the safety net. After a change of transport or shared settings, a server that has no
+connected peers within **90 seconds** restores its previous settings, so it doesn't stay cut off.
+It usually means the new transport is blocked between your servers. Pick another one. See
+[SafeSync](../guides/safesync/).
+
+## A tunnel doesn't work
+
+<Steps>
+
+1. **Check that it's running.** `xraymesh tunnels` lists every saved tunnel with its ports and the
+   state of its service.
+
+2. **Open the listening ports** in the provider's firewall on the server the tunnel **runs on**.
+
+3. **Match the protocol.** HAProxy forwards TCP only. For UDP services such as Hysteria2, WireGuard
+   or QUIC, use Realm, GOST or iptables with UDP or TCP + UDP.
+
+4. **Check the destination.** The service must listen on the destination server's port, and
+   that server must show up under **Servers**. Use **Ping** from the tunnel's server to the
+   destination to check the path. See [Ping and speed test](../guides/ping-speedtest/).
+
+5. **Port conflicts.** A port can't be used by two tunnels, or by a tunnel and another program on the
+   same server. Creating the tunnel then fails with a message that names the taken port.
+
+</Steps>
+
+## A server shows an error label
+
+In the **Tunnels** tab, each server in view has a status:
+
+| Label | Meaning | Fix |
+| :--- | :--- | :--- |
+| **Unreachable** or **Timed out** | This panel couldn't reach that server over the mesh. | Check that it's online and appears under **Servers**. |
+| **Secret mismatch** | That server has a different network secret. | Join it to the mesh again with a fresh invite code. |
+| **Needs update** | That server runs a version too old for this action. | Update it from its terminal with `sudo xraymesh update`. |
+| **Cached** | You're seeing its last known tunnels. | Editing unlocks when it reconnects. |
+
+## An update failed
+
+If an update fails, the server restores the previous version on its own and the panel says so. To
+see why, run `journalctl -u xraymesh-updater-temp` on that server. You can always update from the
+terminal instead:
+
+```bash
+sudo xraymesh update
+```
+
+## Still stuck?
+
+Open an issue on [GitHub](https://github.com/Erfan-XRay/XRayMesh/issues). Include:
+
+- the output of `sudo xraymesh self-test` and `xraymesh version`,
+- the transport you use, and where each server is hosted (for example, Iran or abroad),
+- what you expected and what happened.
+
+:::caution
+Remove invite codes, network secrets, login links and passwords from anything you post.
+:::
