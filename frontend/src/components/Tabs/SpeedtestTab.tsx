@@ -157,7 +157,7 @@ export const SpeedtestTab: React.FC<SpeedtestTabProps> = ({ peers, targetIp, onT
       ? num(formatBytes(summary.total_bytes_received || summary.total_bytes_sent || summary.total_bytes))
       : '—';
   const pending = isRunning ? '…' : '—';
-  const jitter = summary?.jitter_ms !== undefined ? `${num(summary.jitter_ms)} ms` : summary ? t('speed_na') : pending;
+  const jitter = summary?.jitter_ms !== undefined ? `${num(summary.jitter_ms)} ${t('unit_ms')}` : summary ? t('speed_na') : pending;
   const loss = summary?.loss_percent !== undefined ? percent(summary.loss_percent) : summary ? percent(0) : pending;
   const retransmits = isRunning
     ? resultProto === 'tcp' && liveSamples.length

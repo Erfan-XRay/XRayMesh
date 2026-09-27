@@ -3,15 +3,19 @@ import { Activity, ArrowDown, ArrowLeftRight, ArrowUp, Signal, SignalHigh, Signa
 import { Peer } from '../../types';
 import type { Translate } from '../../i18n/translations';
 import { formatText } from '../../i18n/fillTemplate';
-import { formatNumber, localizeDigits } from '../../i18n/format';
+import { formatMs, localizeDigits } from '../../i18n/format';
 import { UpdateRun } from '../../hooks/useNodeUpdates';
 import { btnGhostSm, CopyButton, iconBtn } from '../ui';
 import { formatProtocol, LATENCY_TEXT, latencyOf, versionLabel } from './peerDisplay';
 import { UpdateCell, UpdateFailure } from './UpdateStatus';
 
-/** Shared column template so the header and every row line up on large screens. */
-export const PEER_GRID =
-  'lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.7fr)_auto] lg:items-center lg:gap-4';
+/** Columns of the desktop table. The header and rows take them through subgrid, so the auto-sized
+ *  actions column is the same width everywhere and every column lines up with its header. */
+export const PEER_TABLE =
+  'lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,1.1fr)_minmax(max-content,0.8fr)_minmax(0,1fr)_minmax(0,1.7fr)_auto] lg:gap-x-4';
+
+/** A header or row inside PEER_TABLE. */
+export const PEER_SUBGRID = 'lg:grid lg:grid-cols-subgrid lg:col-span-full';
 
 const LATENCY_ICON = { good: SignalHigh, fair: SignalMedium, poor: SignalLow, none: Signal };
 
@@ -31,11 +35,11 @@ const Traffic: React.FC<{ peer: Peer; t: Translate; className?: string }> = ({ p
   <span className={`inline-flex items-center gap-3 font-mono text-xs text-text-muted tabular-nums ${className}`}>
     <span className="inline-flex items-center gap-1" title={t('peer_traffic_down')}>
       <ArrowDown className="w-3 h-3 text-success" aria-label={t('peer_traffic_down')} />
-      {localizeDigits(peer.rx_bytes || '0 B', t)}
+      <bdi dir="ltr">{localizeDigits(peer.rx_bytes || '0 B', t)}</bdi>
     </span>
     <span className="inline-flex items-center gap-1" title={t('peer_traffic_up')}>
       <ArrowUp className="w-3 h-3 text-info" aria-label={t('peer_traffic_up')} />
-      {localizeDigits(peer.tx_bytes || '0 B', t)}
+      <bdi dir="ltr">{localizeDigits(peer.tx_bytes || '0 B', t)}</bdi>
     </span>
   </span>
 );
@@ -70,7 +74,7 @@ export const PeerRow: React.FC<PeerRowProps> = ({
   const protocolTitle = peer.transport ? formatText(t('peer_via_link'), { transport: protocol }) : undefined;
 
   return (
-    <li className="px-4 py-3.5 sm:px-5 transition-colors hover:bg-hover">
+    <li className={`px-4 py-3.5 sm:px-5 transition-colors hover:bg-hover ${PEER_SUBGRID}`}>
       {/* Phones and tablets: three dense lines instead of a stacked table. */}
       <div className="lg:hidden space-y-2.5">
         <div className="flex items-start justify-between gap-3">
@@ -85,9 +89,9 @@ export const PeerRow: React.FC<PeerRowProps> = ({
               <CopyButton value={peer.ipv4} copied={copiedKey === peer.ipv4} onCopy={onCopy} label={copyLabel} className="w-7 h-7" />
             </div>
           </div>
-          <span className={`shrink-0 inline-flex items-center gap-1 text-sm font-semibold tabular-nums ${LATENCY_TEXT[latency.tone]}`}>
+          <span className={`shrink-0 inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold tabular-nums ${LATENCY_TEXT[latency.tone]}`}>
             <LatencyIcon className="w-4 h-4" aria-hidden="true" />
-            {latency.ms === null ? t('peer_latency_none') : `${formatNumber(latency.ms, t)} ms`}
+            {latency.ms === null ? t('peer_latency_none') : formatMs(latency.ms, t)}
           </span>
         </div>
 
@@ -129,7 +133,7 @@ export const PeerRow: React.FC<PeerRowProps> = ({
       </div>
 
       {/* Desktop: one aligned table row */}
-      <div className={`hidden ${PEER_GRID}`}>
+      <div className={`hidden ${PEER_SUBGRID} lg:items-center`}>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-text-primary truncate">
             <bdi>{peer.hostname || peer.ipv4}</bdi>
@@ -142,16 +146,16 @@ export const PeerRow: React.FC<PeerRowProps> = ({
           </div>
         </div>
 
-        <div className="flex flex-col gap-0.5 min-w-0 text-sm">
+        <div className="flex flex-col items-start gap-0.5 min-w-0 text-sm">
           {connection}
           <span className="font-mono text-xs text-text-subtle" dir="ltr" title={protocolTitle}>
             {protocol}
           </span>
         </div>
 
-        <span className={`inline-flex items-center gap-1.5 text-sm font-medium tabular-nums ${LATENCY_TEXT[latency.tone]}`}>
+        <span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-medium tabular-nums ${LATENCY_TEXT[latency.tone]}`}>
           <LatencyIcon className="w-4 h-4 shrink-0" aria-hidden="true" />
-          {latency.ms === null ? t('peer_latency_none') : `${formatNumber(latency.ms, t, 1)} ms`}
+          {latency.ms === null ? t('peer_latency_none') : formatMs(latency.ms, t, 1)}
         </span>
 
         <Traffic peer={peer} t={t} className="flex-col items-start gap-0.5" />
@@ -178,7 +182,7 @@ export const PeerRow: React.FC<PeerRowProps> = ({
       </div>
 
       {run?.phase === 'failed' && (
-        <div className="mt-3">
+        <div className="mt-3 lg:col-span-full">
           <UpdateFailure peer={peer} run={run} onDismiss={onDismissUpdate} onCopy={onCopy} copiedKey={copiedKey} t={t} />
         </div>
       )}

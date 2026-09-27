@@ -1,8 +1,8 @@
 {
-  "version": "3.0.2",
+  "version": "3.0.3",
   "branch": "main",
-  "release_name": "XRayMesh v3.0.2 (Stable-only updates)",
+  "release_name": "XRayMesh v3.0.3 (Servers list & Persian layout fixes)",
   "release_date": "2026-09-27",
-  "changelog": "The beta update channel was removed. Every server now checks for and installs updates only from the main branch, and the panel no longer has the beta switch or channel badges. Servers that had beta updates turned on move to main on their next update, and the panel moves a mesh server still on beta to main before updating it.",
+  "changelog": "The Servers list columns now line up with their titles, and in Persian the protocol, traffic, latency and RAM usage read in the right order. Persian shows latency in milliseconds (میلی‌ثانیه) instead of ms. The WSS description no longer says a domain and certificate are needed: EasyTier makes its own certificate.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh) update"
 }

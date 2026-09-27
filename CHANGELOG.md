@@ -2,6 +2,17 @@
 
 All notable XRayMesh changes are documented here.
 
+## [3.0.3] - 2026-09-27
+
+### Changed
+- Persian: latency is shown in «میلی‌ثانیه» instead of "ms" everywhere (overview, servers, ping, speed test and tunnels).
+
+### Fixed
+- Servers list: the column titles did not line up with the rows on large screens, because the empty title row had a narrower actions column than the rows. The header and rows now share one set of columns.
+- Overview in Persian: average latency and the RAM usage ("1.4 GB / 3.8 GB") read backwards. They now keep their order.
+- Servers list in Persian: the protocol under Connection sat at the far edge of its column, and traffic and latency read backwards (for example "MB ۱۲٫۳"). They now read "۱۲٫۳ MB" and line up with their titles.
+- The WSS description said it needs a domain with a valid certificate. It does not: EasyTier makes its own certificate, and the certificate from `xraymesh ssl` is only for the web panel.
+
 ## [3.0.2] - 2026-09-27
 
 ### Removed

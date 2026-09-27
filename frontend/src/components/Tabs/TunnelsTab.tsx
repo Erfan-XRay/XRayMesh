@@ -12,7 +12,7 @@ import { TunnelScope } from '../../hooks/useTunnels';
 import { ArrowRight, Boxes, Cpu, Globe, History, Lock, Network, Pencil, Plus, RefreshCw, Search, Server, Trash2, Waypoints, X, Zap } from 'lucide-react';
 import type { Translate, TranslationKey } from '../../i18n/translations';
 import { formatText } from '../../i18n/fillTemplate';
-import { formatCount, localizeDigits } from '../../i18n/format';
+import { formatCount, formatMs } from '../../i18n/format';
 import {
   btnSecondarySm,
   btnTonalSm,
@@ -215,7 +215,7 @@ export const TunnelsTab: React.FC<TunnelsTabProps> = ({
 
   const statusLabel = (n: TunnelNodeState) => {
     if (n.loading && !byNode[n.ip]) return t('tunnels_node_loading');
-    if (n.status === 'ok') return n.latency_ms ? `${localizeDigits(n.latency_ms, t)} ms` : t('tunnels_node_ok');
+    if (n.status === 'ok') return n.latency_ms ? formatMs(String(n.latency_ms), t) : t('tunnels_node_ok');
     if (n.status === 'idle') return t('tunnels_node_idle');
     return t(`tunnels_node_error_${n.status}` as TranslationKey);
   };

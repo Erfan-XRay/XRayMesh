@@ -24,6 +24,12 @@ export function formatNumber(value: number, t: Translate, decimals = 0): string 
   }).format(value);
 }
 
+/** A duration in milliseconds, e.g. "42.3 ms" / "۴۲٫۳ میلی‌ثانیه". */
+export function formatMs(value: number | string, t: Translate, decimals = 0): string {
+  const n = typeof value === 'number' ? formatNumber(value, t, decimals) : localizeDigits(value, t);
+  return `${n} ${t('unit_ms')}`;
+}
+
 /** Localizes the digits of a server-formatted quantity such as "1.24 GB" or "42.3". */
 export function localizeDigits(text: string | number, t: Translate): string {
   const s = String(text);

@@ -3,7 +3,7 @@ import { Server, X } from 'lucide-react';
 import type { PingReply, PingResult } from '../../types';
 import type { Translate, TranslationKey } from '../../i18n/translations';
 import { formatText } from '../../i18n/fillTemplate';
-import { formatCount, formatNumber } from '../../i18n/format';
+import { formatCount, formatMs, formatNumber } from '../../i18n/format';
 import { useAnimatedNumber } from '../../hooks/useAnimatedNumber';
 import { LoadingDots } from '../LoadingSpinner';
 import { Pill, StatusDot, Tone } from '../ui';
@@ -99,7 +99,7 @@ export const PingLive: React.FC<PingLiveProps> = ({ from, to, replies, count, ru
   const scaleMax = Math.max(5, ...replies.map((r) => (r.status === 'ok' ? (r.time_ms as number) * 1.15 : 0)));
   const slots = Math.max(count, replies.length);
   const bySlot = replies.slice(0, slots);
-  const ms = (v: number) => `${formatNumber(v, t, msDecimals(v))} ms`;
+  const ms = (v: number) => formatMs(v, t, msDecimals(v));
 
   return (
     <div className="flex flex-col gap-5">
@@ -139,7 +139,7 @@ export const PingLive: React.FC<PingLiveProps> = ({ from, to, replies, count, ru
             {idle ? (
               <p className="font-mono text-4xl font-bold tabular-nums text-text-subtle">
                 {formatNumber(0, t, 1)}
-                <span className="ms-1.5 text-base font-semibold text-text-muted">ms</span>
+                <span className="ms-1.5 text-base font-semibold text-text-muted">{t('unit_ms')}</span>
               </p>
             ) : latest && latest.status !== 'ok' && running ? (
               <p className="pb-1 text-lg font-semibold text-danger">{t('ping_no_reply')}</p>
@@ -151,7 +151,7 @@ export const PingLive: React.FC<PingLiveProps> = ({ from, to, replies, count, ru
             ) : (
               <p className={`font-mono text-4xl font-bold tabular-nums ${stats.received ? 'text-primary' : 'text-text-subtle'}`}>
                 {formatNumber(shownLatency, t, msDecimals(shownLatency))}
-                <span className="ms-1.5 text-base font-semibold text-text-muted">ms</span>
+                <span className="ms-1.5 text-base font-semibold text-text-muted">{t('unit_ms')}</span>
               </p>
             )}
           </div>

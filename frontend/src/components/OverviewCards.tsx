@@ -2,7 +2,7 @@ import React from 'react';
 import { Activity, Cpu, Network, Users } from 'lucide-react';
 import { NodeInfo, Peer, SystemStats } from '../types';
 import type { Translate } from '../i18n/translations';
-import { formatCount, formatNumber, formatUptime, localizeDigits } from '../i18n/format';
+import { formatCount, formatMs, formatNumber, formatUptime, localizeDigits } from '../i18n/format';
 import { formatText } from '../i18n/fillTemplate';
 import { CopyButton, Meter } from './ui';
 import { useAnimatedNumber } from '../hooks/useAnimatedNumber';
@@ -99,7 +99,7 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({ node, system, peer
 
       <Cell icon={<Activity className="w-4 h-4" />} label={t('latency_title')} footer={t('latency_desc')}>
         <p className={`font-mono text-lg sm:text-xl font-semibold tabular-nums ${avgLatency === null ? 'text-text-subtle' : LATENCY_TEXT[tone]}`}>
-          {avgLatency === null ? '—' : `${formatNumber(shownLatency, t, 1)} ms`}
+          {avgLatency === null ? '—' : formatMs(shownLatency, t, 1)}
         </p>
       </Cell>
 
@@ -131,7 +131,12 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({ node, system, peer
                 </span>
                 <span className="font-mono text-text-primary tabular-nums truncate">
                   <span className="font-semibold">{percent(m.pct)}</span>
-                  {m.detail && <span className="hidden xl:inline text-text-subtle">{t('detail_sep')}{m.detail}</span>}
+                  {m.detail && (
+                    <span className="hidden xl:inline text-text-subtle">
+                      {t('detail_sep')}
+                      <bdi dir="ltr">{m.detail}</bdi>
+                    </span>
+                  )}
                 </span>
               </div>
               <Meter value={m.pct} warn={m.warn} danger={85} label={m.label} />

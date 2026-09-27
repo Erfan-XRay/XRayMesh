@@ -7,7 +7,7 @@ import { fillTemplate } from '../../i18n/fillTemplate';
 import { UpdateRun } from '../../hooks/useNodeUpdates';
 import { cardClass, EmptyState, inputClass, SectionHeader, Segmented } from '../ui';
 import { ConfirmModal } from '../Modals/ConfirmModal';
-import { PEER_GRID, PeerRow } from '../Peers/PeerRow';
+import { PEER_SUBGRID, PEER_TABLE, PeerRow } from '../Peers/PeerRow';
 import { ThisServerCard } from '../Peers/ThisServerCard';
 import { isLegacyPeer, versionLabel } from '../Peers/peerDisplay';
 
@@ -145,8 +145,8 @@ export const PeersTab: React.FC<PeersTabProps> = ({
             <EmptyState compact icon={<Search className="w-5 h-5" />} title={t('peers_no_results')} />
           </div>
         ) : (
-          <>
-            <div className={`hidden ${PEER_GRID} px-5 py-2.5 border-y border-card-border bg-surface text-xs font-medium text-text-muted`} aria-hidden="true">
+          <div className={PEER_TABLE}>
+            <div className={`hidden ${PEER_SUBGRID} px-5 py-2.5 border-y border-card-border bg-surface text-xs font-medium text-text-muted`} aria-hidden="true">
               <span>{t('peers_col_server')}</span>
               <span>{t('peers_col_connection')}</span>
               <span>{t('peers_col_latency')}</span>
@@ -154,7 +154,7 @@ export const PeersTab: React.FC<PeersTabProps> = ({
               <span>{t('peers_col_version')}</span>
               <span />
             </div>
-            <ul className="stagger divide-y divide-card-border border-t border-card-border lg:border-t-0">
+            <ul className={`stagger divide-y divide-card-border border-t border-card-border lg:border-t-0 ${PEER_SUBGRID}`}>
               {visible.map((peer) => (
                 <PeerRow
                   key={peer.ipv4}
@@ -166,7 +166,7 @@ export const PeersTab: React.FC<PeersTabProps> = ({
                 />
               ))}
             </ul>
-          </>
+          </div>
         )}
       </section>
 

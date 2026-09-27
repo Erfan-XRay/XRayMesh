@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Erfan-XRay/XRayMesh/releases/tag/v3.0.2"><img src="https://img.shields.io/badge/version-3.0.2-2dd4bf.svg?style=flat-square" alt="Version 3.0.2" /></a>
+  <a href="https://github.com/Erfan-XRay/XRayMesh/releases/tag/v3.0.3"><img src="https://img.shields.io/badge/version-3.0.3-2dd4bf.svg?style=flat-square" alt="Version 3.0.3" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Source--Available-red.svg?style=flat-square" alt="Source-Available License" /></a>
   <img src="https://img.shields.io/badge/EasyTier-v2.6.4-cyan.svg?style=flat-square" alt="EasyTier core" />
   <img src="https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-orange.svg?style=flat-square" alt="Supported OS" />
@@ -82,7 +82,7 @@ Pick the protocol under **Node Config → Transport & Protocol** in the panel, o
 | `udp` | Lowest latency. Needs UDP open on every server. |
 | `tcp` | Networks where UDP is blocked or throttled. |
 | `ws` | Wraps traffic in WebSocket frames to get past DPI. No certificate needed. |
-| `wss` | Encrypted WebSocket. Needs a domain with a valid certificate. |
+| `wss` | WebSocket inside TLS, so traffic looks like HTTPS. No domain or certificate needed: EasyTier makes its own (the SSL certificate from `xraymesh ssl` is only for the web panel). Servers connect by IP, so it does not work behind a CDN. |
 | `quic` | QUIC with BBR congestion control and automatic TCP fallback. |
 | `faketcp` | Makes UDP look like TCP to avoid ISP UDP throttling. Links are made only to the peers you add. |
 | `icmp` | **New in 3.0, powered by BackPack.** Carries the mesh inside ping packets, for networks where only ICMP gets through. |

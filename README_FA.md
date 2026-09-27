@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Erfan-XRay/XRayMesh/releases/tag/v3.0.2"><img src="https://img.shields.io/badge/version-3.0.2-2dd4bf.svg?style=flat-square" alt="Version 3.0.2" /></a>
+  <a href="https://github.com/Erfan-XRay/XRayMesh/releases/tag/v3.0.3"><img src="https://img.shields.io/badge/version-3.0.3-2dd4bf.svg?style=flat-square" alt="Version 3.0.3" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Source--Available-red.svg?style=flat-square" alt="Source-Available License" /></a>
   <img src="https://img.shields.io/badge/EasyTier-v2.6.4-cyan.svg?style=flat-square" alt="EasyTier core" />
   <img src="https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-orange.svg?style=flat-square" alt="Supported OS" />
@@ -82,7 +82,7 @@
 | `udp` | کمترین تأخیر. پورت UDP باید روی همهٔ سرورها باز باشد. |
 | `tcp` | شبکه‌هایی که UDP در آن‌ها مسدود یا محدود است. |
 | `ws` | ترافیک را در قالب وب‌سوکت می‌فرستد تا از DPI عبور کند؛ به گواهی نیاز ندارد. |
-| `wss` | وب‌سوکت رمزنگاری‌شده؛ به دامنه‌ای با گواهی معتبر نیاز دارد. |
+| `wss` | وب‌سوکت داخل TLS تا ترافیک شبیه HTTPS باشد. به دامنه یا گواهی نیاز ندارد؛ EasyTier خودش گواهی می‌سازد (گواهی SSL که با `xraymesh ssl` می‌گیرید فقط برای پنل وب است). سرورها با IP به هم وصل می‌شوند، پس پشت CDN کار نمی‌کند. |
 | `quic` | QUIC با کنترل ازدحام BBR و بازگشت خودکار به TCP. |
 | `faketcp` | ترافیک UDP را شبیه TCP می‌کند تا محدودیت UDP اپراتور دور زده شود. لینک فقط به همتاهایی که اضافه می‌کنید ساخته می‌شود. |
 | `icmp` | **جدید در ۳.۰، با BackPack.** مش را داخل بسته‌های پینگ می‌برد؛ برای شبکه‌هایی که فقط ICMP از آن‌ها رد می‌شود. |

@@ -68,6 +68,7 @@ export const translations = {
     uptime_minutes: "{n}m",
     uptime_join: " ",
     percent: "{n}%",
+    unit_ms: "ms",
     detail_sep: " · ",
 
     // Tabs
@@ -92,7 +93,7 @@ export const translations = {
     proto_ws: "WebSocket",
     proto_ws_desc: "Wraps traffic in WebSocket frames to get past DPI. No certificate needed.",
     proto_wss: "WebSocket + TLS",
-    proto_wss_desc: "Encrypted WebSocket. Needs a domain with a valid certificate.",
+    proto_wss_desc: "WebSocket inside TLS, so traffic looks like HTTPS. No domain or certificate needed: EasyTier makes its own.",
     proto_quic: "QUIC",
     proto_quic_desc: "QUIC with BBR congestion control and automatic TCP fallback.",
     proto_faketcp: "FakeTCP",
@@ -691,6 +692,7 @@ export const translations = {
     uptime_minutes: "{n} دقیقه",
     uptime_join: " و ",
     percent: "{n}٪",
+    unit_ms: "میلی‌ثانیه",
     detail_sep: "، ",
 
     // Tabs
@@ -715,7 +717,7 @@ export const translations = {
     proto_ws: "وب‌سوکت",
     proto_ws_desc: "ترافیک را در قالب وب‌سوکت می‌فرستد تا از DPI عبور کند؛ به گواهی نیاز ندارد.",
     proto_wss: "وب‌سوکت امن (TLS)",
-    proto_wss_desc: "وب‌سوکت رمزنگاری‌شده؛ به دامنه‌ای با گواهی معتبر نیاز دارد.",
+    proto_wss_desc: "وب‌سوکت داخل TLS تا ترافیک شبیه HTTPS باشد. به دامنه یا گواهی نیاز ندارد؛ EasyTier خودش گواهی می‌سازد.",
     proto_quic: "QUIC",
     proto_quic_desc: "QUIC با کنترل ازدحام BBR و بازگشت خودکار به TCP.",
     proto_faketcp: "FakeTCP",
