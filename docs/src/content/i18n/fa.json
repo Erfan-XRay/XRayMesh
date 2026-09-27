@@ -20,5 +20,8 @@
 	"xr.tunnel.clientSub": "کاربران شما، از هر جا",
 	"xr.tunnel.origin": "اجرا روی",
 	"xr.tunnel.dest": "مقصد",
-	"xr.tunnel.mesh": "مش"
+	"xr.tunnel.mesh": "مش",
+	"xr.wallet.network": "شبکه",
+	"xr.wallet.copy": "کپی آدرس",
+	"xr.wallet.qr": "کد QR آدرس {name}"
 }

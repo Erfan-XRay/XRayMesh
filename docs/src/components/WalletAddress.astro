@@ -1,0 +1,191 @@
+---
+/**
+ * One donation address: coin, network, a QR code made at build time, and a copy button.
+ * The network is shown prominently because coins sent on the wrong network are lost.
+ */
+import QRCode from 'qrcode';
+
+interface Props {
+	name: string;
+	network: string;
+	address: string;
+}
+
+const { name, network, address } = Astro.props;
+const t = Astro.locals.t;
+
+// Dark modules on a white tile scan reliably in both themes.
+const qr = await QRCode.toString(address, {
+	type: 'svg',
+	margin: 1,
+	errorCorrectionLevel: 'M',
+	color: { dark: '#0b0e13', light: '#ffffff' },
+});
+---
+
+<article class="xr-wallet not-content">
+	<div class="xr-wallet-qr" role="img" aria-label={t('xr.wallet.qr').replace('{name}', name)} set:html={qr} />
+	<div class="xr-wallet-body">
+		<header class="xr-wallet-head">
+			<h3>{name}</h3>
+			<span class="xr-wallet-network">
+				<span class="xr-wallet-network-label">{t('xr.wallet.network')}</span>
+				<bdi dir="ltr">{network}</bdi>
+			</span>
+		</header>
+		<code dir="ltr" class="xr-wallet-address">{address}</code>
+		<button
+			type="button"
+			class="xr-copy"
+			data-xr-copy={address}
+			data-label-copy={t('xr.wallet.copy')}
+			data-label-done={t('xr.copied')}
+		>
+			<svg class="xr-copy-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+				<rect x="9" y="9" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"></rect>
+				<path d="M5 15V6.5A2.5 2.5 0 0 1 7.5 4H15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+			</svg>
+			<svg class="xr-check-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+				<path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path>
+			</svg>
+			<span class="xr-copy-text" aria-live="polite">{t('xr.wallet.copy')}</span>
+		</button>
+	</div>
+</article>
+
+<script>
+	import '../scripts/copy';
+</script>
+
+<style>
+	.xr-wallet {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: 1rem;
+		margin-block: 1rem;
+		padding: 1.125rem;
+		border: 1px solid var(--xr-border);
+		border-radius: var(--xr-radius-lg);
+		background: var(--xr-card);
+		box-shadow: var(--xr-shadow);
+	}
+
+	.xr-wallet-qr {
+		justify-self: center;
+		width: 9.5rem;
+		padding: 0.375rem;
+		border-radius: 0.75rem;
+		background: #ffffff;
+		box-shadow: 0 0 0 1px var(--xr-border);
+		line-height: 0;
+	}
+
+	.xr-wallet-qr :global(svg) {
+		width: 100%;
+		height: auto;
+	}
+
+	.xr-wallet-body {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.75rem;
+		min-width: 0;
+	}
+
+	.xr-wallet-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem 0.75rem;
+	}
+
+	.xr-wallet-head h3 {
+		margin: 0;
+		font-size: var(--sl-text-lg);
+		color: var(--sl-color-white);
+	}
+
+	/* The network is the detail people get wrong, so it gets the warning tone. */
+	.xr-wallet-network {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.15rem 0.625rem;
+		border: 1px solid color-mix(in srgb, var(--sl-color-orange) 45%, transparent);
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--sl-color-orange) 10%, transparent);
+		color: var(--sl-color-orange-high);
+		font-size: var(--sl-text-xs);
+		font-weight: 650;
+	}
+
+	.xr-wallet-network-label {
+		font-weight: 500;
+		opacity: 0.8;
+	}
+
+	.xr-wallet-address {
+		display: block;
+		align-self: stretch;
+		padding: 0.625rem 0.75rem;
+		border: 1px solid var(--xr-border);
+		border-radius: 0.625rem;
+		background: var(--xr-code-bg);
+		font-family: var(--__sl-font-mono);
+		font-size: 0.8125rem;
+		line-height: 1.6;
+		color: var(--sl-color-gray-1);
+		word-break: break-all;
+		text-align: left;
+		user-select: all;
+	}
+
+	.xr-copy {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		min-height: 2.25rem;
+		padding: 0 0.875rem;
+		border: 1px solid var(--xr-border-strong);
+		border-radius: 0.625rem;
+		background: var(--xr-elevated);
+		color: var(--sl-color-white);
+		font: inherit;
+		font-size: var(--sl-text-xs);
+		font-weight: 600;
+		cursor: pointer;
+		transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+	}
+
+	.xr-copy:hover {
+		border-color: rgb(var(--xr-accent-rgb) / 0.6);
+	}
+
+	.xr-copy .xr-check-icon,
+	.xr-copy.is-done .xr-copy-icon {
+		display: none;
+	}
+
+	.xr-copy.is-done .xr-check-icon {
+		display: block;
+	}
+
+	.xr-copy.is-done {
+		color: var(--sl-color-text-accent);
+		border-color: rgb(var(--xr-accent-rgb) / 0.6);
+		background: rgb(var(--xr-accent-rgb) / 0.1);
+	}
+
+	@media (min-width: 36rem) {
+		.xr-wallet {
+			grid-template-columns: auto minmax(0, 1fr);
+			align-items: center;
+			gap: 1.25rem;
+		}
+
+		.xr-wallet-qr {
+			width: 8.5rem;
+		}
+	}
+</style>

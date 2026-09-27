@@ -1,0 +1,3 @@
+# Adds a Sponsor button to the repository page. It opens the docs support page,
+# which lists the crypto addresses (GitHub Sponsors is not available in Iran).
+custom: ["https://erfan-xray.github.io/XRayMesh/support/"]

@@ -1,0 +1,7 @@
+---
+/** Every donation address from src/data/wallets.ts. */
+import WalletAddress from './WalletAddress.astro';
+import { wallets } from '../data/wallets';
+---
+
+{wallets.map((wallet) => <WalletAddress {...wallet} />)}

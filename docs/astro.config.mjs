@@ -95,7 +95,7 @@ export default defineConfig({
 				{
 					label: 'Help',
 					translations: { fa: 'کمک' },
-					items: [{ slug: 'troubleshooting' }],
+					items: [{ slug: 'troubleshooting' }, { slug: 'support' }],
 				},
 				{
 					label: 'Reference',

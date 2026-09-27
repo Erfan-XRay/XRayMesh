@@ -17,5 +17,8 @@
 	"xr.tunnel.clientSub": "Your users, from anywhere",
 	"xr.tunnel.origin": "Runs on",
 	"xr.tunnel.dest": "Destination",
-	"xr.tunnel.mesh": "Mesh"
+	"xr.tunnel.mesh": "Mesh",
+	"xr.wallet.network": "Network",
+	"xr.wallet.copy": "Copy address",
+	"xr.wallet.qr": "QR code of the {name} address"
 }
