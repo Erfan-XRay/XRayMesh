@@ -88,6 +88,9 @@ export const SetupFlow: React.FC<SetupFlowProps> = ({ config, t, onCopy, copiedK
     networkName: config.network_name || 'xraymesh',
     ipv4: '10.144.144.1',
     networkSecret: config.network_secret || generateSecret(),
+    // New servers start multi-threaded, with EasyTier's own MTU for encrypted links.
+    multiThread: true,
+    mtu: '1360',
   }));
   const [inviteText, setInviteText] = useState('');
   const [joinIpv4, setJoinIpv4] = useState(() => suggestVirtualIp());
@@ -392,6 +395,13 @@ export const SetupFlow: React.FC<SetupFlowProps> = ({ config, t, onCopy, copiedK
                   hint={t('node_toggle_ipv6_hint')}
                   checked={form.ipv6}
                   onChange={(v) => update('ipv6', v)}
+                  disabled={busy}
+                />
+                <SwitchField
+                  label={t('node_toggle_multithread')}
+                  hint={t('node_toggle_multithread_hint')}
+                  checked={form.multiThread}
+                  onChange={(v) => update('multiThread', v)}
                   disabled={busy}
                 />
               </div>

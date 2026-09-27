@@ -182,7 +182,7 @@ export const ClusterSyncModal: React.FC<ClusterSyncModalProps> = ({ isOpen, onCl
               <Setting label={t('cluster_field_encryption')}>
                 {currentConfig.encryption ? (
                   <span className="font-mono" dir="ltr">
-                    ChaCha20-Poly1305
+                    AES-GCM
                   </span>
                 ) : (
                   t('state_off')

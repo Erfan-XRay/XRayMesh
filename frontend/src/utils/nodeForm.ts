@@ -11,6 +11,7 @@ export interface NodeForm {
   networkSecret: string;
   protocol: MeshProtocol;
   enableKcp: boolean;
+  multiThread: boolean;
   encryption: boolean;
   ipv6: boolean;
   mtu: string;
@@ -31,6 +32,7 @@ export function formFromConfig(cfg: NodeConfig): NodeForm {
     networkSecret: cfg.network_secret || '',
     protocol: MESH_PROTOCOLS.includes(protocol) ? protocol : 'dual',
     enableKcp: Boolean(cfg.enable_kcp),
+    multiThread: Boolean(cfg.multi_thread),
     encryption: cfg.encryption !== false,
     ipv6: Boolean(cfg.ipv6),
     mtu: String(cfg.mtu || 1380),
@@ -46,6 +48,7 @@ export function formToPayload(form: NodeForm, peers: string[]): Partial<NodeConf
     network_secret: form.networkSecret.trim(),
     protocol: form.protocol,
     enable_kcp: form.enableKcp,
+    multi_thread: form.multiThread,
     encryption: form.encryption,
     ipv6: form.ipv6,
     mtu: Number(form.mtu),

@@ -252,6 +252,23 @@ class NodeJoinEndpointTests(unittest.TestCase):
                 with open(server.CONFIG_FILE, "rb") as f:
                     self.assertEqual(f.read(), original)
 
+    def test_join_keeps_this_servers_multi_thread_choice(self):
+        # A fresh server starts multi-threaded; an existing one keeps what it had.
+        for existing, expected in ((None, "yes"), ("", "no"), ("yes", "yes"), ("no", "no")):
+            with self.subTest(existing=existing):
+                if os.path.exists(server.CONFIG_FILE):
+                    os.remove(server.CONFIG_FILE)
+                if existing is not None:
+                    self.write_existing_config()
+                    cfg = server.load_env_file(server.CONFIG_FILE)
+                    cfg["MULTI_THREAD"] = existing
+                    server.save_node_config_env(cfg)
+                with mock.patch.object(server, "run_xraymesh_cmd", return_value=(True, "")):
+                    raw = call_handler("POST", "/api/node/join", {"invite": make_invite(), "hostname": "frankfurt-2"})
+                status, _ = parse_single_response(self, raw)
+                self.assertEqual(status, 200)
+                self.assertEqual(server.load_env_file(server.CONFIG_FILE)["MULTI_THREAD"], expected)
+
     def test_invite_round_trips_transport_settings(self):
         self.write_existing_config()
         with mock.patch.object(server, "get_server_public_ip", return_value="185.100.200.30"):
@@ -438,6 +455,88 @@ class BackpackPeerTransportTests(unittest.TestCase):
         self.assertEqual(server.joined_via_link(links, "udp://10.214.0.170:11010"), "185.100.200.30")
         self.assertEqual(server.joined_via_link(links, "udp://10.214.0.1:11010"), "")
         self.assertEqual(server.joined_via_link(links[:1], "udp://10.214.0.169:11010"), "")
+
+
+class NodeConfigEndpointTests(unittest.TestCase):
+    """Saving node settings from the panel (POST /api/node/config)."""
+
+    setUp = NodeJoinEndpointTests.setUp
+    write_existing_config = NodeJoinEndpointTests.write_existing_config
+
+    def valid_body(self, **overrides):
+        body = {
+            "network_name": "alpha-mesh",
+            "network_secret": "4f1c9e02b7d35a68",
+            "hostname": "frankfurt-2",
+            "ipv4": "10.144.144.40",
+            "port": 11010,
+            "protocol": "quic",
+            "peers": ["185.100.200.30", "wg://203.0.113.9:11011"],
+            "encryption": True,
+            "ipv6": False,
+            "mtu": 1360,
+            "enable_kcp": True,
+            "multi_thread": True,
+        }
+        body.update(overrides)
+        return body
+
+    def test_saves_every_setting(self):
+        with mock.patch.object(server, "run_xraymesh_cmd", return_value=(True, "")) as run_cmd:
+            raw = call_handler("POST", "/api/node/config", self.valid_body())
+        status, payload = parse_single_response(self, raw)
+        self.assertEqual((status, payload["ok"]), (200, True))
+        run_cmd.assert_called_once_with(["node-restart"])
+        cfg = server.load_env_file(server.CONFIG_FILE)
+        self.assertEqual(cfg["PROTOCOL"], "quic")
+        self.assertEqual(cfg["PEERS"], "185.100.200.30:11010,wg://203.0.113.9:11011")
+        self.assertEqual((cfg["MTU"], cfg["ENABLE_KCP"], cfg["MULTI_THREAD"], cfg["IPV6"]), ("1360", "yes", "yes", "no"))
+
+        with mock.patch.object(server, "run_xraymesh_cmd", return_value=(True, "")):
+            call_handler("POST", "/api/node/config", self.valid_body(multi_thread=False))
+        self.assertEqual(server.load_env_file(server.CONFIG_FILE)["MULTI_THREAD"], "no")
+
+    def test_rejects_bad_input_without_touching_config(self):
+        original = self.write_existing_config()
+        cases = {
+            "unknown protocol": {"protocol": "carrier-pigeon"},
+            "bad ipv4": {"ipv4": "10.144.144.300"},
+            "ipv4 with prefix": {"ipv4": "10.144.144.4/24"},
+            "bad hostname": {"hostname": "-bad name"},
+            "port not a number": {"port": "abc"},
+            "port out of range": {"port": 70000},
+            "mtu not a number": {"mtu": "big"},
+            "mtu too small": {"mtu": 100},
+            "line break in name": {"network_name": "mesh\nPEERS=evil"},
+            "missing secret": {"network_secret": ""},
+        }
+        for name, overrides in cases.items():
+            with self.subTest(name):
+                with mock.patch.object(server, "run_xraymesh_cmd") as run_cmd:
+                    raw = call_handler("POST", "/api/node/config", self.valid_body(**overrides))
+                status, payload = parse_single_response(self, raw)
+                self.assertEqual((status, payload["ok"]), (400, False))
+                run_cmd.assert_not_called()
+                with open(server.CONFIG_FILE, "rb") as f:
+                    self.assertEqual(f.read(), original)
+
+    def test_failed_start_restores_previous_config(self):
+        original = self.write_existing_config()
+        with mock.patch.object(server, "run_xraymesh_cmd", side_effect=[(False, "easytier exited"), (True, "")]) as run_cmd:
+            raw = call_handler("POST", "/api/node/config", self.valid_body())
+        status, payload = parse_single_response(self, raw)
+        self.assertEqual((status, payload["ok"], payload["restored"]), (500, False, True))
+        self.assertIn("easytier exited", payload["error"])
+        with open(server.CONFIG_FILE, "rb") as f:
+            self.assertEqual(f.read(), original)
+        self.assertEqual(run_cmd.call_args_list, [mock.call(["node-restart"]), mock.call(["node-restart"])])
+
+    def test_failed_first_start_cleans_up(self):
+        with mock.patch.object(server, "run_xraymesh_cmd", side_effect=[(False, "easytier exited"), (True, "")]) as run_cmd:
+            raw = call_handler("POST", "/api/node/config", self.valid_body())
+        status, payload = parse_single_response(self, raw)
+        self.assertEqual((status, payload["restored"]), (500, False))
+        self.assertEqual(run_cmd.call_args_list[-1], mock.call(["delete-node"]))
 
 
 class InviteCompletenessTests(unittest.TestCase):

@@ -272,6 +272,7 @@ export interface NodeConfig {
   ipv6: boolean;
   mtu: number;
   enable_kcp: boolean;
+  multi_thread?: boolean;
   public_ip?: string;
   node_configured: boolean;
   service_active: boolean;

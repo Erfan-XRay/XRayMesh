@@ -37,7 +37,7 @@ import functools
 from pathlib import Path
 
 # Paths & Defaults
-CURRENT_VERSION = "3.0.0-beta.15"
+CURRENT_VERSION = "3.0.0-beta.16"
 CURRENT_BRANCH = "beta"
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/xraymesh")
 BIN_DIR = os.path.join(INSTALL_DIR, "bin")
@@ -1528,6 +1528,20 @@ def parse_port(value):
     return port if 1 <= port <= 65535 else None
 
 
+def parse_mtu(value):
+    """Return the MTU as an int when it is within 576-9000, otherwise None."""
+    try:
+        mtu = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return mtu if 576 <= mtu <= 9000 else None
+
+
+def has_control_chars(value):
+    """True when a value would break the one-line-per-key config file or EasyTier's arguments."""
+    return any(ord(c) < 32 or ord(c) == 127 for c in str(value))
+
+
 def write_config_bytes(raw):
     """Atomically restore CONFIG_FILE from raw bytes with secure permissions."""
     tmp = CONFIG_FILE + ".tmp"
@@ -1556,7 +1570,7 @@ def save_node_config_env(cfg):
     keys = [
         "NETWORK_NAME", "NETWORK_SECRET", "HOSTNAME", "IPV4",
         "PROTOCOL", "PORT", "PEERS", "ENCRYPTION", "IPV6",
-        "MTU", "ENABLE_KCP"
+        "MTU", "ENABLE_KCP", "MULTI_THREAD"
     ]
     for k in keys:
         v = str(cfg.get(k, ""))
@@ -3117,6 +3131,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                     "ipv6": config.get("IPV6", "no") == "yes",
                     "mtu": int(config.get("MTU", "1380")),
                     "enable_kcp": config.get("ENABLE_KCP", "no") == "yes",
+                    "multi_thread": config.get("MULTI_THREAD", "no") == "yes",
                     "public_ip": get_server_public_ip(),
                     "node_configured": is_node_configured,
                     "service_active": svc_active,
@@ -3939,34 +3954,61 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             return
 
         elif path == "/api/node/config":
-            net_name = data.get("network_name", "").strip()
-            secret = data.get("network_secret", "").strip()
-            hostname = data.get("hostname", "").strip()
-            ipv4 = data.get("ipv4", "").strip()
-            port = int(data.get("port", 11010))
-            protocol = data.get("protocol", "dual").strip().lower()
+            net_name = str(data.get("network_name") or "").strip()
+            secret = str(data.get("network_secret") or "").strip()
+            hostname = str(data.get("hostname") or "").strip()
+            ipv4 = str(data.get("ipv4") or "").strip()
+            port = parse_port(data.get("port", 11010))
+            protocol = str(data.get("protocol") or "dual").strip().lower()
             peers = data.get("peers", [])
             encryption = "yes" if data.get("encryption", True) else "no"
             ipv6 = "yes" if data.get("ipv6", False) else "no"
-            mtu = int(data.get("mtu", 1380))
+            mtu = parse_mtu(data.get("mtu", 1360))
             enable_kcp = "yes" if data.get("enable_kcp", False) else "no"
+            multi_thread = "yes" if data.get("multi_thread", True) else "no"
 
-            if not net_name or not secret or not ipv4 or not port or not hostname:
+            if not net_name or not secret or not ipv4 or not hostname:
                 self.send_json({"ok": False, "error": "Missing required fields: network_name, network_secret, ipv4, port, hostname"}, status=400)
+                return
+            if has_control_chars(net_name) or has_control_chars(secret):
+                self.send_json({"ok": False, "error": "Network name and secret cannot contain line breaks or control characters."}, status=400)
+                return
+            if not valid_mesh_hostname(hostname):
+                self.send_json({"ok": False, "error": "Server name must start with a letter or number and may only contain letters, numbers, '.', '-' or '_'."}, status=400)
+                return
+            if not valid_ipv4(ipv4):
+                self.send_json({"ok": False, "error": "Enter a valid virtual IPv4 address."}, status=400)
+                return
+            if port is None:
+                self.send_json({"ok": False, "error": "Listen port must be between 1 and 65535."}, status=400)
+                return
+            if protocol not in MESH_PROTOCOLS:
+                self.send_json({"ok": False, "error": f"Unknown protocol '{protocol}'. Use one of: {', '.join(MESH_PROTOCOLS)}."}, status=400)
+                return
+            if mtu is None:
+                self.send_json({"ok": False, "error": "MTU must be between 576 and 9000."}, status=400)
                 return
 
             if isinstance(peers, list):
-                raw_peers = [p.strip() for p in peers if p.strip()]
+                raw_peers = [str(p).strip() for p in peers if str(p).strip()]
             else:
                 raw_peers = [p.strip() for p in str(peers).split(",") if p.strip()]
             clean_peers = [sanitize_peer_endpoint(p, str(port)) for p in raw_peers]
             peers_str = ",".join(p for p in clean_peers if p)
 
-            default_hostname = os.uname().nodename if hasattr(os, "uname") else "node"
-            cfg_dict = {
+            previous_raw = None
+            if os.path.isfile(CONFIG_FILE):
+                try:
+                    with open(CONFIG_FILE, "rb") as f:
+                        previous_raw = f.read()
+                except OSError as e:
+                    self.send_json({"ok": False, "error": f"Could not back up the current configuration: {e}"}, status=500)
+                    return
+
+            save_node_config_env({
                 "NETWORK_NAME": net_name,
                 "NETWORK_SECRET": secret,
-                "HOSTNAME": hostname or default_hostname,
+                "HOSTNAME": hostname,
                 "IPV4": ipv4,
                 "PROTOCOL": protocol,
                 "PORT": str(port),
@@ -3974,15 +4016,25 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 "ENCRYPTION": encryption,
                 "IPV6": ipv6,
                 "MTU": str(mtu),
-                "ENABLE_KCP": enable_kcp
-            }
-
-            save_node_config_env(cfg_dict)
+                "ENABLE_KCP": enable_kcp,
+                "MULTI_THREAD": multi_thread
+            })
             ok, msg = run_xraymesh_cmd(["node-restart"])
             if ok:
                 self.send_json({"ok": True, "message": "Node configuration saved and mesh service is online."})
             else:
-                self.send_json({"ok": False, "error": f"Configuration saved, but service failed to start: {msg}"}, status=500)
+                # Put the last working configuration back so a bad setting cannot leave the node offline.
+                if previous_raw is not None:
+                    write_config_bytes(previous_raw)
+                    run_xraymesh_cmd(["node-restart"])
+                else:
+                    run_xraymesh_cmd(["delete-node"])
+                self.send_json({
+                    "ok": False,
+                    "restored": previous_raw is not None,
+                    "error": f"The mesh service failed to start with these settings, so the previous configuration was restored: {msg}"
+                    if previous_raw is not None else f"The mesh service failed to start with these settings: {msg}"
+                }, status=500)
             return
 
         elif path == "/api/node/peers/add":
@@ -4116,6 +4168,8 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 "IPV6": "yes" if invite.get("ipv6", False) or ":" in (split_endpoint(invite["endpoint"]) or ("",))[0] else "no",
                 "MTU": str(mtu),
                 "ENABLE_KCP": "yes" if invite.get("kcp", False) else "no",
+                # Multi-thread is this server's own setting, so it survives joining another mesh.
+                "MULTI_THREAD": ("yes" if current.get("MULTI_THREAD") == "yes" else "no") if previous_raw is not None else "yes",
             })
 
             ok, msg = run_xraymesh_cmd(["node-restart"])

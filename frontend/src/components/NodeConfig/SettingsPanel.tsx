@@ -222,6 +222,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 checked={form.ipv6}
                 onChange={(v) => update('ipv6', v)}
               />
+              <SwitchField
+                label={t('node_toggle_multithread')}
+                hint={t('node_toggle_multithread_hint')}
+                checked={form.multiThread}
+                onChange={(v) => update('multiThread', v)}
+              />
               <div className="md:max-w-xs">
                 <TextField
                   label={t('node_field_mtu')}

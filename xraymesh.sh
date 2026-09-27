@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="3.0.0-beta.15"
+readonly VERSION="3.0.0-beta.16"
 readonly DEFAULT_BRANCH="beta"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
@@ -255,10 +255,25 @@ prompt_default() {
   printf '%s' "${value:-$default}"
 }
 
+# Ask a yes/no question until the answer is one, and print it as "yes" or "no".
+prompt_yes_no() {
+  local prompt="$1" default="$2" value
+  while :; do
+    value="$(prompt_default "$prompt (yes/no)" "$default")"
+    case "${value,,}" in
+      y|yes) printf 'yes'; return 0 ;;
+      n|no) printf 'no'; return 0 ;;
+    esac
+    warn "Answer yes or no." >&2
+  done
+}
+
+valid_mtu() { [[ "$1" =~ ^[0-9]+$ ]] && (( "$1" >= 576 && "$1" <= 9000 )); }
+
 write_config() {
   local name="$1" secret="$2" hostname="$3" ipv4="$4" protocol="$5" port="$6" peers="$7"
   local encryption="$8" ipv6="$9" mtu="${10}"
-  local enable_kcp="${11:-no}"
+  local enable_kcp="${11:-no}" multi_thread="${12:-no}"
 
   # Pre-sanitize stored peers list
   local clean_peers=()
@@ -296,6 +311,7 @@ write_config() {
     printf 'IPV6=%q\n' "$ipv6"
     printf 'MTU=%q\n' "$mtu"
     printf 'ENABLE_KCP=%q\n' "$enable_kcp"
+    printf 'MULTI_THREAD=%q\n' "$multi_thread"
   } > "$CONFIG_FILE"
   chmod 600 "$CONFIG_FILE"
 }
@@ -355,7 +371,7 @@ args=(
   --mtu "$mesh_mtu"
 )
 
-# Normalize protocol (EasyTier --default-protocol only takes tcp or udp)
+# Protocol EasyTier prefers for direct connections; it falls back to any listener the peer advertises.
 if [[ "$proto_lower" == "tcp" || "$proto_lower" == "ws" || "$proto_lower" == "wss" ]]; then
   args+=(--default-protocol "tcp")
 else
@@ -399,8 +415,13 @@ if [[ "${ENABLE_KCP:-no}" == "yes" ]]; then
   args+=(--enable-kcp-proxy)
 fi
 
-[[ "${IPV6:-yes}" == "no" ]] && args+=(--disable-ipv6)
+[[ "${IPV6:-no}" == "no" ]] && args+=(--disable-ipv6)
 [[ "${ENCRYPTION:-yes}" == "no" ]] && args+=(--disable-encryption)
+[[ "${MULTI_THREAD:-no}" == "yes" ]] && args+=(--multi-thread)
+
+# Only accept networks that share this mesh's secret. Without it, anyone running EasyTier
+# could connect with another network name and use this server as a free public relay.
+args+=(--private-mode true)
 
 if [[ -n "${PEERS:-}" ]]; then
   IFS=',' read -ra peer_list <<< "$PEERS"
@@ -446,8 +467,6 @@ if [[ -n "${PEERS:-}" ]]; then
         peer_args+=("${p_scheme}://${target}/")
       elif [[ "$p_scheme" == "quic" ]]; then
         peer_args+=("quic://${target}" "tcp://${target}")
-      elif [[ "$p_scheme" == "wg" ]]; then
-        peer_args+=("tcp://${target}" "udp://${target}")
       else
         peer_args+=("${p_scheme}://${target}")
       fi
@@ -653,12 +672,13 @@ setup_node() {
     printf '\n'
   fi
 
-  local name secret hostname ipv4 protocol port peers encryption ipv6 mtu
+  local name secret hostname ipv4 protocol port peers encryption ipv6 mtu enable_kcp multi_thread
   local config_backup="" had_config=0 service_was_active=0
   local default_name="xraymesh" default_secret="" default_hostname default_ipv4="10.144.144.1"
   local default_protocol="dual" default_port="11010" default_peers=""
-  local default_encryption="yes" default_ipv6="no" default_mtu="1380"
-  local default_enable_kcp="no"
+  # EasyTier's own default MTU with encryption on is 1360; 1380 leaves too little room for its overhead.
+  local default_encryption="yes" default_ipv6="no" default_mtu="1360"
+  local default_enable_kcp="no" default_multi_thread="yes"
   default_hostname="$(hostname -s)"
 
   if [[ -f "$CONFIG_FILE" ]]; then
@@ -682,6 +702,8 @@ setup_node() {
     default_ipv6="${IPV6:-$default_ipv6}"
     default_mtu="${MTU:-$default_mtu}"
     default_enable_kcp="${ENABLE_KCP:-$default_enable_kcp}"
+    # Nodes created before multi-thread support ran single-threaded, so keep that unless changed here.
+    default_multi_thread="${MULTI_THREAD:-no}"
     info "Editing the existing node. Press Enter to keep each current value."
   fi
 
@@ -716,7 +738,9 @@ setup_node() {
     [[ "$protocol" == "pck" ]] && info "PCK: create the invite on the server abroad and join from the server in Iran (Iran dials out)."
     info "BackPack (Noise) encrypts each ${protocol^^} link, but servers that joined over links also reach each other"
     info "directly over plain UDP. Answer 'no' to encryption below only if this mesh will have just two servers."
-    [[ "$default_mtu" == "1380" ]] && default_mtu="$ICMP_MESH_MTU"
+    [[ "$default_mtu" == "1380" || "$default_mtu" == "1360" ]] && default_mtu="$ICMP_MESH_MTU"
+  elif [[ "$protocol" == "faketcp" ]]; then
+    info "FakeTCP links are made only to the peer addresses you enter; other servers may reach each other through them."
   fi
 
   while :; do
@@ -725,13 +749,18 @@ setup_node() {
     warn "The port must be between 1 and 65535."
   done
   peers="$(prompt_default "Peer addresses, comma-separated (empty for first node)" "$default_peers")"
-  encryption="$(prompt_default "Enable encryption? (yes/no)" "$default_encryption")"
-  ipv6="$(prompt_default "Enable IPv6? (yes/no)" "$default_ipv6")"
-  mtu="$(prompt_default "MTU" "$default_mtu")"
+  encryption="$(prompt_yes_no "Enable encryption?" "$default_encryption")"
+  ipv6="$(prompt_yes_no "Enable IPv6?" "$default_ipv6")"
+  while :; do
+    mtu="$(prompt_default "MTU" "$default_mtu")"
+    valid_mtu "$mtu" && break
+    warn "The MTU must be between 576 and 9000."
+  done
 
-  enable_kcp="$(prompt_default "Enable KCP loss-resistance proxy? (yes/no)" "$default_enable_kcp")"
+  enable_kcp="$(prompt_yes_no "Enable KCP loss-resistance proxy?" "$default_enable_kcp")"
+  multi_thread="$(prompt_yes_no "Enable multi-thread mode (uses more than one CPU core)?" "$default_multi_thread")"
 
-  write_config "$name" "$secret" "$hostname" "$ipv4" "$protocol" "$port" "$peers" "$encryption" "$ipv6" "$mtu" "$enable_kcp"
+  write_config "$name" "$secret" "$hostname" "$ipv4" "$protocol" "$port" "$peers" "$encryption" "$ipv6" "$mtu" "$enable_kcp" "$multi_thread"
 
   if apply_node_config; then
     info "Network: $name"
@@ -1063,7 +1092,7 @@ join_mesh_invite() {
   fi
   printf '\n'
 
-  local default_hostname default_ipv4
+  local default_hostname default_ipv4 multi_thread="yes"
   default_hostname="$(hostname -s 2>/dev/null || echo "node")"
 
   # Generate suggested random IP in 10.144.144.2 - 254
@@ -1075,6 +1104,8 @@ join_mesh_invite() {
     source "$CONFIG_FILE" 2>/dev/null || true
     [[ -n "${IPV4:-}" && "$IPV4" != "10.144.144.1" ]] && default_ipv4="$IPV4"
     [[ -n "${HOSTNAME:-}" ]] && default_hostname="$HOSTNAME"
+    # Multi-thread is this server's own setting, so it survives joining another mesh.
+    multi_thread="${MULTI_THREAD:-no}"
   fi
 
   local hostname ipv4 port
@@ -1115,7 +1146,7 @@ join_mesh_invite() {
   fi
 
   info "Applying configuration and connecting to mesh network '${net}'..."
-  write_config "$net" "$secret" "$hostname" "$ipv4" "$proto" "$port" "$peers_val" "$enc_val" "$ipv6_val" "$mtu_val" "$kcp_val"
+  write_config "$net" "$secret" "$hostname" "$ipv4" "$proto" "$port" "$peers_val" "$enc_val" "$ipv6_val" "$mtu_val" "$kcp_val" "$multi_thread"
 
   if apply_node_config; then
     prune_icmp_links

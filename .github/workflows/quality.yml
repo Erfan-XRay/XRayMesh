@@ -39,6 +39,9 @@ jobs:
       - name: Test ICMP link helpers
         run: bash tests/icmp_link_test.sh
 
+      - name: Test node runner arguments
+        run: bash tests/node_runner_test.sh
+
       - name: Test Web UI helpers and backend
         run: |
           python3 tests/web_interfaces_test.py

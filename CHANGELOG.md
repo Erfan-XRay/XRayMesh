@@ -2,6 +2,25 @@
 
 All notable XRayMesh changes are documented here.
 
+## [3.0.0-beta.16] - 2026-09-27
+
+### Security
+- Mesh nodes now run EasyTier with `--private-mode true`. Before, anyone running EasyTier could connect to a server's mesh port with their own network name and secret and use the server as a free public relay, which cost bandwidth and showed the server's name to them. Only servers with this mesh's secret are accepted now.
+
+### Added
+- Multi-thread mode (`--multi-thread`) runs EasyTier on more than one CPU core for higher throughput. New servers and servers that join by invite start with it on; existing servers keep single-thread until it is turned on in the panel (Advanced) or in the terminal node setup. Joining another mesh keeps this server's choice.
+
+### Changed
+- New servers use MTU 1360, EasyTier's own default when encryption is on (1380 left too little room for its overhead). Existing servers keep their MTU.
+- The panel names the actual cipher, AES-GCM (EasyTier's default), instead of ChaCha20-Poly1305.
+- The FakeTCP description explains that links are only made to the peers you add, so other servers may reach each other through them.
+
+### Fixed
+- `wg://` peer addresses were turned into TCP and UDP connections on the same port and never connected. They are now passed to EasyTier as WireGuard peers.
+- Saving node settings from the panel now checks the name, secret, virtual IPv4, port, protocol and MTU on the server, and puts the previous working configuration back when the mesh service fails to start with the new one.
+- The terminal node setup accepts only yes or no for encryption, IPv6, KCP and multi-thread (typing `y` for KCP used to leave it off) and checks the MTU range.
+- A node config without an IPv6 setting now keeps IPv6 off, matching every other default.
+
 ## [3.0.0-beta.15] - 2026-09-27
 
 ### Changed

@@ -1,8 +1,8 @@
 {
-  "version": "3.0.0-beta.15",
+  "version": "3.0.0-beta.16",
   "branch": "beta",
-  "release_name": "XRayMesh v3.0.0-beta.15 (ICMP/PCK Link Clarity)",
+  "release_name": "XRayMesh v3.0.0-beta.16 (Private Mesh & Multi-thread)",
   "release_date": "2026-09-27",
-  "changelog": "Servers reached across an ICMP or PCK link now show PCK or ICMP under Servers instead of plain UDP. A server that joined over a link no longer claims to be the main server under Peers & invite; it points to the server it joined through. The advice to turn off mesh encryption on ICMP/PCK meshes is corrected: joined servers also talk to each other directly over plain UDP, so keep encryption on unless the mesh has just two servers.",
+  "changelog": "Mesh nodes now only accept servers that share your network secret, so strangers can no longer use your server as a free EasyTier relay. New multi-thread mode runs EasyTier on more than one CPU core (on by default for new servers, a toggle for existing ones). New servers use EasyTier's MTU of 1360 for encrypted links, node settings saved from the panel are checked on the server and a failed save restores the previous working configuration, wg:// peer addresses work, and yes/no questions in the terminal setup accept only yes or no.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/beta/xraymesh.sh) update"
 }
