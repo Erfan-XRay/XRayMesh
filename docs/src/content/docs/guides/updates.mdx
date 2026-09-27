@@ -1,6 +1,6 @@
 ---
 title: Updates
-description: Update any server in the mesh from the panel, choose stable or beta releases, and update from the terminal.
+description: Update any server in the mesh from the panel, or from the terminal.
 ---
 
 import { LinkCard, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
@@ -14,7 +14,7 @@ any panel, and a failed update restores the previous version automatically.
 
 1. Open the **Servers** tab. A server with a new release shows **Update available**.
 
-2. Press **Update to** *version* on that server. The dialog shows its current version and channel.
+2. Press **Update to** *version* on that server. The dialog shows the version it runs now.
 
 3. Press **Update now**. The server:
    - downloads the new files and verifies them before replacing anything,
@@ -36,18 +36,10 @@ journalctl -u xraymesh-updater-temp
 ```
 :::
 
-## Stable or beta
-
-Each server has its own **update channel**, shown next to its version. Click it to switch.
-
-| Channel | What you get |
-| :--- | :--- |
-| **Stable** | Tested releases. The default, and the right choice for servers you rely on. |
-| **Beta** | New features first, but they can be unstable or incomplete. Use it for testing. |
-
-Changing the channel installs nothing by itself. You still press **Update**. Switching from beta
-back to stable never downgrades: the server keeps its version until a newer stable release comes
-out.
+:::note[Beta channel removed]
+Since 3.0.2 every server updates from the regular releases only. A server that was set to the beta
+channel in an older version is moved to the regular releases the next time you update it.
+:::
 
 ## Update from the terminal
 

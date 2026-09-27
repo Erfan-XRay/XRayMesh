@@ -86,4 +86,18 @@ The tunnel list can show more than this server. Use **Show tunnels from** to swi
 If a server doesn't respond, its last known tunnels are still shown, marked as cached, and you
 can't edit them until the server is back.
 
+## Tunnels in the terminal
+
+You create and edit tunnels in the panel, but the terminal can list and stop them. That helps when
+a tunnel blocks something, for example a tunnel that listens on the panel's own port.
+
+```bash
+xraymesh tunnels         # saved tunnels, their ports and service state
+sudo xraymesh tunnels-stop   # stop every tunnel and keep them off after a reboot
+sudo xraymesh tunnels-apply  # start the saved tunnels again
+```
+
+`tunnels-stop` keeps the saved tunnels, so `tunnels-apply` brings them back unchanged. The same
+actions are in the `xraymesh` menu.
+
 <LinkCard title="Next: Mesh transports" href="../transports/" description="Choose how the mesh itself travels between servers." />

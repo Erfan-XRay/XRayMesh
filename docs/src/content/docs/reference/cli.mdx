@@ -34,6 +34,16 @@ back into the panel when something goes wrong.
 | `xraymesh link-list` | List ICMP and PCK links with their packet counters. |
 | `xraymesh link-delete <name>` | Delete one ICMP or PCK link, e.g. `out-1234`. |
 
+## Tunnels
+
+Tunnels are created in the panel. These commands list them, and stop or restart all of them.
+
+| Command | What it does |
+| :--- | :--- |
+| `xraymesh tunnels` | List saved tunnels with their ports and service state. |
+| `xraymesh tunnels-stop` | Stop every tunnel and keep them off after a reboot. The saved tunnels stay. |
+| `xraymesh tunnels-apply` | Start the saved tunnels again. |
+
 ## Services
 
 | Command | What it does |
