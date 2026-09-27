@@ -3781,11 +3781,11 @@ update_web_assets() {
 
   # 3. Always regenerate runner and services
   local runner_before runner_after
-  runner_before="$(cat "${INSTALL_DIR}/xraymesh-runner" 2>/dev/null | sha256sum)"
+  runner_before="$(sha256sum "${INSTALL_DIR}/xraymesh-runner" 2>/dev/null)"
   write_runner
   write_iperf_service
   systemctl daemon-reload 2>/dev/null || true
-  runner_after="$(cat "${INSTALL_DIR}/xraymesh-runner" 2>/dev/null | sha256sum)"
+  runner_after="$(sha256sum "${INSTALL_DIR}/xraymesh-runner" 2>/dev/null)"
 
   if [[ -f "$WEB_CONFIG_FILE" ]]; then
     if grep -q '^XRAYMESH_BRANCH=' "$WEB_CONFIG_FILE" 2>/dev/null; then
