@@ -2,7 +2,7 @@
 
 All notable XRayMesh changes are documented here.
 
-## [Unreleased]
+## [3.0.0-beta.10] - 2026-09-27
 
 ### Added
 - Real-time speed test: throughput is reported every second while iperf3 runs, on a new animated speedometer with a live needle, peak marker, progress bar, packets streaming along the route and a chart that grows as each second arrives. Transferred data, peak, average and retransmits update live.
