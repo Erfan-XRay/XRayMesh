@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useEffect, useId, useRef } from 'react';
 import { Peer, HaproxyTunnel, IptablesTunnel, GostTunnel, RealmTunnel, TunnelNodeState } from '../../types';
 import { fetchInterfaces } from '../../services/api';
-import { Boxes, Cpu, Loader2, Network, Server, Zap } from 'lucide-react';
+import { Boxes, Cpu, Loader2, Network, Zap } from 'lucide-react';
 import type { Translate, TranslationKey } from '../../i18n/translations';
 import { formatText } from '../../i18n/fillTemplate';
 import { toAsciiDigits } from '../../utils/meshInvite';
 import { FieldError } from '../NodeConfig/FormControls';
-import { btnPrimary, btnSecondary, Callout, hintClass, inputClass, labelClass, Pill, Segmented, selectClass, toneSoft, Tone } from '../ui';
+import { btnPrimary, btnSecondary, hintClass, inputClass, labelClass, Segmented, selectClass, toneSoft, Tone } from '../ui';
 import { ModalClose, ModalShell } from './ModalShell';
 
 export type TunnelModalType = 'haproxy' | 'iptables' | 'gost' | 'realm';
@@ -94,44 +94,39 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
   const [nodeInterfaces, setNodeInterfaces] = useState<string[]>(interfaces || ['any']);
   const [loadingInterfaces, setLoadingInterfaces] = useState(false);
   const [interfaceError, setInterfaceError] = useState<string | null>(null);
+  const [interfaceReload, setInterfaceReload] = useState(0);
 
-  const isRemoteIptablesEdit = Boolean(
-    type === 'iptables' &&
-      isEdit &&
-      ((initialData as any)?._is_local === false || ((initialData as any)?._node_ip && (initialData as any)?._is_local !== true))
-  );
+  // The interface list belongs to the server the tunnel runs on, so it is read from that server.
+  const peersRef = useRef(peers);
+  peersRef.current = peers;
+  const currentIp = peers.find((p) => p.is_current)?.ipv4;
+  const interfaceNode = originNode && originNode !== currentIp ? originNode : '';
 
   useEffect(() => {
     if (!isOpen || type !== 'iptables') return;
 
     let isMounted = true;
     const abortController = new AbortController();
-    const timeout = setTimeout(() => abortController.abort(), 6000);
+    // A remote server answers through the mesh, so it gets more time than this one.
+    const timeout = setTimeout(() => abortController.abort(), interfaceNode ? 12000 : 6000);
 
     const initialIface = (initialData as IptablesTunnel)?.IN_IF;
-    const baseInterfaces = interfaces && interfaces.length > 0 ? interfaces : ['any'];
-    const mergedBase =
-      initialIface && initialIface !== 'any' && !baseInterfaces.includes(initialIface) ? [...baseInterfaces, initialIface] : baseInterfaces;
+    // Until the server answers, offer what the last peer probe already knew about it.
+    const known = interfaceNode ? peersRef.current.find((p) => p.ipv4 === interfaceNode)?.interfaces : interfaces;
+    const baseInterfaces = known && known.length > 0 ? known : ['any'];
+    const withInitial = (list: string[]) =>
+      initialIface && initialIface !== 'any' && !list.includes(initialIface) ? [...list, initialIface] : list;
+    const mergedBase = withInitial(baseInterfaces);
 
     setNodeInterfaces(mergedBase);
     setIface((prev) => (mergedBase.includes(prev) ? prev : initialIface || 'any'));
     setInterfaceError(null);
 
-    if (isRemoteIptablesEdit) {
-      setLoadingInterfaces(false);
-      return () => {
-        isMounted = false;
-        abortController.abort();
-        clearTimeout(timeout);
-      };
-    }
-
     setLoadingInterfaces(true);
-    fetchInterfaces(undefined, abortController.signal)
+    fetchInterfaces(interfaceNode || undefined, abortController.signal)
       .then((ifaces) => {
         if (isMounted) {
-          const list = ifaces && ifaces.length > 0 ? ifaces : ['any'];
-          const finalList = initialIface && initialIface !== 'any' && !list.includes(initialIface) ? [...list, initialIface] : list;
+          const finalList = withInitial(ifaces && ifaces.length > 0 ? ifaces : ['any']);
           setNodeInterfaces(finalList);
           setIface((prev) => (finalList.includes(prev) ? prev : initialIface || 'any'));
         }
@@ -139,15 +134,13 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
       .catch((requestError: unknown) => {
         if (isMounted) {
           setNodeInterfaces(mergedBase);
-          if (mergedBase.length === 1 && mergedBase[0] === 'any') {
-            setInterfaceError(
-              requestError instanceof DOMException && requestError.name === 'AbortError'
-                ? t('modal_tunnel_interfaces_timeout')
-                : requestError instanceof Error
-                  ? requestError.message
-                  : t('modal_tunnel_interfaces_error')
-            );
-          }
+          setInterfaceError(
+            requestError instanceof DOMException && requestError.name === 'AbortError'
+              ? t('modal_tunnel_interfaces_timeout')
+              : requestError instanceof Error
+                ? requestError.message
+                : t('modal_tunnel_interfaces_error')
+          );
         }
       })
       .finally(() => {
@@ -159,12 +152,12 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
       abortController.abort();
       clearTimeout(timeout);
     };
-  }, [isOpen, type, interfaces, initialData, isRemoteIptablesEdit, t]);
+  }, [isOpen, type, interfaces, initialData, interfaceNode, interfaceReload, t]);
 
   useEffect(() => {
     if (initialData && isEdit) {
       setName(initialData.TUNNEL_NAME || '');
-      setOriginNode(type === 'iptables' ? '' : (initialData as any)._node_ip || '');
+      setOriginNode((initialData as any)._is_local ? '' : (initialData as any)._node_ip || '');
       setTarget(initialData.TARGET_IP || '');
       setPorts(initialData.PORT_SPEC || '');
       if (type === 'iptables') {
@@ -179,7 +172,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
       }
     } else {
       setName('');
-      setOriginNode(type === 'iptables' ? '' : defaultOriginNode);
+      setOriginNode(defaultOriginNode);
       setTarget('');
       setPorts('');
       setProtocol(type === 'gost' || type === 'realm' ? 'both' : 'udp');
@@ -202,10 +195,6 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isRemoteIptablesEdit) {
-      setError(t('modal_tunnel_iptables_remote_notice'));
-      return;
-    }
     if (!name.trim() || !target.trim() || !ports.trim()) {
       setError(t('tunnel_err_required'));
       return;
@@ -220,7 +209,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
       await onSubmit({
         isEdit,
         name: name.trim(),
-        originNode: type === 'iptables' ? undefined : originNode.trim() || undefined,
+        originNode: originNode.trim() || undefined,
         target: target.trim(),
         ports: ports.trim(),
         protocol,
@@ -267,66 +256,37 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
       </header>
 
       <form onSubmit={handleSubmit} noValidate className="space-y-5">
-        {isRemoteIptablesEdit && (
-          <Callout tone="warning" title={t('modal_tunnel_iptables_remote_warning_title')}>
-            {t('modal_tunnel_iptables_remote_notice')}
-          </Callout>
-        )}
-
         {/* Origin server */}
-        {type === 'iptables' ? (
-          <div className="space-y-1.5">
-            <p className={labelClass}>{t('tunnels_origin_server')}</p>
-            <div className="p-3 rounded-xl bg-surface border border-card-border space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-2 min-w-0">
-                  <Server className="w-4 h-4 text-text-muted shrink-0" aria-hidden="true" />
-                  <bdi className="text-sm font-medium text-text-primary truncate">
-                    {isRemoteIptablesEdit
-                      ? (initialData as any)?._node_name || (initialData as any)?._node_ip || t('modal_tunnel_remote_server')
-                      : current?.hostname || current?.ipv4 || t('tunnels_origin_local')}
-                  </bdi>
-                  <span className="font-mono text-xs text-text-subtle" dir="ltr">
-                    {isRemoteIptablesEdit ? (initialData as any)?._node_ip || '' : current?.ipv4 || ''}
-                  </span>
-                </span>
-                <Pill tone="info">{t('modal_tunnel_iptables_kernel_level')}</Pill>
-              </div>
-              <p className={hintClass}>{isRemoteIptablesEdit ? t('modal_tunnel_iptables_remote_notice') : t('modal_tunnel_iptables_local_notice')}</p>
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor={`${id}-origin`} className={labelClass}>
-              {t('tunnels_origin_server')}
-            </label>
-            <select
-              id={`${id}-origin`}
-              value={originNode}
-              onChange={(e) => setOriginNode(e.target.value)}
-              disabled={isEdit}
-              className={selectClass}
-            >
-              <option value="">{t('tunnels_origin_local')}</option>
-              {peers
-                .filter((p) => !p.is_current)
-                .map((p) => {
-                  const st = nodeStates.find((n) => n.ip === p.ipv4)?.status;
-                  const down = Boolean(st && st !== 'ok' && st !== 'idle');
-                  return (
-                    <option key={p.ipv4} value={p.ipv4}>
-                      {p.hostname || p.ipv4} ({p.ipv4}){down ? ` · ${t('tunnels_node_unreachable_short')}` : ''}
-                    </option>
-                  );
-                })}
-            </select>
-            {originDown ? (
-              <p className="text-xs text-warning leading-relaxed">{t('tunnels_origin_unreachable_warning')}</p>
-            ) : (
-              <p className={hintClass}>{t('tunnels_origin_server_desc')}</p>
-            )}
-          </div>
-        )}
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor={`${id}-origin`} className={labelClass}>
+            {t('tunnels_origin_server')}
+          </label>
+          <select
+            id={`${id}-origin`}
+            value={originNode}
+            onChange={(e) => setOriginNode(e.target.value)}
+            disabled={isEdit}
+            className={selectClass}
+          >
+            <option value="">{t('tunnels_origin_local')}</option>
+            {peers
+              .filter((p) => !p.is_current)
+              .map((p) => {
+                const st = nodeStates.find((n) => n.ip === p.ipv4)?.status;
+                const down = Boolean(st && st !== 'ok' && st !== 'idle');
+                return (
+                  <option key={p.ipv4} value={p.ipv4}>
+                    {p.hostname || p.ipv4} ({p.ipv4}){down ? ` · ${t('tunnels_node_unreachable_short')}` : ''}
+                  </option>
+                );
+              })}
+          </select>
+          {originDown ? (
+            <p className="text-xs text-warning leading-relaxed">{t('tunnels_origin_unreachable_warning')}</p>
+          ) : (
+            <p className={hintClass}>{type === 'iptables' ? t('modal_tunnel_iptables_origin_hint') : t('tunnels_origin_server_desc')}</p>
+          )}
+        </div>
 
         {/* Name */}
         <div className="flex flex-col gap-1.5">
@@ -363,7 +323,6 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
                 aria-label={t('modal_tunnel_dest_select')}
                 value={destinations.some((p) => p.ipv4 === target) ? target : ''}
                 onChange={(e) => e.target.value && setTarget(e.target.value)}
-                disabled={isRemoteIptablesEdit}
                 className={selectClass}
               >
                 <option value="">{t('modal_tunnel_dest_select')}</option>
@@ -380,7 +339,6 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
               inputMode="decimal"
               value={target}
               onChange={(e) => setTarget(toAsciiDigits(e.target.value))}
-              disabled={isRemoteIptablesEdit}
               placeholder="10.144.144.2"
               dir="ltr"
               autoComplete="off"
@@ -400,7 +358,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
               value={protocol}
               onChange={setProtocol}
               ariaLabel={t('modal_tunnel_proto')}
-              options={protocolOptions.map((o) => ({ ...o, disabled: isRemoteIptablesEdit, label: <span className="font-mono" dir="ltr">{o.label}</span> }))}
+              options={protocolOptions.map((o) => ({ ...o, label: <span className="font-mono" dir="ltr">{o.label}</span> }))}
             />
           </div>
         )}
@@ -415,7 +373,6 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
             type="text"
             value={ports}
             onChange={(e) => setPorts(toAsciiDigits(e.target.value))}
-            disabled={isRemoteIptablesEdit}
             placeholder="80,443 · 8000-8010 · 1234:443"
             dir="ltr"
             autoComplete="off"
@@ -436,8 +393,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
                   type="button"
                   aria-pressed={active}
                   onClick={() => setPorts(pr.val)}
-                  disabled={isRemoteIptablesEdit}
-                  className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border text-xs transition-colors cursor-pointer disabled:opacity-50 ${
+                    className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border text-xs transition-colors cursor-pointer disabled:opacity-50 ${
                     active ? 'border-primary bg-primary-subtle text-primary' : 'border-card-border text-text-muted hover:text-text-primary hover:border-border-strong'
                   }`}
                 >
@@ -466,21 +422,50 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
                   </span>
                 )}
               </div>
-              <select
-                id={`${id}-iface`}
-                value={iface}
-                onChange={(e) => setIface(e.target.value)}
-                disabled={isRemoteIptablesEdit}
-                dir="ltr"
-                className={`${selectClass} font-mono`}
-              >
-                {nodeInterfaces.map((i) => (
-                  <option key={i} value={i}>
-                    {i === 'any' ? `any · ${t('tunnel_iface_any')}` : i}
-                  </option>
-                ))}
-              </select>
-              {interfaceError && <FieldError message={`${t('modal_tunnel_interfaces_error')}: ${interfaceError}`} />}
+              {/* When the server's list could not be read, the name can be typed instead of picked. */}
+              {interfaceError && nodeInterfaces.length <= 1 ? (
+                <>
+                  <input
+                    id={`${id}-iface`}
+                    type="text"
+                    value={iface}
+                    onChange={(e) => setIface(e.target.value.trim() || 'any')}
+                    placeholder="any"
+                    dir="ltr"
+                    autoComplete="off"
+                    spellCheck={false}
+                    className={`${inputClass()} font-mono`}
+                  />
+                  <p className={hintClass}>{t('modal_tunnel_interfaces_manual_hint')}</p>
+                </>
+              ) : (
+                <select
+                  id={`${id}-iface`}
+                  value={iface}
+                  onChange={(e) => setIface(e.target.value)}
+                  dir="ltr"
+                  className={`${selectClass} font-mono`}
+                >
+                  {nodeInterfaces.map((i) => (
+                    <option key={i} value={i}>
+                      {i === 'any' ? `any · ${t('tunnel_iface_any')}` : i}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {interfaceError && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <FieldError message={`${t('modal_tunnel_interfaces_error')}: ${interfaceError}`} />
+                  <button
+                    type="button"
+                    onClick={() => setInterfaceReload((n) => n + 1)}
+                    disabled={loadingInterfaces}
+                    className="text-xs font-medium text-primary hover:underline disabled:opacity-50 cursor-pointer"
+                  >
+                    {t('modal_tunnel_interfaces_retry')}
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col gap-1.5 min-w-0">
@@ -492,7 +477,6 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
                 type="text"
                 value={sourceCidr}
                 onChange={(e) => setSourceCidr(toAsciiDigits(e.target.value))}
-                disabled={isRemoteIptablesEdit}
                 placeholder="0.0.0.0/0"
                 dir="ltr"
                 autoComplete="off"
@@ -511,7 +495,7 @@ export const TunnelModal: React.FC<TunnelModalProps> = ({
         )}
 
         <div className="grid grid-cols-1 sm:flex sm:justify-end gap-2 pt-4 border-t border-card-border">
-          <button type="submit" disabled={isLoading || isRemoteIptablesEdit} className={`${btnPrimary} sm:order-last`}>
+          <button type="submit" disabled={isLoading} className={`${btnPrimary} sm:order-last`}>
             {isLoading && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
             <span>{isEdit ? t('btn_save') : t('btn_create')}</span>
           </button>

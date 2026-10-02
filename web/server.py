@@ -39,7 +39,7 @@ import functools
 from pathlib import Path
 
 # Paths & Defaults
-CURRENT_VERSION = "3.1.0"
+CURRENT_VERSION = "3.2.0"
 CURRENT_BRANCH = "main"
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/xraymesh")
 BIN_DIR = os.path.join(INSTALL_DIR, "bin")
@@ -363,6 +363,11 @@ def get_peer_version(peer_ip, port=None, timeout=1.0):
     for key in ("channel", "latest_version", "update_available", "update_checked", "update"):
         if key in source:
             cache_entry[key] = source[key]
+    # Newer peers report their public IPv4; keep the last one when a probe comes back without it.
+    for candidate in ((peer_info or {}).get("public_ip"), cached.get("public_ip")):
+        if is_public_ipv4(str(candidate or "")):
+            cache_entry["public_ip"] = candidate
+            break
     PEER_VERSION_CACHE[peer_ip] = cache_entry
     return version_found
 
@@ -1163,6 +1168,31 @@ def get_server_public_ip():
     return ""
 
 
+_public_ip_refresh_lock = threading.Lock()
+_public_ip_last_try = 0.0
+
+
+def peek_server_public_ip():
+    """Last detected public IPv4 without waiting for a lookup (the detection can take seconds).
+
+    A stale or missing value triggers one background refresh at most once a minute."""
+    global _public_ip_last_try
+    now = time.time()
+    if now - _public_ip_cache["time"] >= 60 and now - _public_ip_last_try >= 60 and _public_ip_refresh_lock.acquire(blocking=False):
+        _public_ip_last_try = now
+
+        def refresh():
+            try:
+                get_server_public_ip()
+            except Exception:
+                pass
+            finally:
+                _public_ip_refresh_lock.release()
+
+        threading.Thread(target=refresh, daemon=True).start()
+    return _public_ip_cache["ip"]
+
+
 _public_ipv6_cache = {"ip": "", "time": 0.0}
 _VIRTUAL_IFACE_PREFIXES = ("easytier", "tun", "tap", "docker", "br-", "veth", "wg", "lo", "xrmi")
 
@@ -1855,6 +1885,9 @@ def cluster_error_code(http_status):
     return "remote_error"
 
 
+REMOTE_INTERFACES_BUDGET = 4.5  # seconds the public probe and the signed fallback may spend together
+
+
 def get_remote_network_interfaces(peer_ip, secret, timeout=2.0):
     """Resolve interfaces from the selected peer without degrading failures to any."""
     cached_interfaces = normalize_network_interfaces(
@@ -1868,6 +1901,7 @@ def get_remote_network_interfaces(peer_ip, secret, timeout=2.0):
     if cache_is_fresh:
         return cached_interfaces, "Used cached interface metadata from the peer probe."
 
+    started = time.time()
     peer_info, responsive_port, info_error = fetch_peer_cluster_info(
         peer_ip,
         cached_peer.get("port") or PORT,
@@ -1885,13 +1919,15 @@ def get_remote_network_interfaces(peer_ip, secret, timeout=2.0):
 
 
     signed_target_port = responsive_port or PORT
+    # An unreachable peer used to cost both attempts in full (~8s); share one budget so the panel answers sooner.
+    signed_timeout = min(timeout, max(0.5, REMOTE_INTERFACES_BUDGET - (time.time() - started)))
     signed_ok, signed_response = send_cluster_http(
         peer_ip,
         signed_target_port,
         "/api/cluster/interfaces",
         secret,
         {},
-        timeout=timeout,
+        timeout=signed_timeout,
         strict_port=True,
     )
     signed_interfaces = None
@@ -2861,7 +2897,8 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 "ok": True,
                 "hostname": config.get("HOSTNAME", ""),
                 "ipv4": config.get("IPV4", ""),
-                "interfaces": get_network_interfaces()
+                "interfaces": get_network_interfaces(),
+                "public_ip": peek_server_public_ip(),
             }
             # version, branch, channel, latest_version, update_available and the update job summary.
             info.update(local_update_summary())
@@ -2979,6 +3016,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                         p["xraymesh_version"] = p_ver
                         peer_cache = PEER_VERSION_CACHE.get(p.get("ipv4", ""), {})
                         p["interfaces"] = normalize_network_interfaces(peer_cache.get("interfaces"))
+                        p["public_ip"] = peer_cache.get("public_ip", "")
                         p["xraymesh_branch"] = peer_cache.get("branch", "")
                         # Peers from 2.2.6-beta.5 on report a channel and can be moved off beta remotely.
                         tracked = "channel" in peer_cache
@@ -3035,6 +3073,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                         "update_checked": local_summary["update_checked"],
                         "update": local_summary["update"],
                         "version_drift": False,
+                        "public_ip": peek_server_public_ip(),
                     })
             if isinstance(peers_data, dict):
                 peers_data["peers"] = peers_list
@@ -3694,9 +3733,6 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             if is_local_origin(origin_node):
                 ok, msg = run_tunnel_command(t_type, action, data)
                 status = 200 if ok else 400
-            elif t_type == "iptables" and action != "delete":
-                ok, status = False, 400
-                msg = "iptables tunnels can only be configured locally on the host server. Please manage iptables tunnels directly from that node's web panel."
             else:
                 ok, msg, status = proxy_tunnel_request(origin_node, t_type, action, data)
             if ok:
@@ -4263,6 +4299,9 @@ def run_server():
 
     if not ssl_active:
         print(f"[*] XRayMesh Web Daemon listening on http://{BIND_ADDR}:{PORT}", flush=True)
+
+    # Detect this server's public IP in the background so peers get it from their first probe.
+    peek_server_public_ip()
 
     shutdown_done = threading.Event()
 

@@ -7,6 +7,7 @@ import { formatMs, localizeDigits } from '../../i18n/format';
 import { UpdateRun } from '../../hooks/useNodeUpdates';
 import { btnGhostSm, CopyButton, iconBtn } from '../ui';
 import { formatProtocol, LATENCY_TEXT, latencyOf, versionLabel } from './peerDisplay';
+import { PublicIp } from './PublicIp';
 import { UpdateCell, UpdateFailure } from './UpdateStatus';
 
 /** Columns of the desktop table. The header and rows take them through subgrid, so the auto-sized
@@ -91,6 +92,9 @@ export const PeerRow: React.FC<PeerRowProps> = ({
               </span>
               <CopyButton value={peer.ipv4} copied={copiedKey === peer.ipv4} onCopy={onCopy} label={copyLabel} className="w-7 h-7" />
             </div>
+            <div className="-ms-0.5">
+              <PublicIp peer={peer} onCopy={onCopy} copiedKey={copiedKey} t={t} buttonClass="w-7 h-7" />
+            </div>
           </div>
           <span className={`shrink-0 inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold tabular-nums ${LATENCY_TEXT[latency.tone]}`}>
             <LatencyIcon className="w-4 h-4" aria-hidden="true" />
@@ -147,6 +151,7 @@ export const PeerRow: React.FC<PeerRowProps> = ({
             </span>
             <CopyButton value={peer.ipv4} copied={copiedKey === peer.ipv4} onCopy={onCopy} label={copyLabel} className="w-6 h-6" />
           </div>
+          <PublicIp peer={peer} onCopy={onCopy} copiedKey={copiedKey} t={t} />
         </div>
 
         <div className="flex flex-col items-start gap-0.5 min-w-0 text-sm">

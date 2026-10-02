@@ -2,6 +2,15 @@
 
 All notable XRayMesh changes are documented here.
 
+## [3.2.0] - 2026-10-02
+
+### Added
+- Servers: each server's public IP is shown under its virtual IP, with a copy button (also on the "this server" card). Servers report it themselves, so one that has not been updated yet shows none.
+- Tunnels: iptables tunnels can now be created, edited and deleted on any server in the mesh, like the other engines. Pick the server under "Runs on"; the inbound interface list is read from that server. If that server doesn't answer, the panel gives up after about 5 seconds, offers "Try again" and lets you type the interface name.
+
+### Changed
+- Tunnels: the "iptables tunnels run on this server only" restriction is gone.
+
 ## [3.1.0] - 2026-09-28
 
 ### Fixed

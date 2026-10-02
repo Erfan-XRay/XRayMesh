@@ -1,8 +1,8 @@
 {
-  "version": "3.1.0",
+  "version": "3.2.0",
   "branch": "main",
-  "release_name": "XRayMesh v3.1.0 (Tunnels between servers fixed)",
-  "release_date": "2026-09-28",
-  "changelog": "Creating, editing or deleting a tunnel on another server works again: no more \"NetworkError\" or JSON errors, remote changes wait long enough for the engine to install, and failures say exactly what went wrong.",
+  "release_name": "XRayMesh v3.2.0 (iptables on any server and public IPs)",
+  "release_date": "2026-10-02",
+  "changelog": "iptables tunnels can now be created and edited on any server of the mesh, with that server's own interface list. The Servers list shows each server's public IP with a copy button.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh) update"
 }

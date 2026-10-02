@@ -38,9 +38,8 @@ Start with **Realm**. Switch to **iptables** if a UDP service needs the lowest l
 3. **Runs on**: the server that listens on the ports, usually the one your users connect to. It
    defaults to this server.
 
-   iptables tunnels always run on the server whose panel you're in, because their rules live in
-   that server's kernel. To forward from another server, create the tunnel from that server's
-   panel.
+   iptables tunnels work the same way: their rules are applied in the Linux kernel of the server
+   you pick, and the **Inbound interface** list is read from that server.
 
 4. **Destination**: pick a server from the list, or type its virtual IP, such as `10.144.144.2`.
 

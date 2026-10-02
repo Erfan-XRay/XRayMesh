@@ -61,6 +61,42 @@ class WebInterfaceDiscoveryTests(unittest.TestCase):
             },
         )
 
+    def test_peer_probe_keeps_the_reported_public_ip(self):
+        payload = {"ok": True, "version": "3.2.0", "interfaces": ["any", "ens3"], "public_ip": "203.0.113.7"}
+        with mock.patch.object(server, "is_ssl_enabled", return_value=False), mock.patch.object(
+            server.urllib.request, "urlopen", return_value=FakeResponse(payload)
+        ):
+            server.get_peer_version("10.144.144.2", port=19090, timeout=0.01)
+        self.assertEqual(server.PEER_VERSION_CACHE["10.144.144.2"]["public_ip"], "203.0.113.7")
+
+        # A later probe without the field (or with a private address) must not erase or replace it.
+        server.PEER_VERSION_CACHE["10.144.144.2"]["timestamp"] = 1
+        for answer in ({"ok": True, "version": "3.2.0"}, {"ok": True, "version": "3.2.0", "public_ip": "10.0.0.5"}):
+            with mock.patch.object(server, "is_ssl_enabled", return_value=False), mock.patch.object(
+                server.urllib.request, "urlopen", return_value=FakeResponse(answer)
+            ):
+                server.get_peer_version("10.144.144.2", port=19090, timeout=0.01)
+            server.PEER_VERSION_CACHE["10.144.144.2"]["timestamp"] = 1
+            self.assertEqual(server.PEER_VERSION_CACHE["10.144.144.2"]["public_ip"], "203.0.113.7")
+
+    def test_peek_public_ip_never_waits_for_the_lookup(self):
+        server._public_ip_cache.update({"ip": "198.51.100.4", "time": 0.0})
+        server._public_ip_last_try = 0.0
+        started = server.threading.Event()
+        release = server.threading.Event()
+
+        def slow_lookup():
+            started.set()
+            release.wait(5)
+            return "198.51.100.4"
+
+        with mock.patch.object(server, "get_server_public_ip", side_effect=slow_lookup):
+            self.assertEqual(server.peek_server_public_ip(), "198.51.100.4")
+            self.assertTrue(started.wait(2))
+            # Within the throttle window another call neither starts a second lookup nor blocks.
+            self.assertEqual(server.peek_server_public_ip(), "198.51.100.4")
+            release.set()
+
     def test_public_peer_fallback_uses_cached_custom_port(self):
         server.PEER_VERSION_CACHE["10.144.144.2"] = {
             "version": "2.2.3",
@@ -160,6 +196,18 @@ class WebInterfaceDiscoveryTests(unittest.TestCase):
         )
         self.assertEqual(interfaces, [])
         self.assertIn("Forbidden", error)
+
+    def test_unreachable_peer_shares_one_time_budget(self):
+        # The probe burns most of the budget, so the signed fallback must not get its full timeout again.
+        clock = iter([100.0, 104.0, 104.0])
+        with mock.patch.object(server.time, "time", side_effect=lambda: next(clock, 104.0)), mock.patch.object(
+            server, "send_cluster_http", return_value=(False, "timed out")
+        ) as signed, mock.patch.object(server, "fetch_peer_cluster_info", return_value=({}, None, "timed out")):
+            interfaces, error = server.get_remote_network_interfaces("10.144.144.2", "secret")
+
+        self.assertEqual(interfaces, [])
+        self.assertAlmostEqual(signed.call_args.kwargs["timeout"], 0.5)
+        self.assertIn("timed out", error)
 
     def test_remote_lookup_reports_failure_instead_of_faking_any(self):
         with mock.patch.object(server, "send_cluster_http", return_value=(False, "Forbidden")), mock.patch.object(

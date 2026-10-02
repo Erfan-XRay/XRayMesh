@@ -42,6 +42,8 @@ export interface Peer {
   xraymesh_version?: string;
   xraymesh_branch?: string;
   interfaces?: string[];
+  /** Public IPv4 the server reports about itself; absent on servers that predate this field or have none. */
+  public_ip?: string;
   update_available?: boolean;
   /** False when the server could not reach GitHub, so "no update" is not known. */
   update_checked?: boolean;

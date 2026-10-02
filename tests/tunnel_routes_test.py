@@ -98,15 +98,6 @@ class LocalTunnelTests(TunnelTestCase):
         self.assertEqual(status, 400)
         self.assertIn("already used", payload["error"])
 
-    def test_remote_iptables_create_stays_blocked(self):
-        cli = self.mock_cli()
-        status, payload = call_handler("POST", "/api/tunnels/iptables/create", {
-            "name": "web", "target": "10.144.144.3", "ports": "443", "origin_node": PEER_IP,
-        })
-        self.assertEqual(status, 400)
-        self.assertIn("only be configured locally", payload["error"])
-        cli.assert_not_called()
-
 
 class RemoteTunnelTests(TunnelTestCase):
     def setUp(self):
@@ -131,6 +122,19 @@ class RemoteTunnelTests(TunnelTestCase):
         self.assertEqual(args[4]["tunnel_type"], "gost")
         self.assertNotIn("origin_node", args[4])
         self.assertTrue(kwargs["strict_port"] and kwargs["stop_on_timeout"])
+
+    def test_remote_iptables_create_is_forwarded_with_its_interface(self):
+        reply = {"ok": True, "message": "iptables tunnel 'quic' created."}
+        with mock.patch.object(server, "cluster_request", return_value=(True, reply, 200)) as request:
+            status, payload = call_handler("POST", "/api/tunnels/iptables/create", {
+                "name": "quic", "target": LOCAL_IP, "ports": "443", "protocol": "udp",
+                "interface": "ens3", "source_cidr": "0.0.0.0/0", "origin_node": PEER_IP,
+            })
+        self.assertEqual((status, payload), (200, {"ok": True, "message": reply["message"]}))
+        args = request.call_args.args
+        self.assertEqual((args[0], args[2]), (PEER_IP, "/api/cluster/tunnel/create"))
+        self.assertEqual(args[4]["tunnel_type"], "iptables")
+        self.assertEqual(args[4]["interface"], "ens3")
 
     def test_unreachable_node_fails_fast_with_a_clear_error(self):
         self.probe.return_value = ({}, None, "timed out")
@@ -170,6 +174,19 @@ class ClusterTunnelEndpointTests(TunnelTestCase):
         status, payload = call_handler("POST", "/api/cluster/tunnel/edit", body, self.signed(body))
         self.assertEqual((status, payload["ok"]), (200, True))
         self.assertEqual(cli.call_args.args[0], ["haproxy-edit", "web", "10.144.144.3", "80,443"])
+
+    def test_peer_iptables_request_runs_the_cli_with_interface_and_source(self):
+        cli = self.mock_cli(msg="iptables tunnel 'quic' created.")
+        body = {
+            "tunnel_type": "iptables", "name": "quic", "target": "10.144.144.3", "ports": "443",
+            "protocol": "udp", "interface": "ens3", "source_cidr": "203.0.113.0/24",
+        }
+        status, payload = call_handler("POST", "/api/cluster/tunnel/create", body, self.signed(body))
+        self.assertEqual((status, payload["ok"]), (200, True))
+        self.assertEqual(
+            cli.call_args.args[0],
+            ["iptables-create", "quic", "10.144.144.3", "443", "udp", "ens3", "203.0.113.0/24"],
+        )
 
     def test_peer_request_is_validated(self):
         cli = self.mock_cli()

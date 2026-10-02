@@ -5,6 +5,7 @@ import type { Translate } from '../../i18n/translations';
 import { formatText } from '../../i18n/fillTemplate';
 import { UpdateRun } from '../../hooks/useNodeUpdates';
 import { cardClass, CopyButton, Pill } from '../ui';
+import { PublicIp } from './PublicIp';
 import { UpdateCell, UpdateFailure } from './UpdateStatus';
 
 interface ThisServerCardProps {
@@ -52,6 +53,9 @@ export const ThisServerCard: React.FC<ThisServerCardProps> = ({
               <span className="font-mono text-text-secondary" dir="ltr">
                 {peer.xraymesh_version}
               </span>
+            </div>
+            <div className="mt-0.5 text-xs">
+              <PublicIp peer={peer} onCopy={onCopy} copiedKey={copiedKey} t={t} />
             </div>
             <p className="mt-1 text-xs text-text-subtle">{t('this_server_desc')}</p>
           </div>

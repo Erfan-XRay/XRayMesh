@@ -460,7 +460,7 @@ export default function App() {
             formData.protocol || 'udp',
             formData.interface || 'any',
             formData.source_cidr || formData.sourceCidr || '0.0.0.0/0',
-            undefined
+            formData.originNode
           );
         } else if (tunnelModalType === 'gost') {
           msg = await api.saveGostTunnel(
