@@ -1,0 +1,42 @@
+---
+title: Scheduled restart
+description: Restart the XRayMesh service on a server automatically, every few minutes or hours.
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+A server can restart its XRayMesh service on its own, at a fixed interval. Use it to keep a long-running
+server fresh, or to recover links that stall now and then. You set it per server, from any panel in
+the mesh.
+
+## Set it up
+
+<Steps>
+
+1. Open the **Servers** tab. Press **Auto-restart** on the server's row, or on the "This server" card.
+
+2. Turn on **Restart automatically**.
+
+3. Pick how often: 30 minutes, 1, 3, 6 or 12 hours, 1 day, or **Custom** for any whole number of
+   minutes, hours or days (from 5 minutes to 30 days).
+
+4. Press **Save schedule**. A server with a schedule shows **Restarts every …** in its row.
+
+</Steps>
+
+## What happens at each restart
+
+- Only the XRayMesh mesh service restarts. The panel stays online, and the server's mesh links
+  reconnect within a few seconds. Traffic through that server pauses briefly.
+- A server whose mesh service you stopped by hand is left stopped.
+- The panel shows when the last scheduled restart ran.
+- The schedule survives reboots. The interval counts from the moment you save it, and from boot
+  after a reboot.
+
+The schedule is a systemd timer (`xraymesh-autorestart.timer`) on that server. Turning it off, deleting
+the mesh configuration or uninstalling XRayMesh removes it.
+
+:::note[Older servers]
+A server on a version before 3.3.0 can't be scheduled from another panel. The panel says so; update that
+server first (see [Updates](../updates/)).
+:::

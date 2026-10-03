@@ -1,4 +1,4 @@
-import { StatusResponse, Peer, TunnelsData, TunnelNodeState, TunnelNodeResponse, LiveTest, NodeConfig, MeshInviteData, MeshInviteJoinedVia, JoinMeshResult, RollbackInfo, VersionInfo, UpdateSummary } from '../types';
+import { StatusResponse, Peer, TunnelsData, TunnelNodeState, TunnelNodeResponse, LiveTest, NodeConfig, MeshInviteData, MeshInviteJoinedVia, JoinMeshResult, RollbackInfo, VersionInfo, UpdateSummary, RestartSchedule } from '../types';
 
 export async function fetchAuthStatus(): Promise<{ authenticated: boolean; password_configured: boolean }> {
   const res = await fetch('/api/auth/status');
@@ -510,6 +510,22 @@ export async function startNodeUpdate(
   // The server answers within ~15s even when it has to fall back to a second launcher.
   const d = await postNodeAction('/api/cluster/update', { target_ip: targetIp }, 25000);
   return { legacy: Boolean(d.legacy), status: d.status || {} };
+}
+
+/** Read a server's scheduled restart (this one included). */
+export async function fetchRestartSchedule(targetIp: string): Promise<RestartSchedule> {
+  const d = await postNodeAction('/api/cluster/restart-schedule', { target_ip: targetIp }, 15000);
+  return d.schedule;
+}
+
+/** Turn a server's scheduled restart on or off, or change its interval. Returns the saved schedule. */
+export async function saveRestartSchedule(targetIp: string, enabled: boolean, intervalMinutes: number): Promise<RestartSchedule> {
+  const d = await postNodeAction(
+    '/api/cluster/restart-schedule',
+    { target_ip: targetIp, enabled, interval_minutes: intervalMinutes },
+    20000
+  );
+  return d.schedule;
 }
 
 /**

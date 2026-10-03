@@ -3,6 +3,7 @@ import { LogOut, Menu, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { NodeInfo, TabId } from '../types';
 import type { Translate } from '../i18n/translations';
 import { XRayMeshLogo } from './XRayMeshLogo';
+import { TELEGRAM_URL, TelegramIcon } from './Telegram';
 import { PreferencesPanel, PreferencesProps } from './PreferencesPanel';
 import { iconBtn, StatusDot } from './ui';
 
@@ -134,7 +135,7 @@ export const Header: React.FC<HeaderProps> = ({
   t,
   ...prefs
 }) => {
-  const version = node.xraymesh_version || '3.2.0';
+  const version = node.xraymesh_version || '3.3.0';
   const { listRef, box } = useTabIndicator(activeTab, [tabs.length, showTabs]);
 
   const onTabKeyDown = (e: React.KeyboardEvent) => {
@@ -206,6 +207,16 @@ export const Header: React.FC<HeaderProps> = ({
                 aria-label={t('nav_github')}
               >
                 <GithubIcon className="w-[18px] h-[18px]" />
+              </a>
+              <a
+                href={TELEGRAM_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={iconBtn}
+                title="Telegram"
+                aria-label={t('nav_telegram')}
+              >
+                <TelegramIcon className="w-[18px] h-[18px]" />
               </a>
               <span className="w-px h-6 mx-1 bg-card-border" aria-hidden="true" />
               <button

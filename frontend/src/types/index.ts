@@ -57,6 +57,16 @@ export interface Peer {
   /** Runs the pre-2.2.6-beta.5 updater: no step reports. */
   legacy?: boolean;
   loss_rate?: string | number;
+  /** Scheduled restart of the mesh service; absent on servers that predate it. */
+  auto_restart?: RestartSchedule;
+}
+
+/** A server's scheduled restart of its XRayMesh service. */
+export interface RestartSchedule {
+  enabled: boolean;
+  interval_minutes: number;
+  /** Unix seconds of the last scheduled restart; 0 when none ran yet. Only the full read has it. */
+  last_restart_at?: number;
 }
 
 /** Self-update job recorded by xraymesh.sh node-update. */

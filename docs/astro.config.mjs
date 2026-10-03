@@ -88,6 +88,7 @@ export default defineConfig({
 						{ slug: 'guides/transports' },
 						{ slug: 'guides/safesync' },
 						{ slug: 'guides/updates' },
+						{ slug: 'guides/scheduled-restart' },
 						{ slug: 'guides/security' },
 						{ slug: 'guides/ping-speedtest' },
 					],

@@ -6,7 +6,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly APP="XRayMesh"
-readonly VERSION="3.2.0"
+readonly VERSION="3.3.0"
 readonly DEFAULT_BRANCH="main"
 readonly OWNER="ErfanXRay"
 readonly INSTALL_DIR="/opt/xraymesh"
@@ -59,6 +59,7 @@ readonly UPDATE_LOCK_FILE="${XRAYMESH_UPDATE_LOCK_FILE:-/run/xraymesh-update.loc
 readonly UPDATE_BACKUP_DIR="${INSTALL_DIR}/backups"
 readonly IPERF_SERVICE_FILE="/etc/systemd/system/xraymesh-iperf.service"
 readonly IPERF_RUNNER="${INSTALL_DIR}/xraymesh-iperf-runner"
+readonly AUTORESTART_UNIT_BASE="/etc/systemd/system/xraymesh-autorestart"
 readonly WEB_TOKEN_FILE="/etc/xraymesh/web-tokens.json"
 readonly DEFAULT_WEB_PORT="11080"
 # One row per kind of port-forwarding tunnel: "kind|label|definitions dir|service unit".
@@ -1425,6 +1426,12 @@ join_mesh_invite() {
 }
 
 
+# The panel's scheduled restart of the mesh service has nothing left to restart once the node is gone.
+remove_autorestart_timer() {
+  systemctl disable --now xraymesh-autorestart.timer 2>/dev/null || true
+  rm -f "${AUTORESTART_UNIT_BASE}.timer" "${AUTORESTART_UNIT_BASE}.service" /etc/xraymesh/auto-restart.json /var/lib/xraymesh/auto-restart.last
+}
+
 delete_mesh_noninteractive() {
   require_root
   systemctl disable --now xraymesh.service 2>/dev/null || true
@@ -1437,6 +1444,7 @@ delete_mesh_noninteractive() {
   fi
   # BackPack (ICMP/PCK) links pair this node with specific servers, so they go with the mesh configuration.
   remove_all_icmp_links
+  remove_autorestart_timer
   rm -f "$SERVICE_FILE" "$CONFIG_FILE" "${INSTALL_DIR}/xraymesh-runner"
   systemctl daemon-reload
   systemctl reset-failed xraymesh.service 2>/dev/null || true
@@ -4937,6 +4945,7 @@ uninstall_app() {
     "$IPTABLES_APPLY_SCRIPT" remove >/dev/null 2>&1 || true
   fi
   remove_all_icmp_links
+  remove_autorestart_timer
   rm -f "$SERVICE_FILE" "$HAPROXY_SERVICE_FILE" "$IPTABLES_SERVICE_FILE" "$IPTABLES_SYSCTL_FILE" "$GOST_SERVICE_FILE" "$GOST_CONFIG_FILE" "$REALM_SERVICE_FILE" "$REALM_CONFIG_FILE" "$WEB_SERVICE_FILE" "$IPERF_SERVICE_FILE" /usr/local/bin/xraymesh
   rm -rf -- "$INSTALL_DIR" /etc/xraymesh
   systemctl daemon-reload

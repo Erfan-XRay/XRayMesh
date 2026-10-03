@@ -51,6 +51,7 @@ jobs:
           python3 tests/live_benchmark_test.py
           python3 tests/node_join_test.py
           python3 tests/update_flow_test.py
+          python3 tests/restart_schedule_test.py
           python3 tests/tunnel_routes_test.py
           bash tests/update_verify_test.sh
           python3 -m py_compile web/server.py

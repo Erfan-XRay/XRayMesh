@@ -1,11 +1,12 @@
 import React from 'react';
-import { MonitorSmartphone } from 'lucide-react';
+import { MonitorSmartphone, TimerReset } from 'lucide-react';
 import { Peer } from '../../types';
 import type { Translate } from '../../i18n/translations';
 import { formatText } from '../../i18n/fillTemplate';
 import { UpdateRun } from '../../hooks/useNodeUpdates';
-import { cardClass, CopyButton, Pill } from '../ui';
+import { btnSecondarySm, cardClass, CopyButton, Pill } from '../ui';
 import { PublicIp } from './PublicIp';
+import { RestartBadge } from './RestartBadge';
 import { UpdateCell, UpdateFailure } from './UpdateStatus';
 
 interface ThisServerCardProps {
@@ -13,6 +14,7 @@ interface ThisServerCardProps {
   run?: UpdateRun;
   onUpdate: (peer: Peer) => void;
   onDismissUpdate: (ip: string) => void;
+  onSchedule: (peer: Peer) => void;
   onCopy: (text: string) => void;
   copiedKey: string | null;
   t: Translate;
@@ -24,6 +26,7 @@ export const ThisServerCard: React.FC<ThisServerCardProps> = ({
   run,
   onUpdate,
   onDismissUpdate,
+  onSchedule,
   onCopy,
   copiedKey,
   t,
@@ -42,6 +45,7 @@ export const ThisServerCard: React.FC<ThisServerCardProps> = ({
                 <bdi>{peer.hostname || peer.ipv4}</bdi>
               </h2>
               <Pill tone="primary">{t('node_section_identity')}</Pill>
+              <RestartBadge peer={peer} t={t} />
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-muted">
               <span className="inline-flex items-center gap-0.5">
@@ -60,7 +64,11 @@ export const ThisServerCard: React.FC<ThisServerCardProps> = ({
             <p className="mt-1 text-xs text-text-subtle">{t('this_server_desc')}</p>
           </div>
         </div>
-        <div className="shrink-0">
+        <div className="shrink-0 flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => onSchedule(peer)} className={btnSecondarySm}>
+            <TimerReset className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>{t('restart_btn')}</span>
+          </button>
           <UpdateCell peer={peer} run={run} onUpdate={onUpdate} onDismiss={onDismissUpdate} t={t} />
         </div>
       </div>

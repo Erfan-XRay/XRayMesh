@@ -2,6 +2,15 @@
 
 All notable XRayMesh changes are documented here.
 
+## [3.3.0] - 2026-10-03
+
+### Added
+- Servers: each server can restart its XRayMesh service on a schedule, every few minutes, hours or days (5 minutes to 30 days). Press **Auto-restart** on a server's row or on the "This server" card, and set it from any panel in the mesh. The row shows **Restarts every …**, and the dialog shows when the last scheduled restart ran. A server you stopped by hand stays stopped. It runs as a systemd timer that is removed when you turn it off, delete the mesh configuration or uninstall.
+- Panel: a link to the Telegram channel (t.me/Erfan_Xray) in the header, the phone menu, the sign-in page and at the end of every section.
+
+### Notes
+- A server on a version before 3.3.0 can't be scheduled from another panel; the panel says to update it first.
+
 ## [3.2.0] - 2026-10-02
 
 ### Added

@@ -5,6 +5,7 @@ import type { Translate } from '../i18n/translations';
 import { XRayMeshLogo } from './XRayMeshLogo';
 import { PreferencesPanel, PreferencesProps } from './PreferencesPanel';
 import { GithubIcon, NavTab } from './Header';
+import { TELEGRAM_URL, TelegramIcon } from './Telegram';
 import { btnSecondary, iconBtn, StatusDot } from './ui';
 
 interface MobileDrawerProps extends Omit<PreferencesProps, 't'> {
@@ -74,7 +75,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
               </p>
               <p className="font-mono text-2xs text-text-subtle">
                 <bdi dir="ltr">
-                  v{node.xraymesh_version || '3.2.0'}
+                  v{node.xraymesh_version || '3.3.0'}
                 </bdi>
               </p>
             </div>
@@ -127,14 +128,18 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
         </div>
 
         <div className="p-4 pb-safe border-t border-card-border space-y-2 shrink-0">
+          <button type="button" onClick={onRefresh} disabled={isRefreshing} className={`${btnSecondary} w-full`}>
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin-smooth text-primary' : ''}`} aria-hidden="true" />
+            <span className="truncate">{t('btn_refresh')}</span>
+          </button>
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={onRefresh} disabled={isRefreshing} className={btnSecondary}>
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin-smooth text-primary' : ''}`} aria-hidden="true" />
-              <span className="truncate">{t('btn_refresh')}</span>
-            </button>
             <a href="https://github.com/Erfan-XRay/XRayMesh" target="_blank" rel="noopener noreferrer" className={btnSecondary}>
               <GithubIcon />
               <span>GitHub</span>
+            </a>
+            <a href={TELEGRAM_URL} target="_blank" rel="noopener noreferrer" className={btnSecondary} aria-label={t('nav_telegram')}>
+              <TelegramIcon />
+              <span lang="en">Telegram</span>
             </a>
           </div>
           <button

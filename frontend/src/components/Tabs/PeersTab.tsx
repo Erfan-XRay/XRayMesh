@@ -1,15 +1,17 @@
 import React, { useMemo, useState } from 'react';
 import { Check, Search, Server, X } from 'lucide-react';
 import { formatCount } from '../../i18n/format';
-import { Peer } from '../../types';
+import { Peer, RestartSchedule } from '../../types';
 import type { Translate, TranslationKey } from '../../i18n/translations';
-import { fillTemplate } from '../../i18n/fillTemplate';
+import { fillTemplate, formatText } from '../../i18n/fillTemplate';
 import { UpdateRun } from '../../hooks/useNodeUpdates';
 import { cardClass, EmptyState, inputClass, SectionHeader, Segmented } from '../ui';
 import { ConfirmModal } from '../Modals/ConfirmModal';
+import { RestartScheduleModal } from '../Modals/RestartScheduleModal';
 import { PEER_SUBGRID, PEER_TABLE, PeerRow } from '../Peers/PeerRow';
 import { ThisServerCard } from '../Peers/ThisServerCard';
 import { isLegacyPeer, versionLabel } from '../Peers/peerDisplay';
+import { formatInterval } from '../Peers/restartDisplay';
 
 type Filter = 'all' | 'updates' | 'relayed';
 
@@ -22,6 +24,10 @@ interface PeersTabProps {
   onQuickSpeedtest: (ip: string) => void;
   onCopy: (text: string) => void;
   copiedKey: string | null;
+  /** Shows a toast. */
+  onNotify: (message: string, type?: 'success' | 'error' | 'info') => void;
+  /** Reloads the peers list so a changed schedule shows right away. */
+  onRefresh: () => void;
   t: Translate;
 }
 
@@ -41,11 +47,14 @@ export const PeersTab: React.FC<PeersTabProps> = ({
   onQuickSpeedtest,
   onCopy,
   copiedKey,
+  onNotify,
+  onRefresh,
   t,
 }) => {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [pendingUpdate, setPendingUpdate] = useState<Peer | null>(null);
+  const [scheduleTarget, setScheduleTarget] = useState<Peer | null>(null);
 
   const current = peers.find((p) => p.is_current);
   const others = useMemo(
@@ -80,9 +89,22 @@ export const PeersTab: React.FC<PeersTabProps> = ({
     setPendingUpdate(null);
   };
 
+  const scheduleSaved = (peer: Peer, schedule: RestartSchedule) => {
+    const host = peer.hostname || peer.ipv4;
+    onNotify(
+      schedule.enabled
+        ? formatText(t('restart_saved_on'), { host, interval: formatInterval(schedule.interval_minutes, t) })
+        : formatText(t('restart_saved_off'), { host }),
+      'success'
+    );
+    setScheduleTarget(null);
+    onRefresh();
+  };
+
   const rowHandlers = {
     onUpdate: setPendingUpdate,
     onDismissUpdate,
+    onSchedule: setScheduleTarget,
     onCopy,
     copiedKey,
     t,
@@ -199,6 +221,7 @@ export const PeersTab: React.FC<PeersTabProps> = ({
         </ul>
       </ConfirmModal>
 
+      <RestartScheduleModal peer={scheduleTarget} onClose={() => setScheduleTarget(null)} onSaved={scheduleSaved} t={t} />
     </div>
   );
 };

@@ -39,7 +39,7 @@ import functools
 from pathlib import Path
 
 # Paths & Defaults
-CURRENT_VERSION = "3.2.0"
+CURRENT_VERSION = "3.3.0"
 CURRENT_BRANCH = "main"
 INSTALL_DIR = os.environ.get("INSTALL_DIR", "/opt/xraymesh")
 BIN_DIR = os.path.join(INSTALL_DIR, "bin")
@@ -360,7 +360,7 @@ def get_peer_version(peer_ip, port=None, timeout=1.0):
         cache_entry["branch"] = peer_branch
     # Peers from 2.2.6-beta.5 on report their own channel, latest release and update job.
     source = peer_info if peer_info else cached
-    for key in ("channel", "latest_version", "update_available", "update_checked", "update"):
+    for key in ("channel", "latest_version", "update_available", "update_checked", "update", "auto_restart"):
         if key in source:
             cache_entry[key] = source[key]
     # Newer peers report their public IPv4; keep the last one when a probe comes back without it.
@@ -1055,6 +1055,132 @@ def spawn_detached_node_update():
         except Exception:
             pass
         return False, f"Could not start the updater: {e}", "launch_failed"
+
+
+RESTART_SCHEDULE_FILE = os.environ.get("RESTART_SCHEDULE_FILE", "/etc/xraymesh/auto-restart.json")
+RESTART_LAST_FILE = os.environ.get("RESTART_LAST_FILE", "/var/lib/xraymesh/auto-restart.last")
+RESTART_UNIT_DIR = os.environ.get("RESTART_UNIT_DIR", "/etc/systemd/system")
+RESTART_UNIT = "xraymesh-autorestart"
+RESTART_MIN_MINUTES = 5
+RESTART_MAX_MINUTES = 30 * 24 * 60
+RESTART_DEFAULT_MINUTES = 360
+RESTART_LOCK = threading.Lock()
+
+
+def read_restart_schedule():
+    """This server's scheduled restart of the mesh service: enabled, interval and the last run."""
+    schedule = {"enabled": False, "interval_minutes": RESTART_DEFAULT_MINUTES, "last_restart_at": 0}
+    try:
+        with open(RESTART_SCHEDULE_FILE, "r", encoding="utf-8") as f:
+            saved = json.load(f)
+        minutes = int(saved.get("interval_minutes", 0))
+        if RESTART_MIN_MINUTES <= minutes <= RESTART_MAX_MINUTES:
+            schedule["interval_minutes"] = minutes
+        schedule["enabled"] = bool(saved.get("enabled"))
+    except Exception:
+        pass
+    try:
+        with open(RESTART_LAST_FILE, "r", encoding="utf-8") as f:
+            schedule["last_restart_at"] = int(f.read().strip())
+    except Exception:
+        pass
+    return schedule
+
+
+def restart_schedule_summary():
+    """The part of the schedule every panel in the mesh shows next to a server."""
+    schedule = read_restart_schedule()
+    return {"enabled": schedule["enabled"], "interval_minutes": schedule["interval_minutes"]}
+
+
+def parse_restart_schedule(data):
+    """Validate a schedule request. Returns (enabled, interval_minutes, error)."""
+    enabled = data.get("enabled")
+    if not isinstance(enabled, bool):
+        return False, 0, "enabled must be true or false."
+    raw = data.get("interval_minutes")
+    if raw is None and not enabled:
+        return False, read_restart_schedule()["interval_minutes"], ""
+    try:
+        minutes = int(raw)
+    except (TypeError, ValueError):
+        return False, 0, "interval_minutes must be a whole number of minutes."
+    if isinstance(raw, bool) or not RESTART_MIN_MINUTES <= minutes <= RESTART_MAX_MINUTES:
+        return False, 0, f"The interval must be between {RESTART_MIN_MINUTES} minutes and {RESTART_MAX_MINUTES // 1440} days."
+    return enabled, minutes, ""
+
+
+def restart_unit_files(minutes):
+    """The oneshot service and the timer that fires it. The service only restarts a mesh service that
+    is running, so stopping the node by hand is not undone by the schedule."""
+    restart_cmd = (
+        "if systemctl is-active --quiet xraymesh.service; then "
+        "systemctl restart xraymesh.service && "
+        f"mkdir -p {os.path.dirname(RESTART_LAST_FILE)} && "
+        f"date +%%s > {RESTART_LAST_FILE}; fi"
+    )
+    service = (
+        "[Unit]\n"
+        "Description=XRayMesh scheduled mesh service restart\n"
+        f"ConditionPathExists={CONFIG_FILE}\n"
+        "\n"
+        "[Service]\n"
+        "Type=oneshot\n"
+        f"ExecStart=/bin/sh -c '{restart_cmd}'\n"
+    )
+    timer = (
+        "[Unit]\n"
+        "Description=XRayMesh scheduled mesh service restart timer\n"
+        "\n"
+        "[Timer]\n"
+        f"OnActiveSec={minutes}min\n"
+        f"OnUnitActiveSec={minutes}min\n"
+        "AccuracySec=10s\n"
+        f"Unit={RESTART_UNIT}.service\n"
+        "\n"
+        "[Install]\n"
+        "WantedBy=timers.target\n"
+    )
+    return service, timer
+
+
+def apply_restart_schedule(enabled, minutes):
+    """Install or remove the systemd timer and save the schedule. Returns (ok, message)."""
+    service_path = os.path.join(RESTART_UNIT_DIR, f"{RESTART_UNIT}.service")
+    timer_path = os.path.join(RESTART_UNIT_DIR, f"{RESTART_UNIT}.timer")
+
+    def systemctl(*args):
+        r = subprocess.run(["systemctl", *args], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
+        return r.returncode == 0, (r.stderr or r.stdout).strip()
+
+    with RESTART_LOCK:
+        try:
+            if enabled:
+                service, timer = restart_unit_files(minutes)
+                for path, content in ((service_path, service), (timer_path, timer)):
+                    with open(path, "w", encoding="utf-8") as f:
+                        f.write(content)
+                systemctl("daemon-reload")
+                ok, msg = systemctl("enable", f"{RESTART_UNIT}.timer")
+                if ok:
+                    # A restart, not a start: a changed interval counts from now.
+                    ok, msg = systemctl("restart", f"{RESTART_UNIT}.timer")
+                if not ok:
+                    return False, msg or "systemd refused the restart timer."
+            else:
+                systemctl("disable", "--now", f"{RESTART_UNIT}.timer")
+                for path in (timer_path, service_path):
+                    try:
+                        os.remove(path)
+                    except FileNotFoundError:
+                        pass
+                systemctl("daemon-reload")
+            os.makedirs(os.path.dirname(RESTART_SCHEDULE_FILE), exist_ok=True)
+            with open(RESTART_SCHEDULE_FILE, "w", encoding="utf-8") as f:
+                json.dump({"enabled": enabled, "interval_minutes": minutes}, f)
+        except Exception as e:
+            return False, str(e)
+    return True, "Scheduled restart saved."
 
 
 _public_ip_cache = {"ip": "", "time": 0.0}
@@ -2899,6 +3025,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                 "ipv4": config.get("IPV4", ""),
                 "interfaces": get_network_interfaces(),
                 "public_ip": peek_server_public_ip(),
+                "auto_restart": restart_schedule_summary(),
             }
             # version, branch, channel, latest_version, update_available and the update job summary.
             info.update(local_update_summary())
@@ -3036,6 +3163,8 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                             p["update_available"] = False
                             p["latest_version"] = ""
                         p["update"] = peer_cache.get("update") or {}
+                        if "auto_restart" in peer_cache:
+                            p["auto_restart"] = peer_cache["auto_restart"]
                         # Reachable peers that do not report a channel run the untracked pre-2.2.6-beta.5 updater.
                         p["legacy"] = p_ver != "unknown" and not tracked
                         p["version_drift"] = (p_ver != CURRENT_VERSION)
@@ -3074,6 +3203,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
                         "update": local_summary["update"],
                         "version_drift": False,
                         "public_ip": peek_server_public_ip(),
+                        "auto_restart": restart_schedule_summary(),
                     })
             if isinstance(peers_data, dict):
                 peers_data["peers"] = peers_list
@@ -3419,6 +3549,7 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             "/api/cluster/prepare", "/api/cluster/commit", "/api/cluster/confirm", "/api/cluster/rollback",
             "/api/cluster/tunnels", "/api/cluster/tunnel/create", "/api/cluster/tunnel/edit", "/api/cluster/tunnel/delete",
             "/api/cluster/node/update", "/api/cluster/node/update-status",
+            "/api/cluster/restart-schedule/get", "/api/cluster/restart-schedule/set",
             "/api/cluster/interfaces", "/api/cluster/iperf/run", "/api/cluster/ping/run",
             "/api/cluster/iperf/start", "/api/cluster/ping/start", "/api/cluster/live/status"
         ):
@@ -3531,6 +3662,19 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
 
             elif path == "/api/cluster/node/update-status":
                 self.send_json({"ok": True, "status": local_update_summary()})
+                return
+
+            elif path in ("/api/cluster/restart-schedule/get", "/api/cluster/restart-schedule/set"):
+                if path.endswith("/set"):
+                    enabled, minutes, err = parse_restart_schedule(data)
+                    if err:
+                        self.send_json({"ok": False, "error": err}, status=400)
+                        return
+                    ok, msg = apply_restart_schedule(enabled, minutes)
+                    if not ok:
+                        self.send_json({"ok": False, "error": msg}, status=500)
+                        return
+                self.send_json({"ok": True, "schedule": read_restart_schedule()})
                 return
 
             elif path == "/api/cluster/interfaces":
@@ -4193,6 +4337,53 @@ class XRayMeshHandler(http.server.BaseHTTPRequestHandler):
             ok, msg, code = spawn_detached_node_update()
             self.send_json({"ok": ok, "code": code, "message": msg, "error": "" if ok else msg,
                             "status": local_update_summary()}, status=200 if ok else 409 if code == "already_running" else 500)
+            return
+
+        elif path == "/api/cluster/restart-schedule":
+            # Read or change the scheduled restart of any mesh server (signed with the network secret),
+            # or of this one. Without "enabled" in the body it only reads.
+            target_ip = str(data.get("target_ip") or "").strip()
+            cfg = load_env_file(CONFIG_FILE)
+            local_ip = cfg.get("IPV4", "").strip()
+            secret = cfg.get("NETWORK_SECRET", "").strip()
+            if not valid_ipv4(target_ip):
+                self.send_json({"ok": False, "code": "invalid_target", "error": "Missing or invalid target_ip."}, status=400)
+                return
+            changing = "enabled" in data
+            if changing:
+                enabled, minutes, err = parse_restart_schedule(data)
+                if err:
+                    self.send_json({"ok": False, "code": "invalid_schedule", "error": err}, status=400)
+                    return
+                payload = {"enabled": enabled, "interval_minutes": minutes}
+
+            if target_ip == local_ip or target_ip == "127.0.0.1":
+                if changing:
+                    ok, msg = apply_restart_schedule(enabled, minutes)
+                    if not ok:
+                        self.send_json({"ok": False, "code": "apply_failed", "error": msg}, status=500)
+                        return
+                self.send_json({"ok": True, "schedule": read_restart_schedule()})
+                return
+
+            if not secret:
+                self.send_json({"ok": False, "code": "not_configured", "error": "This server has no mesh secret to sign the request."}, status=400)
+                return
+
+            port = PEER_VERSION_CACHE.get(target_ip, {}).get("port", PORT)
+            action = "set" if changing else "get"
+            ok, res, http_status = cluster_request(
+                target_ip, port, f"/api/cluster/restart-schedule/{action}", secret,
+                payload if changing else {}, 10, stop_on_timeout=changing,
+            )
+            if ok and isinstance(res, dict) and res.get("ok", True):
+                if changing:
+                    PEER_VERSION_CACHE.pop(target_ip, None)  # the peers list must show the new schedule now
+                self.send_json({"ok": True, "schedule": res.get("schedule") or {}})
+                return
+            code = res.get("code") if isinstance(res, dict) and res.get("code") else cluster_error_code(http_status)
+            error = res.get("error") if isinstance(res, dict) else str(res)
+            self.send_json({"ok": False, "code": code, "error": error or "Request to the peer failed."}, status=502)
             return
 
         elif path in ("/api/cluster/update", "/api/cluster/update/status"):

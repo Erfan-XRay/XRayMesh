@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, ArrowDown, ArrowLeftRight, ArrowUp, Signal, SignalHigh, SignalLow, SignalMedium, Waypoints, Zap } from 'lucide-react';
+import { Activity, ArrowDown, ArrowLeftRight, ArrowUp, Signal, SignalHigh, SignalLow, SignalMedium, TimerReset, Waypoints, Zap } from 'lucide-react';
 import { Peer } from '../../types';
 import type { Translate } from '../../i18n/translations';
 import { formatText } from '../../i18n/fillTemplate';
@@ -8,6 +8,7 @@ import { UpdateRun } from '../../hooks/useNodeUpdates';
 import { btnGhostSm, CopyButton, iconBtn } from '../ui';
 import { formatProtocol, LATENCY_TEXT, latencyOf, versionLabel } from './peerDisplay';
 import { PublicIp } from './PublicIp';
+import { RestartBadge } from './RestartBadge';
 import { UpdateCell, UpdateFailure } from './UpdateStatus';
 
 /** Columns of the desktop table. The header and rows take them through subgrid, so the auto-sized
@@ -25,6 +26,7 @@ interface PeerRowProps {
   run?: UpdateRun;
   onUpdate: (peer: Peer) => void;
   onDismissUpdate: (ip: string) => void;
+  onSchedule: (peer: Peer) => void;
   onPing: (ip: string) => void;
   onSpeedtest: (ip: string) => void;
   onCopy: (text: string) => void;
@@ -53,12 +55,14 @@ export const PeerRow: React.FC<PeerRowProps> = ({
   run,
   onUpdate,
   onDismissUpdate,
+  onSchedule,
   onPing,
   onSpeedtest,
   onCopy,
   copiedKey,
   t,
 }) => {
+  const scheduleLabel = formatText(t('restart_btn_aria'), { host: peer.hostname || peer.ipv4 });
   const relayed = peer.connection === 'relay';
   const latency = latencyOf(peer);
   const LatencyIcon = LATENCY_ICON[latency.tone];
@@ -121,8 +125,12 @@ export const PeerRow: React.FC<PeerRowProps> = ({
               {versionLabel(peer)}
             </span>
             <UpdateCell peer={peer} run={run} onUpdate={onUpdate} onDismiss={onDismissUpdate} t={t} />
+            <RestartBadge peer={peer} t={t} />
           </div>
           <div className="flex items-center shrink-0 -me-2">
+            <button type="button" onClick={() => onSchedule(peer)} aria-label={scheduleLabel} title={t('restart_btn')} className={iconBtn}>
+              <TimerReset className="w-4 h-4" aria-hidden="true" />
+            </button>
             <button type="button" onClick={() => onPing(peer.ipv4)} aria-label={t('peer_card_btn_ping')} title={t('peer_card_btn_ping')} className={iconBtn}>
               <Activity className="w-4 h-4" aria-hidden="true" />
             </button>
@@ -175,9 +183,14 @@ export const PeerRow: React.FC<PeerRowProps> = ({
             </span>
           </div>
           <UpdateCell peer={peer} run={run} onUpdate={onUpdate} onDismiss={onDismissUpdate} t={t} />
+          <RestartBadge peer={peer} t={t} />
         </div>
 
         <div className="flex items-center gap-1 justify-end">
+          <button type="button" onClick={() => onSchedule(peer)} aria-label={scheduleLabel} className={btnGhostSm}>
+            <TimerReset className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>{t('restart_btn')}</span>
+          </button>
           <button type="button" onClick={() => onPing(peer.ipv4)} className={btnGhostSm}>
             <Activity className="w-3.5 h-3.5" aria-hidden="true" />
             <span>{t('peer_card_btn_ping')}</span>

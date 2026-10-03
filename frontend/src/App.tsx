@@ -43,6 +43,7 @@ import { AppBackdrop } from './components/AppBackdrop';
 import { formatText } from './i18n/fillTemplate';
 import { formatCount, localizeDigits } from './i18n/format';
 import { btnPrimary } from './components/ui';
+import { TelegramCard } from './components/Telegram';
 
 /** Version this server was just updated to, read once per page load (null when no update happened). */
 const JUST_UPDATED_TO: string | null = (() => {
@@ -714,6 +715,8 @@ export default function App() {
                   onQuickSpeedtest={handleQuickSpeedtest}
                   onCopy={handleCopy}
                   copiedKey={copiedKey}
+                  onNotify={addToast}
+                  onRefresh={handleRefresh}
                   t={t}
                 />
               )}
@@ -764,6 +767,8 @@ export default function App() {
                 />
               )}
             </main>
+
+            <TelegramCard t={t} />
           </div>
 
           <TunnelModal

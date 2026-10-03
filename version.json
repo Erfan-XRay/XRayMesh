@@ -1,8 +1,8 @@
 {
-  "version": "3.2.0",
+  "version": "3.3.0",
   "branch": "main",
-  "release_name": "XRayMesh v3.2.0 (iptables on any server and public IPs)",
-  "release_date": "2026-10-02",
-  "changelog": "iptables tunnels can now be created and edited on any server of the mesh, with that server's own interface list. The Servers list shows each server's public IP with a copy button.",
+  "release_name": "XRayMesh v3.3.0 (scheduled restart and Telegram channel)",
+  "release_date": "2026-10-03",
+  "changelog": "Each server can now restart its XRayMesh service on a schedule, every few minutes, hours or days, set from any panel in the mesh. The panel also links to the Telegram channel.",
   "update_command": "bash <(curl -fsSL https://raw.githubusercontent.com/Erfan-XRay/XRayMesh/main/xraymesh.sh) update"
 }

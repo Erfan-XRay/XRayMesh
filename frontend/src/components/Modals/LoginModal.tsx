@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { XRayMeshLogo } from '../XRayMeshLogo';
 import { AppBackdrop } from '../AppBackdrop';
+import { TELEGRAM_URL, TelegramIcon } from '../Telegram';
 import { Language, ThemeMode } from '../../types';
 import type { Translate, TranslationKey } from '../../i18n/translations';
 import { btnPrimary, Callout, iconBtn } from '../ui';
@@ -362,6 +363,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             <ShieldCheck className="w-3.5 h-3.5 text-success" aria-hidden="true" />
             {t('modal_login_secure_note')}
           </p>
+          <a
+            href={TELEGRAM_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 flex items-center justify-center gap-1.5 text-xs font-medium text-text-muted hover:text-primary transition-colors"
+          >
+            <TelegramIcon className="w-3.5 h-3.5" />
+            {t('telegram_login_link')}
+          </a>
         </div>
       </main>
     </div>
